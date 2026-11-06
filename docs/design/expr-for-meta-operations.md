@@ -36,14 +36,20 @@ prototype and its captured results are in [`prototype/`](prototype/).
   the raw tree must contain, and whose JSON shape already diverges between
   the TypeScript and Go ports. Resolution therefore has to be a post-parse
   walk over a verbatim raw tree, which `expr` as published cannot supply.
+  A fourth experiment shows what closing that
+  gap means: not operators over a new kind of value, since `expr`'s terms
+  may already be containers, but operators recognised by the shape of a
+  built node, and a fold that walks the tree at end of parse carrying
+  context down as well as values up. Section 6 sets out that extension.
 - **Recommendation: build `@tabnas/openapi` as a layer over
   `jsonic`+`yaml`, keep the raw tree verbatim, derive the resolved tree in
   a post-parse pass, and use `expr` for the embedded string languages.**
   Borrow `expr`'s shape for the resolution pass (an operator head, terms,
   a bottom-up fold, a `simplify` form for fixtures) without making the
-  raw tree an `expr` tree. Four `expr` enhancements and two engine
-  enhancements, listed in section 6, would make that borrowing direct
-  rather than copied; none is a precondition for starting.
+  raw tree an `expr` tree. The `expr` enhancements of section 7.2, a
+  structural operator kind and a tree fold, and two engine enhancements,
+  would make that borrowing direct rather than copied; none is a
+  precondition for starting.
 
 ## 1. What OpenAPI needs
 
@@ -84,6 +90,44 @@ Rules from the specification that shape the design:
 - A discriminator `mapping` value "that is both a valid schema name and a
   valid relative URI reference is implementation-defined, but it is
   RECOMMENDED that it be treated as a schema name".
+
+### When each reference is resolved
+
+The five classes above are not resolved at the same time, or by the same
+party, and the specification is explicit about it. That decides what a
+parser may do with each.
+
+| Construct | Resolved | Against | What a parser can do |
+|---|---|---|---|
+| `$ref`, Path Item `$ref`, `operationRef`, `mapping` URIs, and the implicit connections by name | statically, once every document of the description is parsed | the OpenAPI Description, with base URIs from `$self`, `$id` or the retrieval URI | resolve it, which is the resolved tree |
+| JSON Schema `$dynamicRef` and `$dynamicAnchor` | at validation time | the dynamic scope: the chain of schema resources entered while validating an instance | check the syntax, and that some `$dynamicAnchor` of that name exists; otherwise leave it in place |
+| Runtime expressions in Link Objects and Callback Object keys | at call time | one actual HTTP request and its response | check the syntax, parse it to a structure, cross-check it against the operation; never give it a value |
+| Path templates and server URL templates | at call time | the parameter and variable values of one call | parse the template; check each expression names a declared parameter or variable |
+
+Runtime expressions are the case the maintainer asked about, and they
+are metadata handed to the calling code. The specification says a
+Callback key "is a runtime expression that can be evaluated in the
+context of a runtime HTTP request/response to identify the URL to be used
+for the callback request", that expressions "preserve the type of the
+referenced value", and, for Link parameters, that "when a runtime
+expression fails to evaluate, no parameter value is passed to the target
+operation". All three sentences presuppose a request in hand. A document
+processor has none, and the specification never asks it to evaluate one.
+It does ask for two static things: recognition, because "it is not
+possible to provide a constant value to `parameters` that matches the
+syntax of a runtime expression", so a reader must tell the two apart; and
+a cross-check, because "request parameters MUST be declared in the
+`parameters` section of the parent operation or they cannot be evaluated.
+This includes request headers", so `$request.path.id` in a Link can be
+held against the declared parameters of the operation that owns it.
+
+For `@tabnas/openapi` this means: the raw tree keeps a runtime expression
+as the string it is; the resolved tree may add its parsed form and the
+result of the static checks; and evaluation belongs to the consumer, with
+the plugin exporting the expression grammar and an evaluator that takes a
+request and response pair. That is a different operation from resolving
+`$ref`, which is why this note keeps the two apart and lets `expr` serve
+the first while asking what it would take to serve the second.
 
 ## 2. What `expr` is, and is not
 
@@ -223,17 +267,31 @@ and on the strict `json` grammar:
   hook; `rule.start` is read at install time, so the mode depends on
   install order) lifts any remaining `$ref` maps, then walks the tree.
   Each operator node is handed to `expr`'s `evaluation()` with a resolver
-  that decodes the fragment, locates the target (following references met
-  on the way, so a reference to a reference resolves), walks the target
-  first so references inside it resolve too, shares one result per
-  target, keeps a cyclic back edge as the verbatim `{ "$ref" }`, applies
-  siblings by object kind (override for a Reference Object, `allOf`
-  conjunction for a Schema Object), leaves an external reference verbatim
-  and reports it, and records provenance on the engine's hidden
-  `__info__` marker instead of a visible key.
+  that percent-decodes the fragment and then splits it (RFC 6901 section
+  6: an encoded `/` is a separator), locates the target (following
+  references met on the way, so a reference to a reference resolves),
+  walks the target first so references inside it resolve too, shares one
+  result per target, keeps a cyclic back edge as the verbatim `{ "$ref" }`
+  whether the cycle is met by URI (a chain of references) or by node (a
+  recursive schema reached top-down before any reference to it), applies
+  siblings by object kind (override for a Reference Object; for a Schema
+  Object an `allOf` conjunction that an `allOf` the site already carries
+  joins), leaves an external reference verbatim and reports it, and
+  records provenance on the engine's hidden `__info__` marker instead of a
+  visible key. Both the hook and the lift leave alone a `$ref` key in a
+  slot whose content is data: a specification extension, an example
+  payload, a `const`, `enum` or schema `default`; there `$ref` is a
+  literal, and the first draft of the prototype rewrote it.
 
 The resolved trees from the YAML and the JSON input are identical, every
-case behaves as designed, and the output serialises. What the experiment
+case behaves as designed, and the output serialises. The review of the
+first draft found four defects in the resolver, each now a case in the
+script: a site's own `allOf` replaced the target instead of joining it;
+a recursive schema reached top-down exposed a half-built object, so the
+cycle rule depended on document order; the fragment was split before it
+was percent-decoded; and a `$ref` inside an extension or an example
+payload was rewritten. All four are defects a real resolver would have to
+avoid, and none is about `expr`. What the experiment
 showed about `expr`'s share of that work: `evaluation()` did the fold of
 one node at a time and nothing else, because it does not walk objects;
 `simplify` was useful for a fixture form; the operator head gave the
@@ -241,6 +299,53 @@ resolver the token position for every site built at parse time and none
 for the site lifted afterwards; and the raw document had to be kept
 verbatim beside the operator tree, since the operator node's JSON is an
 array of an operator description.
+
+### E4: a structural-operator layer over `expr`
+
+The question behind this experiment is the one section 6 answers: if
+`expr` were extended to carry `$ref`, what would have to be true? Three
+measurements, in `prototype/e4-expr-struct.js`.
+
+(a) `$ref` as a lexical operator. With `$ref` declared as a prefix or
+infix token operator on jsonic+expr, `{ $ref: '#/x' }` fails with
+`unexpected`: the fixed token takes the key position, which the base
+grammar's pair rule owns and expects a KEY token in. A bare `$ref '#/x'`
+outside any map does parse as `["$ref", "#/x"]`, and a quoted `'$ref'`
+key stays an ordinary map because a string token is not an operator. The
+document shape OpenAPI uses is the one that cannot be reached lexically.
+
+(b) A structural layer. About ninety lines written against `expr`'s
+public surface (`testing.opify`, `evaluation`, `simplify`) do what an
+extension inside `expr` would do: an operator definition
+`{ struct: true, key: '$ref' }`; recognition at every `val` after-close
+by the shape of the built node (a map holding that key), producing
+`[op, value, siblings]` with the map's opening token on the op and a
+`guard(path)` that leaves data slots alone; a tree fold at the start
+rule's after-close that walks objects as well as arrays, hands each
+operator node to `expr`'s own `evaluation`, memoises per source node,
+detects a cycle met top-down or through a chain of references, and
+carries a site to the resolver: the root, the path, the token, and an
+inherited environment that an `inherit(node, env, path)` callback extends
+at each object on the way down. The resolver supplied for the test, sixty
+lines of OpenAPI and JSON Schema knowledge, uses the inherited
+environment for the base URI: `$self` on the document and `$id` on a
+schema set it, `$anchor` registers a plain-name fragment in it. On a
+document with a `$self`, two schemas carrying absolute `$id`s, an
+`$anchor`, a `$self`-relative document reference
+(`openapi.yaml#/components/responses/NotFound`), an absolute `$id`
+reference, a reference relative to a schema's `$id` (`tag.json`), a
+plain-name fragment (`#name`), a self-reference (`#`) and a `$ref` inside
+an `x-` extension, every case resolved as the specifications say, the
+cycle kept its back edge, the extension stayed verbatim, and the output
+serialised. Parsing the same document without `evaluate` gives the
+operator tree, which `expr`'s `simplify` prints as
+`["$ref", "#/components/responses/PetList", {"description": "Overridden"}]`
+exactly as it prints a token operator.
+
+(c) `expr`'s own fold on that tree. `evaluation(null, null, tree, fn)`
+over the root leaves every structural node where it is, inside its map;
+applied to one node it reduces it. The one change (b) could not make from
+outside `expr` is the one it most needs.
 
 ## 5. Findings
 
@@ -267,10 +372,12 @@ array of an operator description.
    exist; a `finish` counterpart does not. The start rule's after-close
    works, but which rule starts is the grammar's choice (`stream` in
    yaml), so a plugin has to read `rule.start` at install time.
-6. **Sibling semantics need positional typing.** The same
-   `{ "$ref": X, "description": D }` is an override under `responses`
-   and a conjunction under `schemas`. A resolver needs the path to the
-   site, or the OpenAPI object kind at the site. `expr`'s post-parse fold
+6. **Sibling semantics need positional typing, and so does being a
+   reference at all.** The same `{ "$ref": X, "description": D }` is an
+   override under `responses` and a conjunction under `schemas`, and
+   under `x-vendor`, `example` or `enum` it is not a reference but data.
+   A resolver needs the path to the site, or the OpenAPI object kind at
+   the site. `expr`'s post-parse fold
    passes `rule` and `ctx` (null after the parse) and no path; the Rust
    port's `EvalSite` already carries the occurrence token, which is the
    right direction.
@@ -293,10 +400,127 @@ array of an operator description.
     the extension namespace; a single merge rule cannot express both
     Reference Object and Schema Object semantics. Its alias-expansion
     guard is a yaml concern worth noting there.
+11. **`$ref` cannot be a lexical operator.** The key position of a map
+    belongs to the base grammar's pair rule, in JSON and YAML alike, and a
+    fixed token there breaks the parse (E4a). Whatever `expr` does for
+    `$ref` has to happen after the map is built.
+12. **A structural layer over `expr` carries `$ref`, and needs five
+    things `expr` does not have.** Recognition of an operator by node
+    shape; a fold that walks objects; a site with the root, path and token;
+    an inherited environment flowing down the tree, which base-URI scoping
+    needs; and memoisation with a cycle policy. Given those, a resolver of
+    sixty lines of OpenAPI knowledge handled `$self`, `$id`, `$anchor`,
+    relative and absolute references, chains, cycles and extensions (E4b).
+    None of the five is about values: `expr`'s terms and results may be
+    containers today.
 
-## 6. Recommendations
+## 6. Should `expr` handle trees as well as values?
 
-### 6.1 Shape of `@tabnas/openapi`
+The maintainer's question, put precisely. The answer from E4 is: `expr`
+already handles tree-shaped values, and that is not the gap. An operand of
+`f(x)` may be a map, a list or another expression, and an `evaluate`
+callback may return a container. What `$ref` needs is different in kind,
+and it comes in three parts.
+
+### 6.1 Operators recognised by shape
+
+Every `expr` operator today is a token: the lexer emits it, a `val` or
+`expr` alternate matches it, and Pratt binding powers decide where it
+attaches. A structural operator is recognised after the base grammar has
+built a node, by the node's shape: a map holding a keyword key such as
+`$ref`, `$dynamicRef`, `$merge`, or, in other formats, a list whose head
+is a keyword. It has no binding power, because it is never in competition
+with a neighbour for an operand; its operands are fixed by the shape (the
+key's value, and the remaining members). In `expr`'s terms it is a fifth
+operator kind beside infix, prefix, suffix, ternary and paren, with its
+own table (`structTM`, keyed by the keyword), recognised in a `val`
+after-close hook beside the alternates `expr` already adds to `val`, and
+producing the same node `[Op, ...terms]` that `isOp`, `simplify`, the
+render parts and the fixtures already understand. The `Op` gains a
+`struct` flag and a `key`; `OpDef` gains `struct: true` and `key`.
+
+Two things the prototype learned about that hook. The yaml grammar builds
+a block-sequence entry's mapping outside `val`, so the hook misses that
+one position (E3); the honest fix is in the engine (a node-complete or
+end-of-parse event), with a second hook on `yamlElemPair` as the interim.
+And whether a map with the keyword IS an operator depends on where it is
+(an `x-` extension, an example payload, an `enum` hold data), so the hook
+needs the path, read off the rule stack from the pair rules' `u.key`, and
+a guard the host supplies.
+
+### 6.2 A fold that walks the tree
+
+`expr`'s `evaluation` is a fold over operator nodes and arrays; the
+resolved tree needs a fold over the whole document. Three properties,
+each of which the prototype had to add from outside:
+
+- **It runs at the end.** Structural operators resolve against the
+  finished root, so `evaluate` gets a timing: `when: 'end'` collects
+  nothing and folds once at the start rule's after-close (or at an engine
+  `parse.finish` hook once one exists), where today's `evaluate` reduces
+  at each expression's close.
+- **It carries a site, and context flows down.** The resolver needs the
+  root, the path to the site and the operator's token, and it needs an
+  environment inherited from the ancestors: the base URI set by the
+  nearest `$id` or the document's `$self`, the anchors declared in that
+  resource. The engine already draws this line for rule state, between
+  the propagated `k` bag and the local `u` bag; the fold draws the same
+  one, with an `inherit(node, env, path)` callback that may extend the
+  environment at each object, and values returning upward as they do now.
+  The Rust port's `EvalSite` is the start of this shape.
+- **It memoises, and has a cycle policy.** One target is named by many
+  sites; the fold caches one result per source node and shares it. A
+  recursive schema reaches its own target, top-down before any reference
+  or through a chain of references; the fold detects both and applies a
+  policy the host chooses: keep the back edge verbatim (a tree, the
+  default) or share the object (a graph).
+
+Making `evaluation` walk objects is the smallest of these and the one
+nothing outside `expr` can do; the prototype re-implemented the fold to
+get it.
+
+### 6.3 What stays out of `expr`
+
+The resolver. URI resolution against a base, JSON Pointer decoding, which
+OpenAPI object a path names and what its siblings mean, document loading,
+the choice between a name and a URI in a discriminator mapping: all of
+that is OpenAPI and JSON Schema knowledge, and it is the `evaluate`
+callback and the `inherit` callback the host passes in. In the prototype
+it is sixty lines beside ninety of generic machinery, and the two never
+mix. `expr` supplies the operator model and the fold; the plugin supplies
+meaning, as it does for `+` today.
+
+### 6.4 Where the extension lives
+
+Three homes are possible, and the choice is the maintainer's:
+
+- **Inside `expr`, as a second module** (`ts/src/tree.ts` beside
+  `expr.ts`, mirrored in the Go and Rust crates), sharing `opify`,
+  `isOp`, `simplify`, the S-expression contract and the fixture format.
+  The Pratt ladder is untouched, since structural operators have no
+  binding power. Cost: three runtimes, roughly the size of the prototype's
+  generic layer each, plus fixtures; and the Go port's wrapped operator
+  node (`DIVERGENCE.md`) has to be settled for the new kind before a
+  consumer depends on the operator tree, since the raw tree never carries
+  one but the `ops` form does.
+- **A sibling package on `expr`'s public surface**, which still needs
+  `opify` made public and `evaluation` taught to walk objects, so `expr`
+  changes anyway; it adds a package to the fleet for the sake of keeping
+  Pratt and tree concerns in separate repositories.
+- **Inside `@tabnas/openapi` alone**, which is what the prototype did and
+  what a first release can ship with; it forfeits reuse by JSON Schema,
+  AsyncAPI and the other `$`-keyword formats, and keeps `expr` out of
+  `$ref` entirely.
+
+This note recommends the first, in two steps: land `opify` and the
+object-walking `evaluation` in `expr` now, since every home needs them,
+and build the structural kind and the fold as the second module once the
+openapi plugin's resolver has settled what the site and the environment
+must carry. Until then the plugin carries the prototype's layer locally.
+
+## 7. Recommendations
+
+### 7.1 Shape of `@tabnas/openapi`
 
 - **Layer on `jsonic` and `yaml`**, as the template's ZON plugin layers
   on jsonic: `new Tabnas().use(jsonic).use(Yaml).use(OpenApi, opts)`. One
@@ -309,19 +533,25 @@ array of an operator description.
   engine's `info` marker on containers, carrying what resolution needs.
 - **Resolved mode is a derived tree, produced after the parse.**
   Implement it as a walk over the raw tree, in the shape E3 prototyped:
-  decode the URI (RFC 3986 split, percent-decoding, `~1`/`~0`), locate
-  through references, resolve targets first, one result per target, back
-  edges kept as verbatim `$ref` by default (a tree) with an option to
-  share references (a graph, apidef's shape), siblings applied by object
-  kind, externals through a `load(uri)` callback with `$self` and the
-  retrieval URI as base, unresolved references left verbatim and listed.
+  decode the URI (RFC 3986 split, then percent-decode the fragment, then
+  split the pointer, then `~1`/`~0`), locate through references, resolve
+  targets first, one result per target, back edges kept as verbatim `$ref`
+  by default (a tree) with an option to share references (a graph,
+  apidef's shape), a cycle detected by node as well as by URI, siblings
+  applied by object kind (a site's `allOf` joins the target's), externals
+  through a `load(uri)` callback with `$self` and the retrieval URI as
+  base, unresolved references left verbatim and listed.
   Record provenance on the `info` marker (`{ ref, kind, at }`), with an
   `xref: true` option that also writes apidef's `x-ref` key during
   migration.
 - **Type sites by position.** The plugin knows the OpenAPI object model,
   so it can tell a Reference Object slot from a Schema Object slot by the
-  path to the site. That is what decides sibling semantics, discriminator
-  `mapping` name-or-URI, and which implicit connection a bare name is.
+  path to the site, and both from a slot that holds data (an `x-`
+  extension, an `example`, an Example Object's `value`, a schema `const`,
+  `enum` or `default`), where a `$ref` key is a literal and must pass
+  through. That is what decides what is a reference, sibling semantics,
+  discriminator `mapping` name-or-URI, and which implicit connection a
+  bare name is.
 - **Use `expr` for the embedded string languages**, through a second
   small instance owned by the plugin: a runtime-expression grammar
   (`.`, `/`, `#`, `{ }`), a pointer-fragment grammar (`/`), and a
@@ -330,38 +560,45 @@ array of an operator description.
   S-expressions on the resolved tree (or through a `parseExpression`
   helper) so a client such as apidef can evaluate links and callbacks
   against a request. Keep URI splitting outside `expr`.
-- **Do not use `expr` for `$ref` in the document grammar**, as a prefix
-  operator on the `$ref` key or as the raw tree's node shape, for the
-  reasons in findings 1 to 3.
+- **Do not use `expr`'s lexical operators for `$ref`** (finding 11), and
+  never make the raw tree an operator tree (findings 1 to 3). If `$ref`
+  is to be an `expr` operator at all, it is the structural kind of
+  section 6, and the resolved tree is what its fold produces.
 - **Parity.** A resolved tree is plain data in every runtime, so Go and
   Rust ports carry no `expr` divergence. Pin the raw/resolved pair in
   shared `test/spec` fixtures: raw input, resolved output, and a column
   for unresolved references.
 
-### 6.2 Enhancements to `@tabnas/expr`
+### 7.2 Enhancements to `@tabnas/expr`
 
 In order of value to this plugin. Each is a three-runtime change under
-the fixture contract.
+the fixture contract. The first two are needed whatever home section 6.4
+chooses; the next two are the tree extension itself.
 
 1. **A public operator constructor.** Promote `testing.opify` to an
    exported `opify` (Go and Rust already export it) so a sibling plugin
    can mint operator nodes `simplify` and `evaluation` recognise. Small,
-   and it removes the only unstable API the prototype had to use.
+   and it removes the only unstable API the prototypes had to use.
 2. **`evaluation()` over objects.** An option (`evaluation(rule, ctx,
    tree, evaluate, { objects: true })`, or a sibling function) that
    descends into plain objects as it already descends into plain arrays.
-   Without it the fold cannot be applied to a document; with it the
-   resolved pass in 6.1 is `evaluation` plus a resolver.
-3. **Site context for the resolver.** Pass the path (or parent chain)
-   to the site alongside `rule` and `ctx`, which are null after a parse.
-   The Rust `EvalSite` is the model. Finding 6 needs this for sibling
-   semantics; it also lets a resolver report where an unresolved
-   reference sits.
-4. **A deferred `evaluate`.** `evaluate: { fn, when: 'end' }` that
-   collects operator nodes and folds them when the parse completes,
-   against the finished root. This depends on the engine `finish` hook
-   below, and would make "evaluate against the document" a supported
-   `expr` mode rather than a pattern each plugin repeats.
+   Without it the fold cannot be applied to a document; E4c shows it is
+   the one thing the prototype could not supply from outside.
+3. **A structural operator kind.** `OpDef.struct: true` with `key`,
+   recognised at `val` after-close by node shape, producing
+   `[op, value, siblings]` with the opening token on the op, gated by a
+   host-supplied guard over the path (section 6.1). Fixtures: a
+   `struct-ref.tsv` with the operator tree as `simplify` prints it, for
+   JSON and YAML input, including a site inside an `x-` extension that
+   must stay a map.
+4. **A tree fold with timing, site and inherited context.** `evaluate:
+   { fn, when: 'end', inherit, env, cycle: 'ref' | 'share' }`, folding at
+   end of parse against the finished root, passing the resolver a site
+   with root, path, token and the inherited environment, memoising per
+   source node, detecting both kinds of cycle (section 6.2). The Rust
+   `EvalSite` is the model for the site; the engine's `k` bag for the
+   environment. Fixtures: forward reference, chain, top-down recursion,
+   `$id`-relative reference, each with the resolved tree as output.
 5. **Error on a dangling operator.** The existing TODO; `#` alone and
    `$request.body#` with no pointer should be distinguishable from each
    other by the grammar, and `1+` should fail. The `$ref` sub-parse made
@@ -371,20 +608,22 @@ the fixture contract.
    template grammars. Low priority; the path-template grammar can be a
    dedicated lex matcher instead.
 
-### 6.3 Enhancements to `@tabnas/parser`
+### 7.3 Enhancements to `@tabnas/parser`
 
 1. **A `parse.finish` hook**, symmetrical to `parse.prepare`, called with
    the context and the root node once the parse completes and before the
    result is returned. Plugins that post-process a document (this one,
-   and `expr`'s deferred mode) would use it instead of hooking whichever
-   rule happens to start the grammar.
+   and the tree fold of section 6.2) would use it instead of hooking
+   whichever rule happens to start the grammar.
 2. **Source position on the `info` marker.** `@object$` and `@array$`
    attach `{ implicit, meta }` when `info.map`/`info.list` are on; adding
    the opening token's `sI`, `rI`, `cI` would give every post-parse walk
    the provenance E3 could only get from parse-time rewriting, in all
-   three runtimes, without a grammar-specific hook.
+   three runtimes, without a grammar-specific hook. A node-complete event
+   on container close would also close the yaml block-sequence gap that
+   both E3 and E4 hook around.
 
-### 6.4 Notes for `@tabnas/yaml`
+### 7.4 Notes for `@tabnas/yaml`
 
 Nothing is required. Two facts to record in the openapi plugin's guide:
 the start rule is `stream` and a multi-document stream parses to an array
@@ -394,7 +633,7 @@ alias-expansion bound (`yamlalias.ts`) describes a cost in the yaml
 plugin's alias copying that belongs with that plugin, as a documented
 limit or an option.
 
-### 6.5 Migration from apidef
+### 7.5 Migration from apidef
 
 The resolved mode replaces `addXRefsAndResolve`, `resolvePointer`,
 `followAlias` and `decycle` in apidef's `parse.ts`. The compatibility
@@ -404,7 +643,7 @@ too), and the single merge rule, which apidef's downstream heuristics may
 depend on for Schema Objects; measure that against apidef's fixtures
 before switching the default to the `allOf` form.
 
-## 7. Open questions
+## 8. Open questions
 
 - Should the resolved tree's default for a Schema Object with `$ref` and
   siblings be the `allOf` conjunction (correct under 2020-12) or the merge
@@ -419,6 +658,11 @@ before switching the default to the `allOf` form.
 - Does the plugin own a document loader for external references, or only
   the `load(uri)` callback, with the loader in `@tabnas/mcp` or the
   client?
+- Which home in section 6.4 does the tree extension get, and in what
+  order: `opify` and the object-walking fold first in `expr`, the
+  structural kind after the plugin's resolver has settled the site?
+- What is the Go shape of a structural operator node, given the wrapped
+  array `DIVERGENCE.md` records for token operators?
 
 ## Appendix: running the prototype
 
@@ -435,6 +679,7 @@ node e0-input-formats.js
 node e1-ref-syntax.js
 node e2-eager.js
 node e3-ref-op.js
+node e4-expr-struct.js
 ```
 
 Each script's output as captured for this document is in the

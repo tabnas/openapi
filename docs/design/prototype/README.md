@@ -11,6 +11,7 @@ declares what they import.
 | `e1-ref-syntax.js` | How well does `expr`, as a sub-parser, read runtime expressions, `$ref` URIs and path templates? | `e1-ref-syntax.result.txt` |
 | `e2-eager.js` | Can `expr`'s eager `evaluate` resolve a document-level reference? | `e2-eager.result.txt` |
 | `e3-ref-op.js` | `$ref` as an `expr` operator node over YAML and JSON input, resolved by a post-parse fold | `e3-ref-op.result.txt` |
+| `e4-expr-struct.js` | Can `expr` be extended to carry `$ref`? A lexical attempt, then a structural-operator layer over `expr`'s public surface with a tree fold and an inherited base URI | `e4-expr-struct.result.txt` |
 
 Run them from a scratch directory with the five published packages
 installed (see the appendix of the design note). The captured results were

@@ -1,19 +1,24 @@
 1. raw: yaml == json == JSON.parse: true true ; also via jsonic+Yaml on the JSON text: true
-2. ops: $ref maps in document: 9; op nodes built at parse time: yaml 8 (missed 1: the block-sequence entry), json 9
+2. ops: $ref maps in document: 14 (2 of them data: an x- extension and an example payload); op nodes built at parse time: yaml 11 (missed 1: the block-sequence entry), json 12
    simplify(/pets 200) = ["$ref","#/components/responses/PetList",{"description":"Overrides the component description"}]
    simplify(parameters) = [{"$ref":"#/components/parameters/Limit"}] <- yaml: still a map
    simplify(parameters) = [["$ref","#/components/parameters/Limit",{}]] <- json: an op
    JSON.stringify(op node) is the op-array, not the document: [{"name":"ref-meta","src":"$ref","terms":2,"prefix":false,"i...
    simplify(ops) yaml == json after lift(): true
 3. resolved yaml == resolved json: true ; JSON.stringify is finite: true
-   /pets 200 (Reference Object: description overrides) = {"description":"Overrides the component description","content":{"application/json":{"schema":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"friends":{"type":"array","items":{"$ref":"#/components/schemas/Pet"}},"owner":{"$ref":"https://example.com/schemas/person.json"},"tag":{"allOf":[{"type":"string"}],"description":"The pet's tag"}}}}}}}
+   /pets 200 (Reference Object: description overrides) = {"description":"Overrides the component description","content":{"application/json":{"schema":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"friends":{"type":"array","items":{"$ref":"#/components/schemas/Pet"}},"owner":{"$ref":"https://example.com/schemas/person.json"},"tag":{"allOf":[{"type":"string"}],"description":"The pet's tag"}}}},"example":{"$ref":"#/components/schemas/Pet","note":"data"}}}}
    /pets 404 (ref -> ref) = {"description":"Not found"}
-   /pets/{id} 200 (~1 pointer into paths) = {"description":"Overrides the component description","content":{"application/json":{"schema":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"friends":{"type":"array","items":{"$ref":"#/components/schemas/Pet"}},"owner":{"$ref":"https://example.com/schemas/person.json"},"tag":{"allOf":[{"type":"string"}],"description":"The pet's tag"}}}}}}}
+   /pets/{id} 200 (~1 pointer into paths) = {"description":"Overrides the component description","content":{"application/json":{"schema":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"friends":{"type":"array","items":{"$ref":"#/components/schemas/Pet"}},"owner":{"$ref":"https://example.com/schemas/person.json"},"tag":{"allOf":[{"type":"string"}],"description":"The pet's tag"}}}},"example":{"$ref":"#/components/schemas/Pet","note":"data"}}}}
    parameters[0] = {"name":"limit","in":"query","schema":{"type":"integer"}}
    provenance (hidden) = {"ref":"#/components/parameters/Limit","kind":"reference"}
    Pet.friends.items (cycle: back edge kept) = {"$ref":"#/components/schemas/Pet"}
    Pet.tag (Schema Object: sibling is a conjunction) = {"allOf":[{"type":"string"}],"description":"The pet's tag"}
    Pet.owner (external, verbatim) = {"$ref":"https://example.com/schemas/person.json"}
+   Derived (site allOf joins the target) = {"allOf":[{"type":"string"},{"maxLength":5}]}
+   Node.properties.child (recursion met top-down, before any reference) = {"$ref":"#/components/schemas/Node"}
+   Encoded (%2F is a separator, RFC 6901 s6) = {"type":"string"}
+   x-vendor (extension: data, verbatim) = {"$ref":"#/components/schemas/Tag","keep":"literal"}
+   PetList example (payload: data, verbatim) = {"$ref":"#/components/schemas/Pet","note":"data"}
    unresolved = []
    one target, one object: /pets 200 content === PetList content: true
    /pets/{id} 200 === /pets 200: false
