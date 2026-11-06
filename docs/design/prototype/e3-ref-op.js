@@ -220,7 +220,7 @@ components:
     Tag: { type: string }
 `
 const jsonSrc = JSON.stringify(new Tabnas().use(jsonic).use(Yaml).parse(yamlSrc), null, 2)
-const show = (label, v) => console.log(label, JSON.stringify(v))
+const show = (label, v, note) => console.log(label, JSON.stringify(v) + (note ? ' ' + note : ''))
 const countOps = (n) => isRefOp(n) ? 1 : Array.isArray(n) ? n.reduce((a, v) => a + countOps(v), 0)
   : isRecord(n) ? Object.values(n).reduce((a, v) => a + countOps(v), 0) : 0
 const countRefs = (n) => isRecord(n) && 'string' === typeof n.$ref ? 1 : Array.isArray(n) ? n.reduce((a, v) => a + countRefs(v), 0)
