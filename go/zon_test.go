@@ -1,0 +1,545 @@
+/* Copyright (c) 2025 Richard Rodger, MIT License */
+
+package tabnaszon
+
+import (
+	"errors"
+	"math"
+	"math/big"
+	"reflect"
+	"strconv"
+	"strings"
+	"testing"
+
+	jsonic "github.com/tabnas/jsonic/go"
+)
+
+// mustZon builds a jsonic instance with the Zon plugin installed, failing the
+// test if the plugin does not install.
+//
+// UseDefaults returns an error and both helpers below used to DISCARD it. That
+// hid a whole class of failure: with the plugin not installed, `j` is left as
+// bare jsonic, and bare jsonic already parses `42`, `3.14`, `true`, `null` and
+// `"hello"` — so a chunk of this suite would still pass while exercising none
+// of this plugin's behaviour.
+func mustZon(t *testing.T, opts ...map[string]any) *jsonic.Jsonic {
+	t.Helper()
+	j := jsonic.Make()
+	if err := j.UseDefaults(Zon, Defaults, opts...); err != nil {
+		t.Fatalf("Zon plugin failed to install: %v", err)
+	}
+	return j
+}
+
+// parse creates a jsonic instance with the Zon plugin and parses src.
+func parse(t *testing.T, src string, opts ...map[string]any) any {
+	t.Helper()
+	result, err := mustZon(t, opts...).Parse(src)
+	if err != nil {
+		t.Fatalf("parse(%q) unexpected error: %v", src, err)
+	}
+	return result
+}
+
+func parseErr(t *testing.T, src string, opts ...map[string]any) error {
+	t.Helper()
+	_, err := mustZon(t, opts...).Parse(src)
+	return err
+}
+
+// normalize recursively converts parsed *OrderedMap nodes into plain
+// map[string]any so value comparisons are order-agnostic. The parser now
+// returns insertion-ordered maps; these tests assert values/structure, not
+// key order, so both sides are flattened before reflect.DeepEqual.
+func normalize(v any) any {
+	switch x := v.(type) {
+	case *jsonic.OrderedMap:
+		m := make(map[string]any, x.Len())
+		for _, k := range x.Keys {
+			m[k] = normalize(x.Vals[k])
+		}
+		return m
+	case map[string]any:
+		m := make(map[string]any, len(x))
+		for k, val := range x {
+			m[k] = normalize(val)
+		}
+		return m
+	case []any:
+		s := make([]any, len(x))
+		for i, val := range x {
+			s[i] = normalize(val)
+		}
+		return s
+	default:
+		return v
+	}
+}
+
+func assertEqual(t *testing.T, label string, got, want any) {
+	t.Helper()
+	if !reflect.DeepEqual(normalize(got), normalize(want)) {
+		t.Errorf("%s: got %#v, want %#v", label, got, want)
+	}
+}
+
+func TestScalars(t *testing.T) {
+	assertEqual(t, "int", parse(t, "42"), float64(42))
+	assertEqual(t, "float", parse(t, "3.14"), float64(3.14))
+	assertEqual(t, "true", parse(t, "true"), true)
+	assertEqual(t, "false", parse(t, "false"), false)
+	assertEqual(t, "null", parse(t, "null"), nil)
+	assertEqual(t, "string", parse(t, `"hello"`), "hello")
+}
+
+func TestNumericBases(t *testing.T) {
+	assertEqual(t, "hex", parse(t, "0x2a"), float64(42))
+	assertEqual(t, "oct", parse(t, "0o52"), float64(42))
+	assertEqual(t, "bin", parse(t, "0b101010"), float64(42))
+	assertEqual(t, "sep", parse(t, "1_000_000"), float64(1000000))
+}
+
+func TestEnumLiteralAsValue(t *testing.T) {
+	assertEqual(t, "single", parse(t, ".foo"), "foo")
+	assertEqual(t, "snake_case", parse(t, ".bar_baz"), "bar_baz")
+}
+
+func TestEmptyStruct(t *testing.T) {
+	got := parse(t, ".{}")
+	if !reflect.DeepEqual(got, []any{}) {
+		t.Errorf("empty .{} got %#v, want []any{}", got)
+	}
+}
+
+func TestSimpleStruct(t *testing.T) {
+	assertEqual(t, "single", parse(t, ".{ .a = 1 }"),
+		map[string]any{"a": float64(1)})
+	assertEqual(t, "two", parse(t, ".{ .a = 1, .b = 2 }"),
+		map[string]any{"a": float64(1), "b": float64(2)})
+}
+
+func TestTrailingCommaStruct(t *testing.T) {
+	assertEqual(t, "single", parse(t, ".{ .a = 1, }"),
+		map[string]any{"a": float64(1)})
+	assertEqual(t, "two", parse(t, ".{ .a = 1, .b = 2, }"),
+		map[string]any{"a": float64(1), "b": float64(2)})
+}
+
+func TestTuple(t *testing.T) {
+	assertEqual(t, "numbers", parse(t, ".{ 1, 2, 3 }"),
+		[]any{float64(1), float64(2), float64(3)})
+	assertEqual(t, "strings", parse(t, `.{ "a", "b" }`),
+		[]any{"a", "b"})
+}
+
+func TestTrailingCommaTuple(t *testing.T) {
+	assertEqual(t, "trailing", parse(t, ".{ 1, 2, 3, }"),
+		[]any{float64(1), float64(2), float64(3)})
+}
+
+func TestNestedStruct(t *testing.T) {
+	assertEqual(t, "nested", parse(t, ".{ .a = .{ .b = 1 } }"),
+		map[string]any{"a": map[string]any{"b": float64(1)}})
+}
+
+func TestNestedTuple(t *testing.T) {
+	assertEqual(t, "nested",
+		parse(t, ".{ .{ 1, 2 }, .{ 3, 4 } }"),
+		[]any{
+			[]any{float64(1), float64(2)},
+			[]any{float64(3), float64(4)},
+		})
+}
+
+func TestMixedNesting(t *testing.T) {
+	got := parse(t, ".{ .xs = .{ 1, 2, 3 }, .y = .{ .z = true } }")
+	want := map[string]any{
+		"xs": []any{float64(1), float64(2), float64(3)},
+		"y":  map[string]any{"z": true},
+	}
+	assertEqual(t, "mixed", got, want)
+}
+
+func TestStringEscapes(t *testing.T) {
+	assertEqual(t, "newline", parse(t, `"a\nb"`), "a\nb")
+	assertEqual(t, "tab", parse(t, `"a\tb"`), "a\tb")
+	assertEqual(t, "backslash", parse(t, `"a\\b"`), `a\b`)
+}
+
+func TestEnumAsFieldValue(t *testing.T) {
+	assertEqual(t, "field", parse(t, ".{ .kind = .red }"),
+		map[string]any{"kind": "red"})
+}
+
+func TestComments(t *testing.T) {
+	src := `.{
+		// a comment
+		.name = "x", // trailing comment
+		.version = "1.0", // version
+	}`
+	got := parse(t, src)
+	want := map[string]any{"name": "x", "version": "1.0"}
+	assertEqual(t, "with comments", got, want)
+}
+
+func TestRealisticZon(t *testing.T) {
+	src := `.{
+		.name = "example",
+		.version = "0.0.1",
+		.minimum_zig_version = "0.14.0",
+		.dependencies = .{
+			.foo = .{
+				.url = "https://example.com/foo.tar.gz",
+				.hash = "1220deadbeef",
+			},
+		},
+		.paths = .{
+			"build.zig",
+			"src",
+			"",
+		},
+	}`
+	got := parse(t, src)
+	want := map[string]any{
+		"name":                "example",
+		"version":             "0.0.1",
+		"minimum_zig_version": "0.14.0",
+		"dependencies": map[string]any{
+			"foo": map[string]any{
+				"url":  "https://example.com/foo.tar.gz",
+				"hash": "1220deadbeef",
+			},
+		},
+		"paths": []any{"build.zig", "src", ""},
+	}
+	assertEqual(t, "build.zig.zon", got, want)
+}
+
+func TestCharLiteralAsNumber(t *testing.T) {
+	assertEqual(t, "A", parse(t, "'A'", map[string]any{"charAsNumber": true}), float64(65))
+	assertEqual(t, "n", parse(t, `'\n'`, map[string]any{"charAsNumber": true}), float64(10))
+	assertEqual(t, "emoji",
+		parse(t, `'\u{1F600}'`, map[string]any{"charAsNumber": true}),
+		float64(0x1F600))
+}
+
+func TestCharLiteralAsString(t *testing.T) {
+	assertEqual(t, "A", parse(t, "'A'"), "A")
+}
+
+func TestMultiLineString(t *testing.T) {
+	src := ".{\n" +
+		"\t.text = \\\\hello\n" +
+		"\t\t\\\\world\n" +
+		"\t,\n" +
+		"}"
+	got := parse(t, src)
+	want := map[string]any{"text": "hello\nworld"}
+	assertEqual(t, "multi-line", got, want)
+}
+
+func TestEnumTagOption(t *testing.T) {
+	got := parse(t, ".{ .kind = .red }", map[string]any{"enumTag": "$enum"})
+	want := map[string]any{"kind": map[string]any{"$enum": "red"}}
+	assertEqual(t, "enum-tagged", got, want)
+}
+
+func TestSyntaxError(t *testing.T) {
+	// `{` without `.` is not valid ZON.
+	if err := parseErr(t, "{ a = 1 }"); err == nil {
+		t.Error("expected error for bare { but got none")
+	}
+}
+
+// The cases below cannot live in `test/spec/*.tsv`: the shared fixtures
+// compare after a JSON round-trip, and big.Int / Inf / NaN / -0 have no JSON
+// spelling. Mirrors the equivalent block in ts/test/zon.test.ts.
+
+func bigOf(t *testing.T, s string) *big.Int {
+	t.Helper()
+	v, ok := new(big.Int).SetString(s, 10)
+	if !ok {
+		t.Fatalf("bad big literal %q", s)
+	}
+	return v
+}
+
+func TestBigIntegersKeepExactValue(t *testing.T) {
+	// 2^65 - 1 is not representable as an IEEE-754 double, so the plugin
+	// returns a *big.Int rather than silently rounding (zig 0.16.0 reports
+	// the same exact value).
+	want := bigOf(t, "36893488147419103231")
+	for _, src := range []string{
+		"36893488147419103231",
+		"368934_881_474191032_31",
+		"0x1ffffffffffffffff",
+		"0o3777777777777777777777",
+		"0b" + strings.Repeat("1", 65),
+	} {
+		got, ok := parse(t, src).(*big.Int)
+		if !ok || got.Cmp(want) != 0 {
+			t.Errorf("parse(%q) = %v, want *big.Int %v", src, parse(t, src), want)
+		}
+	}
+	neg := bigOf(t, "-36893488147419103231")
+	if got, ok := parse(t, "-36893488147419103231").(*big.Int); !ok || got.Cmp(neg) != 0 {
+		t.Errorf("parse(-2^65+1) = %v, want %v", parse(t, "-36893488147419103231"), neg)
+	}
+	if got, ok := parse(t, "9007199254740993").(*big.Int); !ok ||
+		got.Cmp(bigOf(t, "9007199254740993")) != 0 {
+		t.Errorf("2^53+1 should be exact, got %v", parse(t, "9007199254740993"))
+	}
+}
+
+func TestIntegersThatFitADoubleStayFloat64(t *testing.T) {
+	cases := map[string]float64{
+		"9007199254740992":      9007199254740992,
+		"18446744073709551616":  18446744073709551616,
+		"-36893488147419103232": -36893488147419103232,
+	}
+	for src, want := range cases {
+		got, ok := parse(t, src).(float64)
+		if !ok || got != want {
+			t.Errorf("parse(%q) = %#v, want float64 %v", src, parse(t, src), want)
+		}
+	}
+}
+
+func TestInfAndNanLiterals(t *testing.T) {
+	if got := parse(t, "inf").(float64); !math.IsInf(got, 1) {
+		t.Errorf("inf = %v", got)
+	}
+	if got := parse(t, "-inf").(float64); !math.IsInf(got, -1) {
+		t.Errorf("-inf = %v", got)
+	}
+	if got := parse(t, "- inf").(float64); !math.IsInf(got, -1) {
+		t.Errorf("- inf = %v", got)
+	}
+	if got := parse(t, "nan").(float64); !math.IsNaN(got) {
+		t.Errorf("nan = %v", got)
+	}
+	// `-nan` is not a Zig numeric literal.
+	if err := parseErr(t, "-nan"); err == nil {
+		t.Error("expected -nan to be rejected")
+	}
+}
+
+func TestNegativeZero(t *testing.T) {
+	for _, src := range []string{"-0.0", "-0e0"} {
+		got := parse(t, src).(float64)
+		if got != 0 || !math.Signbit(got) {
+			t.Errorf("parse(%q) = %v, want -0", src, got)
+		}
+	}
+	// But an integer `-0` is ambiguous in Zig and rejected.
+	if err := parseErr(t, "-0"); err == nil {
+		t.Error("expected -0 to be rejected")
+	}
+}
+
+func TestDuplicateStructFieldRejected(t *testing.T) {
+	for _, src := range []string{`.{ .a = 1, .a = 2 }`, `.{ .@"a" = 1, .a = 2 }`} {
+		err := parseErr(t, src)
+		if err == nil {
+			t.Fatalf("expected %q to be rejected", src)
+		}
+		if !strings.Contains(err.Error(), "duplicate struct field") {
+			t.Errorf("%q: unexpected message %q", src, err.Error())
+		}
+	}
+	// Sibling structs may of course repeat a name.
+	got := parse(t, `.{ .x = .{ .a = 1 }, .y = .{ .a = 2 } }`)
+	want := map[string]any{
+		"x": map[string]any{"a": 1.0},
+		"y": map[string]any{"a": 2.0},
+	}
+	assertEqual(t, "sibling-dup", got, want)
+}
+
+// TestFieldNameIsAField pins that only `.ident` / `.@"..."` names a
+// field: the zig 0.16.0 oracle answers each input below "expected field
+// initializer".
+//
+// What rejects them is the KEY token set {"#TX", "", "", ""} in zon.go.
+// The engine overlays a token set by INDEX, so a bare {"#TX"} left the
+// default #NR, #ST and #VL live, and with github.com/tabnas/parser/go
+// v0.12.0 every one of these parsed. The Rust port refuses them too,
+// since engine 0.12.3 (tabnas/parser#217).
+func TestFieldNameIsAField(t *testing.T) {
+	for _, src := range []string{
+		`.{ .a = 1, "b" = 2 }`,
+		`.{ .a = 1, 1 = 2 }`,
+		`.{ .a = 1, -1 = 2 }`,
+		`.{ .a = 1, 0x1 = 2 }`,
+		`.{ .a = 1, inf = 2 }`,
+		`.{ .a = 1, true = 2 }`,
+		`.{ .a = 1, null = 2 }`,
+		`.{ .a = 1, 'x' = 2 }`,
+		".{ .a = 1, \\\\x\n = 2 }",
+	} {
+		got, err := mustZon(t).Parse(src)
+		var te *jsonic.JsonicError
+		if !errors.As(err, &te) {
+			t.Errorf("%q: want ERROR:unexpected, got %#v, %v", src, got, err)
+			continue
+		}
+		if te.Code != "unexpected" {
+			t.Errorf("%q: got code %q, want unexpected", src, te.Code)
+		}
+	}
+	assertEqual(t, "quoted-field", parse(t, `.{ .a = 1, .@"b" = 2 }`),
+		map[string]any{"a": 1.0, "b": 2.0})
+}
+
+func TestDocCommentsRejected(t *testing.T) {
+	for _, src := range []string{"//! doc\n1", "/// doc\n1"} {
+		err := parseErr(t, src)
+		if err == nil {
+			t.Fatalf("expected %q to be rejected", src)
+		}
+		if !strings.Contains(err.Error(), "doc comments") {
+			t.Errorf("%q: unexpected message %q", src, err.Error())
+		}
+	}
+	// Four or more slashes is an ordinary line comment again.
+	for _, src := range []string{"//// four\n1", "// two\n1"} {
+		if got := parse(t, src); got != 1.0 {
+			t.Errorf("parse(%q) = %v, want 1", src, got)
+		}
+	}
+}
+
+// TestExponentPastTheHostInteger pins the GO column of the DIVERGENCE.md
+// entry "An exponent past what the runtime's integer parse holds".
+//
+// The exponent digits are read with strconv.Atoi, which parses into int,
+// so a literal whose exponent overflows the HOST word is rejected as
+// zon_number where the zig oracle (and the Rust port) saturate to an
+// infinity or a zero. The boundary is therefore math.MaxInt64 on a 64-bit
+// host and math.MaxInt32 on a 32-bit one; the expectation is picked from
+// strconv.IntSize so the test measures the host it runs on rather than
+// assuming one (`CGO_ENABLED=0 GOARCH=386 go test` runs the other column).
+//
+// A rejected NEGATIVE exponent quotes a shorter span, on either word size:
+// the failure span is measured with scanNumTokenEnd, which stops at the
+// sign, so the message names `1e` or `0x1p` rather than the whole literal.
+// A rejected positive exponent quotes the literal in full.
+//
+// Repairing this (strconv.ParseInt(.., 64) with saturation) moves every
+// rejected row to the oracle's answer; delete this test and the entry in
+// the same change.
+func TestExponentPastTheHostInteger(t *testing.T) {
+	inf := math.Inf(1)
+	const reject = "ERROR:zon_number"
+	rows := []struct {
+		input string
+		on64  any    // the cell for a 64-bit host
+		on32  any    // the cell for a 32-bit host
+		src   string // the quoted source when rejected
+	}{
+		{"1e400", inf, inf, ""},
+		{"1e2147483647", inf, inf, ""},
+		{"1e2147483648", inf, reject, "1e2147483648"},
+		{"1e9223372036854775807", inf, reject, "1e9223372036854775807"},
+		{"1e9223372036854775808", reject, reject, "1e9223372036854775808"},
+		{"1e-9223372036854775807", 0.0, reject, "1e"},
+		{"1e-9223372036854775808", reject, reject, "1e"},
+		{"1e9999999999999999999", reject, reject, "1e9999999999999999999"},
+		{"1e100000000000000000001", reject, reject, "1e100000000000000000001"},
+		{"1e999999999999999999998", reject, reject, "1e999999999999999999998"},
+		{"1e999999999999999999999", reject, reject, "1e999999999999999999999"},
+		{"1e-999999999999999999999", reject, reject, "1e"},
+		{"0x1p2147483647", inf, inf, ""},
+		{"0x1p2147483648", inf, reject, "0x1p2147483648"},
+		{"0x1p99999999999999999999", reject, reject, "0x1p99999999999999999999"},
+		{"0x1p-99999999999999999999", reject, reject, "0x1p"},
+	}
+	if len(rows) != 16 {
+		t.Fatalf("the register's table holds sixteen rows; this test has %d", len(rows))
+	}
+	j := mustZon(t)
+	for _, row := range rows {
+		want := row.on64
+		if strconv.IntSize == 32 {
+			want = row.on32
+		}
+		got, err := j.Parse(row.input)
+		if want == reject {
+			var te *jsonic.JsonicError
+			if !errors.As(err, &te) {
+				t.Errorf("%s: want %s on a %d-bit host, got %#v, %v", row.input, reject, strconv.IntSize, got, err)
+				continue
+			}
+			if te.Code != "zon_number" || te.Src != row.src {
+				t.Errorf("%s: got code %q quoting %q, want zon_number quoting %q", row.input, te.Code, te.Src, row.src)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: want %v on a %d-bit host, got %v", row.input, want, strconv.IntSize, err)
+			continue
+		}
+		f, ok := got.(float64)
+		if !ok || f != want.(float64) || math.Signbit(f) {
+			t.Errorf("%s: got %#v, want %v", row.input, got, want)
+		}
+	}
+}
+
+// TestErrorCodesCarryTheirOwnHints: a declared code without a hint of its
+// own falls back to the engine's hint for an UNKNOWN code, which tells the
+// reader the error is probably a bug in jsonic or a plugin.
+func TestErrorCodesCarryTheirOwnHints(t *testing.T) {
+	for _, c := range []struct{ src, code, want string }{
+		{"0X2A", "zon_number", "After a lowercase base prefix"},
+		{`.@""`, "zon_ident", "the quoted form must"},
+		{`'\u{110000}'`, "zon_char", "no higher than U+10FFFF"},
+		{"///x", "zon_doc_comment", "only plain // comments"},
+		{".{ .a = 1, .a = 2 }", "zon_dup_field", "and .a appears"},
+	} {
+		_, err := mustZon(t).Parse(c.src)
+		var te *jsonic.JsonicError
+		if !errors.As(err, &te) {
+			t.Fatalf("%q: want a %s error, got %v", c.src, c.code, err)
+		}
+		if te.Code != c.code {
+			t.Errorf("%q: code %q, want %q", c.src, te.Code, c.code)
+		}
+		if !strings.Contains(te.Hint, c.want) || strings.Contains(te.Hint, "probably a bug") {
+			t.Errorf("%q: hint %q", c.src, te.Hint)
+		}
+	}
+	// Every declared code, not only these, has a hint of its own.
+	o := mustZon(t).Options()
+	for code := range o.Error {
+		if strings.TrimSpace(o.Hint[code]) == "" {
+			t.Errorf("%s has no hint", code)
+		}
+	}
+}
+
+// TestZonNumberHintHolds: the zon_number hint describes the number
+// grammar, so the numbers it cites (and the accepted forms it must not
+// rule out) parse, and one breach of each of its rules is a zon_number
+// error.
+func TestZonNumberHintHolds(t *testing.T) {
+	j := mustZon(t)
+	for _, src := range []string{
+		"0", "42", "1_000", "3.14", "1.e3", "0x2a", "0x1.8p3", "0o17", "0b101",
+		"0.5e1_0", "0xF.p1", "0x.Fp1", "-0.0",
+	} {
+		if _, err := j.Parse(src); err != nil {
+			t.Errorf("%q should parse: %v", src, err)
+		}
+	}
+	for _, src := range []string{
+		"0X2A", "0x", "0x.p1", "0b102", "0o8", "0123", "0_0", "0b1.0", "0b1e1",
+		"1e", "0x1p", "1__0", "1_", "0x_2a", "-0", "-nan",
+	} {
+		_, err := j.Parse(src)
+		var te *jsonic.JsonicError
+		if !errors.As(err, &te) || te.Code != "zon_number" {
+			t.Errorf("%q: want a zon_number error, got %v", src, err)
+		}
+	}
+}
