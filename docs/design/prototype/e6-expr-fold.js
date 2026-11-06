@@ -11,7 +11,7 @@ const fs = require('fs')
 const { Tabnas } = require('@tabnas/parser')
 const { jsonic } = require('@tabnas/jsonic')
 const { Yaml } = require('@tabnas/yaml')
-const { Expr, fold } = require(process.env.TABNAS_EXPR || '@tabnas/expr')
+const { fold } = require(process.env.TABNAS_EXPR || '@tabnas/expr')
 
 const isRecord = (v) => null != v && 'object' === typeof v && !Array.isArray(v)
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k)
