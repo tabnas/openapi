@@ -506,7 +506,7 @@ fragment under an `$id` resolves within that resource, not the document).
    root, else `jsonSchemaDialect`, else the OAS dialect id for the version;
    2020-12 rules for the OAS and 2020-12 ids; any other dialect leaves
    `$ref` sites verbatim with `unresolved.why: 'unsupported dialect'`
-   (**Decision 13:** support draft-07/06/04 sibling-ignoring semantics
+   (**Decision 13:** support the sibling-ignoring semantics of draft-07, draft-06 and draft-04
    later). An index of `$id`, `$anchor` and `$dynamicAnchor` per resource,
    built in the same walk.
 4. **Sibling rules** by version, dialect and kind, as in section 2; the
