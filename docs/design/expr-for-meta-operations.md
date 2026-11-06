@@ -10,12 +10,15 @@ packages, what the OpenAPI 3.2.0 specification requires, and what
 `voxgig/apidef` does today, and ends with recommendations. The
 [implementation plan](implementation-plan.md) builds on it.
 
-This is the third revision. The second was reviewed by three independent
-readers and eight claim-by-claim verifiers, and several of its statements
-did not survive: an engine facility it had missed, a wrong reason in one
-experiment, an untested report, a missing version axis, and an
-over-claim for runtime expressions. Each correction is marked where it
-lands, and the prototype was re-run after each.
+This is the fourth revision. The second was reviewed by three independent
+readers and sixteen claim-by-claim verifiers, and a three-designer panel
+with two judges took up the question of section 6; several statements did
+not survive: an engine facility the note had missed, a wrong reason in one
+experiment, an untested report, a missing version axis, an over-claim for
+runtime expressions, and, in the third revision, a memoisation defect
+that broke sharing and a Path Item test that never matched. Each
+correction is marked where it lands, and the prototype was re-run after
+each.
 
 This is a working document, not a reader-facing page: it is outside the
 prose gate's file list, and its prototype is not part of the build. The
@@ -27,11 +30,12 @@ prototype and its captured results are in [`prototype/`](prototype/).
   strings and nothing more; the strings are lexical.** A jsonic+expr
   instance with a five-entry operator table reads every runtime
   expression in the specification's tables into a clean S-expression,
-  and every JSON Pointer fragment. But the ABNF makes everything after
-  `header.`, `query.` and `path.` one name, dots included, and a pointer
-  token may hold `.` or `,`; a binding power is global, so the member
-  operator that reads `$request.body` also splits `X.Y` and `user.name`.
-  Six of seven ABNF-legal adversarial names misread. URIs, path templates
+  and every JSON Pointer fragment whose tokens are non-empty and hold no
+  `.` or `,`. But the ABNF makes everything after `header.`, `query.` and
+  `path.` one name, dots included, and a pointer token may hold `.` or
+  `,`; a binding power is global, so the member operator that reads
+  `$request.body` also splits `X.Y` and `user.name`. Five of seven
+  ABNF-legal adversarial names misread. URIs, path templates
   and server URL templates are not operator-shaped at all. The embedded
   languages get lexical readers; `expr` is at most a convenience for the
   three-case skeleton.
@@ -80,24 +84,32 @@ Two of those rows were corrected by the review. Security Requirement keys
 are a name-or-URI pair like discriminator mapping values, and there the
 name reading is mandatory: "property names that are identical to a
 component name under the Components Object MUST be treated as a component
-name", with `./foo` to force a URI. And `operationId` is looked up in
-"all Operation Objects from all parsed documents", while components and
-tags are looked up in the entry document.
+name", with `./foo` to force a URI (section 4.30). And multi-document
+resolution of the implicit connections is "implementation-defined"
+(section 4.1.2.3): it is RECOMMENDED that `operationId` be sought in "all
+Operation Objects from all parsed documents" and that component and tag
+names be resolved from the entry document.
 
 Rules from the specification that shape the design:
 
 - "Each document in an OAD MUST be fully parsed in order to locate
   possible reference targets" and "Implementations MUST NOT treat a
   reference as unresolvable before completely parsing all documents
-  provided to the implementation". Resolution is a whole-description
-  operation, after parsing.
-- A Reference Object's siblings: `summary` and `description` override the
-  target's; "any properties added SHALL be ignored". A Schema Object's
-  `$ref` is a JSON Schema 2020-12 keyword, and its siblings all apply:
-  "this restriction on additional properties is a difference between
-  Reference Objects and Schema Objects". A Path Item `$ref` with adjacent
-  fields is "undefined". What `$ref` means depends on which object holds
-  it, which is a positional property of the document.
+  provided to the implementation as possible parts of the OAD" (section
+  4.1.2.1). Resolution is a whole-description operation, after parsing.
+- A Reference Object's siblings: `summary` and `description` "by default
+  SHOULD override" the target's, and have no effect where the target type
+  lacks the field; "any properties added SHALL be ignored". A Schema
+  Object's `$ref` is a JSON Schema 2020-12 keyword, and its siblings all
+  apply: "this restriction on additional properties is a difference
+  between Reference Objects and Schema Objects that contain a `$ref`
+  keyword" (section 4.23). A Path Item's `$ref` is a field of the Path
+  Item, not a Reference Object: adjacent fields combine with the referenced
+  Path Item, and only "in case a Path Item Object field appears both in
+  the defined object and the referenced object, the behavior is undefined"
+  (section 4.9.1), with the note that this "is likely to change in future
+  versions". So siblings follow three rules by position: ignore, conjoin,
+  merge.
 - Reference targets "are defined by fields including the OpenAPI Object's
   `$self` field and the Schema Object's `$id`, `$anchor`, and
   `$dynamicAnchor` keywords", and "Schema Objects containing an `$id`, or
@@ -106,9 +118,10 @@ Rules from the specification that shape the design:
   Pointer" when it is a location; a plain name is an anchor.
 - Runtime expressions "preserve the type of the referenced value" and are
   evaluated against a request or response, never against the document.
-- A discriminator `mapping` value "that is both a valid schema name and a
-  valid relative URI reference is implementation-defined, but it is
-  RECOMMENDED that it be treated as a schema name".
+- A discriminator `mapping` or `defaultMapping` value "that is both a
+  valid schema name and a valid relative URI reference is
+  implementation-defined, but it is RECOMMENDED that it be treated as a
+  schema name" (section 4.25.3).
 
 ### The version axis
 
@@ -122,7 +135,10 @@ accepts `swagger` documents. What `$ref` means changes with the version:
 |---|---|---|---|---|
 | Swagger 2.0 | JSON Reference, everywhere | ignored | `#/definitions/`, `#/parameters/`, `#/responses/`, `#/securityDefinitions/` | none |
 | 3.0.x | a Reference Object wherever it stands, Schema Objects included ("any time a Schema Object can be used, a Reference Object can be used in its place"; the Schema Object is "an extended subset of JSON Schema Wright Draft 00") | ignored | `#/components/...` | none |
-| 3.1.x and 3.2.x | a Reference Object, except in a Schema Object where it is the 2020-12 keyword | `summary`, `description` override at a Reference Object; all apply at a Schema Object; undefined at a Path Item | `#/components/...`, `$id`, `$anchor`, `$self` | yes |
+| 3.1.x and 3.2.x | a Reference Object, except in a Schema Object where it is the 2020-12 keyword (or the keyword of the dialect a resource's `$schema` or the document's `jsonSchemaDialect` names) | `summary`, `description` override at a Reference Object; all apply at a Schema Object; merge at a Path Item, undefined where a field is on both sides | `#/components/...`, `$id`, `$anchor`, `$dynamicAnchor`, `$self` | yes |
+
+A Path Item's `$ref` is a Path Item field in every version, Swagger 2.0
+included, so the Path Item column is the same three-way merge throughout.
 
 So the version is the first input to site typing, before the path. The
 prototype reads it from `openapi` or `swagger` at the root; note that an
@@ -181,11 +197,21 @@ exist and are held to the TypeScript behaviour by fixtures.
 Properties of the implementation that matter here, read from the source
 and confirmed by the prototype and its review:
 
-1. The operator marker is private. `isOp` tests `node[0].OP_MARK` against
-   a module-local object; the only way a host can mint an operator is
-   `testing.opify`, which the reference marks "not part of the stable
-   API". The Go port exports `Opify` and the Rust port `opify`
-   publicly. `isOp` is private in TypeScript too.
+1. The operator marker is private, and no runtime offers a stable,
+   documented constructor. `isOp` and `evaluation` test `node[0].OP_MARK`
+   against a module-local object, and `testing.opify`, which the
+   reference marks "not part of the stable API", is the only exported
+   function that stamps it (a host can also copy `OP_MARK` off any parsed
+   operator, a documented field of `Op`, which works and is unsupported).
+   `simplify` tests no marker: it reads any array whose head carries a
+   `src` text as an operation, as `DIVERGENCE.md` records, so the fixture
+   form needs no constructor. The ports differ in kind rather than
+   visibility: in Go the exported `*Op` type is itself the mark, so a
+   hand-built `&Op{}` at the head of a slice is recognised with or without
+   the exported `Opify`, which only fills `Terms` and is documented as a
+   test mirror; in Rust the public `opify` returns an `Op`, not a node, and
+   `OpRef::node` is what mints one `is_op` recognises. `isOp` is private
+   in TypeScript and Go.
 2. `evaluation()` folds operator nodes and plain arrays and returns
    everything else unchanged, in TypeScript (`evaluation`), Go
    (`evaluationStep`, whose `unwrapExpr` accepts only slices) and Rust
@@ -219,19 +245,26 @@ with `ts/test/parse-resolve.tsv` run by both):
 
 - Only local pointers (`#/...`) resolve; anything else keeps its `$ref`
   and gains an `x-ref` key beside it.
-- A site is replaced by the target's members, with the site's own
-  siblings winning, at every object kind alike, and the original pointer
-  recorded as a visible `x-ref` key. A target that is not an object stays
+- A site becomes a shallow copy of the target's members, with the site's
+  own siblings winning, at every object kind alike, and the original
+  pointer recorded as a visible `x-ref` key; two sites naming one target
+  are distinct objects holding the same child references, and the target
+  itself never gains an `x-ref`. A target that is not an object stays
   unresolved.
-- Targets are shared, so the result is a graph; `decycle` cuts back edges
-  to `[Circular *path]` strings and records every cut in a side table
-  that `decycledChild` reads, which `refcount.ts` uses to walk pointers
-  through the cuts.
+- The target's children are shared beneath every site, so the result is a
+  graph through them; in TypeScript `decycle` cuts back edges to
+  `[Circular *path]` strings and records every cut in a side table that
+  `decycledChild` reads, which `refcount.ts` uses to walk pointers through
+  the cuts. The Go port runs no `decycle`: a self-referencing schema comes
+  back as a cyclic graph, walked by node identity in `refcount.go` and
+  broken only at serialisation.
 - Before resolving, `parse.ts` repairs lone surrogates, normalises quoted
   path keys, defaults `components`, and writes with `Object.defineProperty`
-  so a key named `__proto__` stays data. `yamlalias.ts` bounds YAML alias
-  expansion before parsing, because the yaml plugin copies an anchored
-  node for every alias.
+  so a key named `__proto__` stays data. `yamlalias.ts` estimates, from
+  the text and before parsing, the size the source reaches once every
+  alias is copied in, and refuses the document above the larger of 1 MB
+  and ten times the source, because the yaml plugin deep-copies the
+  anchored node for every alias.
 - Swagger 2.0 documents are accepted and handled by the same pass.
 
 The `x-ref` key is a provenance mechanism that changes the document and
@@ -259,51 +292,67 @@ rejects (`{openapi: 3.2.0}`, a trailing comma, a multi-document stream,
 which becomes an array). The YAML grammar's start rule is `stream`; the
 JSON and jsonic grammars start at `val`. Equality is as JSON text: the
 engine's containers have a null prototype, so `deepStrictEqual` against
-`JSON.parse` fails and `obj.hasOwnProperty(k)` throws on them.
+`JSON.parse` fails and `obj.hasOwnProperty(k)` throws on them. The review
+extended the measurement to apidef's 43 JSON fixtures, all equal, and
+found one RFC 8259 text the yaml grammar refuses: a JSON text whose first
+line is empty fails with `unexpected` in yaml 0.5.26, where jsonic alone,
+the strict grammar and `JSON.parse` accept it.
 
 ### E1: `expr` as a sub-parser for the embedded string languages
 
-A jsonic+expr instance with comments, pairs, containers, the comma token
-and the default operators switched off, and the lexer told not to
+A jsonic+expr instance with comments, pairs, the explicit container
+tokens, jsonic's implicit containers (`rule.exclude: 'imp'`), the comma
+token and the default operators switched off, and the lexer told not to
 interpret numbers and keywords (so a pointer segment `1` is the string
-`"1"`), reads each class of string with its own operator table. Comment
-lexing has to be off: `DIVERGENCE.md` records that a `/` operator next
-to a comment marker lexes differently in the three runtimes, so a port of
-this sub-grammar has to switch it off in every runtime.
+`"1"`), reads each class of string with its own operator table. `expr`
+adds its own implicit-list alternates when it is installed after that
+exclusion has run, so a space-separated list still forms after an
+expression; the two-element lists below are `expr`'s, not jsonic's.
+Comment lexing has to be off: `DIVERGENCE.md` records that a `/`
+operator next to a comment marker lexes differently in the three
+runtimes, so a port of this sub-grammar has to switch it off in every
+runtime.
 
 Runtime expressions, with `.` (member, tightest), `/` (pointer segment,
-prefix and infix), `#` (fragment) and a `{ }` paren. The fourteen cases
-drawn from the specification's own tables read as the ABNF says, bar the
-one that is a full URL around two embedded expressions, which is the
-`{}` string template, not an expression. Then the review's seven
-ABNF-legal adversarial names, and six misread: `$request.query.a.b`
+prefix and infix), `#` (fragment) and a `{ }` paren. Every example in the
+specification's tables (eighteen rows across the Link and Callback
+sections and the ABNF), plus five constructed cases, read as the ABNF
+says, bar the one that is a full URL around two embedded expressions,
+which is the `{}` string template, not an expression. Then the review's
+seven ABNF-legal adversarial names, and five misread: `$request.query.a.b`
 splits a query parameter named `a.b`, `$request.header.X.Y` and
 `$request.header.X#Y` split header names (`tchar` admits `.` and `#`),
-`$request.body#/user.name` splits a pointer token, `#/a//b` turns an
-empty token into nested operators, and `$request.query.` is accepted
-with a dangling member operator. Only `#/a,b` reads right, and only once
-the comma token is disabled. The cause is structural: a binding power is
-global, so `.` cannot be an operator left of `#` and inert right of it.
-The ABNF is lexical after the `source` prefix, and so must the reader be.
+`$request.body#/user.name` splits a pointer token, and `#/a//b` turns an
+empty token into nested operators. `#/a,b` reads right once the comma
+token is disabled, and `$request.query.` reads right as a one-term `.`,
+since `name = *char` admits an empty name. The cause of the misreads is
+structural: a binding power is global, so `.` cannot be an operator left
+of `#` and inert right of it. The ABNF is lexical after the `source`
+prefix, and so must the reader be; the one false acceptance `expr` would
+add is `$request.header.`, where the header `token` must be non-empty.
 
 `$ref` URIs: the fragment side is right (`#/components/schemas/Pet`,
 `#/paths/~12.0~1repositories~1%7Busername%7D/get`, a bare `Pet.yaml`, a
 `definitions.yaml#/Pet`, a bare `#`, which is the whole document and
 legal), but three cases show the limit. A URL with a scheme reads
 `https:` as a path segment and the authority as another. A raw space
-inside a segment, illegal in a URI, becomes a two-element implicit list
-rather than an error. A literal `{` in a segment, which the specification
-requires percent-encoded, is accepted without complaint. None is fixable
+inside a segment, illegal in a URI, becomes a two-element list built by
+`expr`'s own implicit-list alternates rather than an error. A literal `{`
+in a segment, which the specification requires percent-encoded, is
+accepted without complaint. None is fixable
 with binding powers: URI syntax is lexical, with context-dependent
 delimiters and its own validity rules.
 
 Path templates: `/pets/{petId}/photos/{photoId}` reads correctly, but a
 literal glued to a template (`/users/{id}.json`, `/files/{path}:download`,
-both shapes present seven times in apidef's own fixtures) comes out as an
-implicit list, because Pratt parsing has no juxtaposition operator and
-jsonic's implicit list stands in for one. A server URL template with a
-scheme and port is unusable. These are literal-plus-`{...}` sequences, and
-a splitter reads them completely.
+both shapes present seven times in apidef's own fixtures) comes out as a
+two-element list at the top level, because Pratt parsing has no
+juxtaposition operator and `expr`'s own implicit-list alternate stands in
+for one. A server URL template with a scheme and port is unusable. These
+are literal-plus-`{...}` sequences, defined by the specification's own
+grammars (sections 4.8.2 and 4.6: any character but `{` and `}` inside the
+braces, several expressions in one segment), and a splitter reads them
+completely.
 
 ### E2: what `expr`'s eager `evaluate` sees
 
@@ -341,17 +390,24 @@ and on the strict `json` grammar, and its fold was also exported as
   outside a data slot, into `[refOp, uri, siblings]`, with `refOp` minted
   through `testing.opify` and carrying the opening token. `expr`'s
   `simplify` then prints `["$ref", "#/components/responses/PetList",
-  {"description": "..."}]`. Of the 12 reference sites in the test document
-  (14 `$ref` maps, two of them data: an `x-` extension and an `example`),
-  the hook caught 12 from JSON and 11 from YAML: a mapping that starts a
-  block-sequence entry (`- $ref: x`) is built by yaml's own `yamlElemMap`
-  and `yamlElemPair` rules and never passes through `val`.
+  {"description": "..."}]`. Of the 13 reference sites in the test document
+  (15 `$ref` maps, two of them data: an `x-` extension and an `example`),
+  the hook caught 13 from JSON and 12 from YAML: a mapping that begins a
+  sequence entry as a bare pair, `- $ref: x` in a block sequence or
+  `[$ref: x]` and `[? $ref : x]` in a flow sequence, is built by yaml's own
+  `yamlElemMap` and `yamlElemPair` rules and pushed into the list without
+  passing through `val`; `- {$ref: x}` and every other map position do pass
+  through it.
 - `resolve`: at end of parse, lift any remaining `$ref` maps and walk the
   tree. End of parse is the engine's post-process rule subscriber,
   `tn.sub({ ruleDone })`, filtered to the depth-0 close pass whose
   alternate neither pushes nor replaces, outside probes and recovery; it
-  fires exactly once per parse and `ctx.root().node` then holds the
-  result, which the subscriber replaces. The first two drafts hooked the
+  fires once per parse that reaches its final close, and `ctx.root().node`
+  then holds the result, which the subscriber replaces. It does not fire
+  for an empty document (the parse returns undefined and the callback is
+  never called) or for a parse that fails first, and on trailing content
+  it fires, resolves, and the parse then still fails, which is one reason
+  to prefer the function form. The first two drafts hooked the
   start rule's after-close instead, and the review showed that is wrong
   for YAML: `stream` is replaced on `%YAML`, `---` and `...`, a replaced
   rule is a new object, and `parse()` returns the original root rule's
@@ -367,30 +423,41 @@ and on the strict `json` grammar, and its fold was also exported as
 The resolver percent-decodes the fragment and then splits it (RFC 6901
 section 6: an encoded `/` is a separator), locates the target (following
 references met on the way, so a reference to a reference resolves), walks
-the target first so references inside it resolve too, shares one result
-per target, detects a cycle met by node (a target still being walked) or
-by URI (a chain) and cuts it to the verbatim `{ "$ref" }` with the cut
-recorded, applies siblings by version and object kind (ignored under
-Swagger 2.0 and 3.0.x; `summary` and `description` override at a 3.1
-Reference Object; a conjunction, `allOf: [target, ...siblings' allOf]`,
-at a 3.1 Schema Object), leaves an external reference verbatim and lists
-it, writes defined members into null-prototype objects so `__proto__`
-stays data, and records provenance in a side table keyed by path, with
-line and column for every site built at parse time and none for a site
-lifted afterwards.
+the target first so references inside it resolve too, memoises on the
+original operator node so one result serves every site and every pointer
+that ends at it, detects a cycle met by node (a target still being
+walked) or by URI (a chain) and cuts it to the verbatim `{ "$ref" }` with
+the cut recorded, applies siblings by version and object kind (ignored
+under Swagger 2.0 and 3.0.x; `summary` and `description` override at a
+3.1 Reference Object; a conjunction, `allOf: [target, ...siblings' allOf]`,
+at a 3.1 Schema Object; a merge at a Path Item, the site's fields over the
+target's), leaves an external reference verbatim and lists it, writes
+defined members into null-prototype objects so `__proto__` stays data,
+and records provenance once per site, resolved, unresolved or cut, in a
+side table keyed by path, with row and column for a site built at parse
+time and none for a site lifted afterwards. The third revision's version
+of this memoised on a fresh array built per call, so a target that was
+itself a reference site was resolved again and recorded twice, and its
+Path Item test could never match a key beginning with `/`; the review
+caught both, and the Path Item case is now exercised.
 
 Measured on the test document: the resolved trees from the YAML and the
 JSON input are identical and serialise; the Reference Object override, the
-chain, the `~1` pointer into `paths`, the top-down recursion, the
-`%2F`-encoded separator, the site `allOf` joining the target's, the
-extension and the example staying verbatim, and the `__proto__` key all
-behave as designed; `unresolved` lists the one external reference;
-`cuts` lists the two cycles; the same document read as 3.0.3 ignores
-every sibling, and read as Swagger 2.0 ignores them too. Sharing is
-precise: every site naming one target holds one object (`/pets` `200`'s
-content is `PetList`'s content), and a Reference Object with overriding
-siblings is a copy of its target, by design, so `/pets/{id}` `200` is not
-the same object as `/pets` `200`.
+chain, the `~1` pointer into `paths`, the Path Item merge, the top-down
+recursion, the `%2F`-encoded separator, the site `allOf` joining the
+target's, the extension and the example staying verbatim, and the
+`__proto__` key all behave as designed; `unresolved` lists the one
+external reference; `cuts` lists the two cycles; `provenance` has one
+entry for each of the 13 sites; the same document read as 3.0.3 ignores
+every sibling, and read as Swagger 2.0 ignores them too. Sharing holds
+through pointers as well as references: `/pets` `200`'s content is
+`PetList`'s content, and `/pets/{id}` `200`, a pointer that ends at the
+`/pets` `200` reference site, is that site's one result. The YAML side of
+the raw equality is checked against a hand-written expected value, since
+the JSON form is the YAML grammar's own parse re-serialised. Under the
+yaml grammar a recorded column is one too large per preceding `: ` on
+the line (rows are exact, and the json grammar's columns are exact), a
+yaml plugin defect the review measured.
 
 What the experiment showed about `expr`'s share of that work:
 `evaluation()` did the fold of one node at a time and nothing else,
@@ -429,15 +496,22 @@ environment that an `inherit(node, env, path)` callback extends at each
 object on the way down. The resolver supplied for the test, sixty lines
 of OpenAPI and JSON Schema knowledge, uses the inherited environment for
 the base URI: `$self` on the document and `$id` on a schema set it,
-`$anchor` registers a plain-name fragment in it. On a document with a
-`$self`, two schemas carrying absolute `$id`s, an `$anchor`, a
-`$self`-relative document reference
-(`openapi.yaml#/components/responses/NotFound`), an absolute `$id`
-reference, a reference relative to a schema's `$id` (`tag.json`), a
-plain-name fragment (`#name`), a self-reference (`#`) and a `$ref` inside
-an `x-` extension, every case resolved as the specifications say, the
-cycle kept its back edge, the extension stayed verbatim, and the output
-serialised. Parsing the same document without `evaluate` gives the
+`$anchor` registers a plain-name fragment in it. The environment at a
+path is computed from that path's own ancestors and memoised per prefix,
+so a target reached early through a reference gets its ancestors' base,
+not the referrer's: the design panel found the first draft passing the
+referrer's environment into the target's walk, and the case that shows it
+(a schema under `$id https://schemas.example.com/pet.json` referring to
+`owner.json`, reached first from `paths`) resolved to
+`https://api.example.com/owner.json` and nothing before the fix, and to
+the right `$id` after it. On a document with a `$self`, three schemas
+carrying absolute `$id`s, an `$anchor`, a `$self`-relative document
+reference (`openapi.yaml#/components/responses/NotFound`), an absolute
+`$id` reference, a reference relative to a schema's `$id` (`tag.json`), a
+plain-name fragment (`#name`), a self-reference (`#`), the early-reached
+nested target and a `$ref` inside an `x-` extension, every case resolved
+as the specifications say, the cycle kept its back edge, the extension
+stayed verbatim, and the output serialised. Parsing the same document without `evaluate` gives the
 operator tree, which `expr`'s `simplify` prints as
 `["$ref", "#/components/responses/PetList", {"description": "Overridden"}]`
 exactly as it prints a token operator.
@@ -494,11 +568,18 @@ JSON input for an identical value.
    fires after every rule pass in all three runtimes, grammar-neutrally,
    with the matched tokens on the rule; filtered to the final depth-0
    close it is a reliable end-of-parse trigger, and recording the opening
-   token of every container as it closes gives positions for every site,
-   the yaml block-sequence entry included. The first two drafts proposed
-   an engine hook and an `info`-marker position without having found it.
-   Its limits: in Rust the subscriber observes and cannot replace the
-   result; it fires before the trailing-content check; it is per instance.
+   token of every container as it closes gives a row for every site, the
+   yaml sequence-entry mappings included (block `- k: v` and flow `[k: v]`
+   alike, which `val` never sees); the column is reliable under json and
+   jsonic until yaml's column drift is repaired. The first two drafts
+   proposed an engine hook and an `info`-marker position without having
+   found it, and the marker would not have reached those sites, since
+   yaml builds them outside `@object$`. Its limits: in Rust the
+   subscriber observes and cannot replace the result; in Go the result is
+   read from a private rule that a replace moves, so a write must go to
+   the rule the final event hands over; it fires before the
+   trailing-content check and not at all for an empty document; it is per
+   instance.
 5. **The start rule's after-close is not an end-of-parse hook.** It fires
    once per depth-0 rule object, and a replaced start rule (yaml's
    `stream` on directives and markers) is a new object whose node
@@ -513,15 +594,20 @@ JSON input for an identical value.
    data; the review's wider slot list put about a quarter there.
 7. **`expr` reads the skeleton of the embedded languages and misreads
    their tokens.** Runtime expressions are `source ["#" pointer]` around
-   lexical names; a Pratt table reads the skeleton and splits the names.
-   Pointer fragments split correctly on `/` only when no token holds `.`
-   or `,`; URIs and templates are not operator-shaped. Bare `#` and a
-   one-term `/` are legal, and `expr`'s dangling-operator fixture is the
-   right contract: the two "defects" the first draft reported were not
-   defects.
-8. **The operator-minting API is unstable in the canonical port only.**
-   Go and Rust export `Opify`/`opify`; TypeScript hides it under
-   `testing`, and `isOp` is private everywhere a host would want it.
+   lexical names; a Pratt table reads the skeleton and splits the names
+   (five of seven legal adversarial cases). Pointer fragments split
+   correctly on `/` only when no token is empty or holds `.` or `,`; URIs
+   and templates are not operator-shaped. Bare `#`, a one-term `/` and an
+   empty query name are legal, and `expr`'s dangling-operator fixture is
+   the right contract: the two "defects" the first draft reported were
+   not defects.
+8. **No runtime offers a stable, documented operator constructor.**
+   TypeScript stamps a private marker through `testing.opify`, excluded
+   from the stable API; Go exports `Opify` but documents it as a test
+   mirror, and its `*Op` type is the mark; Rust's public `opify` returns an
+   `Op`, not a node. Only `isOp` and `evaluation` need the marker;
+   `simplify` reads any `src`-headed array. A sibling plugin needs one
+   public constructor and predicate with the same contract in all three.
 9. **One engine instance reads both serialisations**, at a cost: on JSON
    input the grammars take two orders of magnitude longer than
    `JSON.parse` for an identical value (E5), so a fast path is worth
@@ -550,7 +636,8 @@ JSON input for an identical value.
     is a request-forgery and file-read vector and an unbounded fetch loop.
 15. **apidef's provenance and merge rules are the two places a typed
     parser improves on it**, and its Go port, its pre-resolution repairs
-    and its cut table are what a migration must carry.
+    and its TypeScript-only cut table (the Go port leaves cycles in place
+    and walks by identity) are what a migration must carry.
 
 ## 6. Should `expr` handle trees as well as values?
 
@@ -579,8 +666,11 @@ fixtures already understand. The `Op` gains a `struct` flag and a `key`;
 `OpDef` gains `struct: true` and `key`.
 
 Two things the prototype learned about that hook. The yaml grammar builds
-a block-sequence entry's mapping outside `val`, so a `val` hook misses
-that one position (E3), where `ruleDone` reaches it. And whether a map
+a sequence entry's bare-pair mapping outside `val`, in block and flow
+sequences alike, so a `val` hook misses those positions (E3), where
+`ruleDone` reaches them; an interim hook on `yamlElemPair` must change
+the mapping in place, since the sequence rules push `rule.child.node` and
+a reassigned `r.node` there is lost. And whether a map
 with the keyword IS an operator depends on the version and on where it is
 (an `x-` extension, an example payload, an `enum` hold data), so the hook
 needs the path, read off the rule stack from the pair rules' `u.key` or
@@ -660,9 +750,41 @@ the later step, in two moves: land `opify`, `isOp` and the object-walking
 `evaluation` in `expr` when the maintainer instructs it, since every home
 needs them, and build the structural kind and the fold as the second
 module once the openapi plugin's resolver has settled what the site and
-the environment must carry. A design panel on exactly this question was
-still running when this revision was written; its verdict will be
-appended.
+the environment must carry.
+
+**The design panel's verdict.** Three designers took three angles (the
+smallest change to `expr`; a tree layer inside `expr`; the skeptic, with
+the fold in the plugin behind an `expr`-shaped interface) and two judges
+scored them. The judges split on the winner, one for the tree layer and
+one for the skeptic, and converged on one synthesis, which this note and
+the plan adopt. First, the generic changes every home needs, each its own
+instruction: a public constructor and predicate; `evaluation` over
+objects as an opt-in, because a designer measured an unconditional walk
+changing 180 of 1061 existing fixture rows; the Go occurrence token.
+Second, the fold's contract, written in `expr`'s vocabulary whichever
+home it gets: operators declared as `{ key: true, src: '$ref' }` entries
+with `dynamic: true` for keys recognised and reported but never evaluated
+(`$dynamicRef`, which writes the static/dynamic distinction into the
+types); recognition by node shape at fold time only, never by a parse
+hook or a marker, because a marker misses the `JSON.parse` fast path,
+dies on copies, and in Go forces `info` on, which makes every map a
+`MapRef` that is neither ordered nor verbatim as JSON; `evaluate(site,
+op, [value, siblings])` bottom-up; an inherited bag computed as a memoised
+function of the path from each node's own ancestors (the E4 defect
+above); memoisation by path string, not identity, since Rust values are
+copy-on-write and yaml aliases are copies; an active set of every
+container being folded plus the URI chain for cycles; and for the
+deferred mode, `ruleDone` in TypeScript writing `ctx.root().node`, in Go
+writing the final done rule's node (the result is read from a private
+rule that a replace moves), and the function form only in Rust. Third,
+the staging the skeptic argued: the plugin ships first with that fold in
+its own `fold.ts`, importing nothing from its resolver, and the lift into
+`expr` is a move when a second `$`-keyword format wants it or the
+maintainer wants reuse up front. Two facts the panel added to the
+record: `expr`'s default operator table must never be installed under the
+document grammar, since its `/` breaks `/pets:` as a YAML key; and the
+TypeScript `Evaluate` type is a rest parameter today where the fold passes
+an array, which the first `expr` change should correct.
 
 ## 7. Alternatives considered
 
@@ -766,10 +888,12 @@ appended.
 Re-ranked by the review. Each is its own pull request and its own
 maintainer instruction; nothing in 8.1 depends on them.
 
-1. **Export `opify` and `isOp`** (TypeScript only; Go and Rust already
-   export `Opify`/`opify`), the constructor taking a partial definition
-   and filling defaults, so a sibling can mint and recognise operator
-   nodes. Small; unit-tested, since API surface cannot be a `.tsv` row.
+1. **A documented operator constructor and predicate in all three
+   runtimes**: export `opify` and `isOp` in TypeScript (the constructor
+   taking a partial definition and filling defaults), `IsOp` in Go beside
+   the existing `Opify`, and a node constructor in Rust beside `opify`,
+   with one contract, so a sibling can mint and recognise operator nodes.
+   Small; unit-tested, since API surface cannot be a `.tsv` row.
 2. **`evaluation()` over objects**, as a consistency repair: the fold
    should agree with the eager option on `{a:1+2}`, the guide and the
    reference should agree with each other, Go must return the map type it
@@ -820,7 +944,10 @@ motivated it. `ruleDone` is the route.
   is lost; merging instead of resetting would remove an ordering trap.
 - The start rule is `stream` and a multi-document stream parses to an
   array; an unquoted `$ref: #/x` reads as null; an unquoted `swagger:
-  2.0` reads as 2. The plugin's guide records all three.
+  2.0` reads as 2; a JSON text whose first line is empty fails with
+  `unexpected`; a reported column is one too large per preceding `: ` on
+  its line. The plugin's guide records all five, and the last two are yaml
+  defects worth an instruction.
 - apidef's alias-expansion bound (`yamlalias.ts`) describes a cost in the
   yaml plugin's alias copying that belongs with that plugin, as a
   documented limit or an option.
@@ -828,12 +955,15 @@ motivated it. `ruleDone` is the route.
 ### 8.5 Migration from apidef
 
 Gated on the TypeScript and Go ports both shipping, with apidef's
-`parse-resolve.tsv` green in both. `resolve(raw, { siblings: 'merge',
-xref: true, sharing: 'share', cycles: 'cut' })` reproduces apidef's
-resolver: `x-ref` beside every resolved and every unresolved site, the
-site's siblings winning at every object kind, shared targets, cycles cut
-with a cut table that `decycledChild` and `refcount.ts` read through, a
-non-object target left unresolved. What `parse.ts` does before resolving
+`parse-resolve.tsv` green in both. A `compat: 'apidef'` preset
+reproduces apidef's resolver: `x-ref` beside every resolved and every
+unresolved site, the site's siblings winning at every object kind, one
+shallow copy per site with the target's children shared, cycles kept (so
+apidef's own `decycle`, `DECYCLED` and `decycledChild` stay as they are,
+a post-pass over any graph that imports nothing from the resolver, and
+the Go port's cyclic graph stays as it is), a non-object target left
+unresolved, a reference ring left verbatim, and aliases followed when a
+pointer segment lands on one. What `parse.ts` does before resolving
 (lone-surrogate repair, path-key normalisation, the `components` default,
 `__proto__`-safe writes) stays in apidef or moves to the plugin as the
 plan's table says; Swagger 2.0 is covered by the version table. The

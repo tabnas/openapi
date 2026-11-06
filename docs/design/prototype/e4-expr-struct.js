@@ -108,6 +108,24 @@ function treeEvaluation(root, evaluate, opts) {
     inherit: opts.inherit || defaultInherit,
     walk: null, locate: null,
   }
+  // The environment in force at a path is a function of that path's own
+  // ancestors (the engine's k discipline), memoised per prefix, so a target
+  // forced out of order by a reference gets ITS ancestors' base URI, not
+  // the referrer's. The design panel found the first draft passing the
+  // referrer's environment into the target's walk.
+  const envMemo = new Map()
+  site.envAt = (path) => {
+    const key = path.join('/')
+    if (envMemo.has(key)) return envMemo.get(key)
+    let env = site.env, node = site.root
+    for (let i = 0; i < path.length; i++) {
+      if (isRecord(node)) env = site.inherit(node, env, path.slice(0, i))
+      node = Array.isArray(node) ? node[Number(path[i])] : isRecord(node) ? node[path[i]] : undefined
+      if (undefined === node) break
+    }
+    envMemo.set(key, env)
+    return env
+  }
   site.walk = (node, path, env) => {
     if (site.memo.has(node)) return site.memo.get(node)
     if (isStructOp(node)) {
@@ -210,7 +228,7 @@ function resolveRef(site, op, terms) {
   if (undefined === node) { unresolved.push({ uri, abs, why: 'names nothing' }); out = { $ref: uri, ...siblings } }
   else if (site.walking.has(node)) out = { $ref: uri, ...siblings, cycle: true }
   else {
-    const hit = site.walk(node, parts, site.env)
+    const hit = site.walk(node, parts, site.envAt(parts))
     const kind = /(^|\/)(schemas\/[^/]+|schema|items|properties\/[^/]+|allOf\/\d+|oneOf\/\d+|anyOf\/\d+|not|\$defs\/[^/]+)$/.test(site.path.join('/')) ? 'schema' : 'reference'
     if (!isRecord(hit)) out = hit
     else if ('schema' === kind) { const { allOf = [], ...rest } = siblings; out = 0 === Object.keys(siblings).length ? hit : { allOf: [hit, ...allOf], ...rest } }
@@ -231,6 +249,7 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/PetList', description: Overridden }
         '404': { $ref: 'openapi.yaml#/components/responses/NotFound' }
+      requestBody: { content: { application/json: { schema: { $ref: 'https://schemas.example.com/pet.json#/$defs/Owner' } } } }
 components:
   responses:
     PetList: { description: A page of pets, content: { application/json: { schema: { $ref: 'https://schemas.example.com/pet.json' } } } }
@@ -245,6 +264,10 @@ components:
         friends: { type: array, items: { $ref: '#' } }
       $defs:
         Name: { $anchor: name, type: string }
+        Owner: { $ref: 'owner.json' }
+    Owner:
+      $id: https://schemas.example.com/owner.json
+      type: string
     Tag:
       $id: https://schemas.example.com/tag.json
       type: string
@@ -268,6 +291,7 @@ show('    PetList schema (absolute $id of a schema in this document) =', res.com
 show('    Pet.properties.name (`#name`: $anchor in the $id scope) =', res.components.schemas.Pet.properties.name)
 show('    Pet.properties.tag (`tag.json` relative to the $id, Schema Object conjunction) =', res.components.schemas.Pet.properties.tag)
 show('    Pet.properties.friends.items (`#` = this resource: cycle) =', res.components.schemas.Pet.properties.friends.items)
+show('    /pets requestBody schema (a target under a $id, reached first from paths: `owner.json` resolves against the TARGET\'s base) =', res.paths['/pets'].get.requestBody.content['application/json'].schema)
 show('    x-vendor (data: verbatim) =', res['x-vendor'])
 show('    unresolved =', unresolved)
 console.log('    serialises:', 'string' === typeof JSON.stringify(res))

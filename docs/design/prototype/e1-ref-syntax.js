@@ -16,7 +16,7 @@ function instance(ops, extra = {}) {
   tn.options({
     comment: { lex: false },               // `#` must not start a comment
     fixed: { token: { '#CL': null, '#OB': null, '#CB': null, '#OS': null, '#CS': null, '#CA': null } },
-    rule: { exclude: 'imp' },              // no implicit maps/lists
+    rule: { exclude: 'imp' },              // no jsonic implicit maps/lists; expr's own implicit list, added when it is use()d, survives this
     number: { lex: false },                // a pointer segment "1" is text, not 1
     value: { lex: false },                 // ... and "true" is text, not true
     ...extra,
@@ -72,7 +72,17 @@ run('(a) runtime expressions (OAS 4.20.3 ABNF)', rt, [
   ['$request.body#/user.name', ['#', ['.', '$request', 'body'], ['/', 'user.name']]],
   ['$request.body#/a,b', ['#', ['.', '$request', 'body'], ['/', 'a,b']]],
   ['$request.body#/a//b', ['#', ['.', '$request', 'body'], ['/', ['/', ['/', 'a'], ''], 'b']]],
-  ['$request.query.', 'ERROR'],
+  ['$request.query.', ['.', ['.', '$request', 'query']]],       // name = *char admits an empty name: legal, a one-term `.`
+  // the specification's remaining table rows, so every example is run
+  ['$response.body#/status', ['#', ['.', '$response', 'body'], ['/', 'status']]],
+  ['$response.header.Server', ['.', ['.', '$response', 'header'], 'Server']],
+  ['$request.path.eventType', ['.', ['.', '$request', 'path'], 'eventType']],
+  ['$request.header.content-type', ['.', ['.', '$request', 'header'], 'content-type']],
+  ['$request.body#/failedUrl', ['#', ['.', '$request', 'body'], ['/', 'failedUrl']]],
+  ['$response.header.Location', ['.', ['.', '$response', 'header'], 'Location']],
+  ['$response.body#/uuid', ['#', ['.', '$response', 'body'], ['/', 'uuid']]],
+  ['$response.body#/username', ['#', ['.', '$response', 'body'], ['/', 'username']]],
+  ['$request.body#/url', ['#', ['.', '$request', 'body'], ['/', 'url']]],
 ])
 
 // (b) $ref URIs. No `.` op (file names carry dots); `/`, `#` as above.

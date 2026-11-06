@@ -7,13 +7,14 @@
     infix op src "$ref"    { '$ref': '#/x' }    -> {"$ref":"#/x"}
 
 (b) a structural-operator layer over expr, with an inherited base URI
-    $id/$self/$anchor index: {"https://api.example.com/openapi.yaml":"","https://schemas.example.com/pet.json":"components/schemas/Pet","https://schemas.example.com/pet.json#name":"components/schemas/Pet/$defs/Name","https://schemas.example.com/tag.json":"components/schemas/Tag"}
-    /pets 200 (Reference Object, description override) = {"description":"Overridden","content":{"application/json":{"schema":{"$id":"https://schemas.example.com/pet.json","type":"object","properties":{"name":{"$anchor":"name","type":"string"},"tag":{"allOf":[{"$id":"https://schemas.example.com/tag.json","type":"string"}],"description":"The tag"},"friends":{"type":"array","items":{"$ref":"#","cycle":true}}},"$defs":{"Name":{"$anchor":"name","type":"string"}}}}}}
+    $id/$self/$anchor index: {"https://api.example.com/openapi.yaml":"","https://schemas.example.com/pet.json":"components/schemas/Pet","https://schemas.example.com/pet.json#name":"components/schemas/Pet/$defs/Name","https://schemas.example.com/owner.json":"components/schemas/Owner","https://schemas.example.com/tag.json":"components/schemas/Tag"}
+    /pets 200 (Reference Object, description override) = {"description":"Overridden","content":{"application/json":{"schema":{"$id":"https://schemas.example.com/pet.json","type":"object","properties":{"name":{"$anchor":"name","type":"string"},"tag":{"allOf":[{"$id":"https://schemas.example.com/tag.json","type":"string"}],"description":"The tag"},"friends":{"type":"array","items":{"$ref":"#","cycle":true}}},"$defs":{"Name":{"$anchor":"name","type":"string"},"Owner":{"$id":"https://schemas.example.com/owner.json","type":"string"}}}}}}
     /pets 404 ($self-relative document reference) = {"description":"Not found"}
-    PetList schema (absolute $id of a schema in this document) = {"$id":"https://schemas.example.com/pet.json","type":"object","properties":{"name":{"$anchor":"name","type":"string"},"tag":{"allOf":[{"$id":"https://schemas.example.com/tag.json","type":"string"}],"description":"The tag"},"friends":{"type":"array","items":{"$ref":"#","cycle":true}}},"$defs":{"Name":{"$anchor":"name","type":"string"}}}
+    PetList schema (absolute $id of a schema in this document) = {"$id":"https://schemas.example.com/pet.json","type":"object","properties":{"name":{"$anchor":"name","type":"string"},"tag":{"allOf":[{"$id":"https://schemas.example.com/tag.json","type":"string"}],"description":"The tag"},"friends":{"type":"array","items":{"$ref":"#","cycle":true}}},"$defs":{"Name":{"$anchor":"name","type":"string"},"Owner":{"$id":"https://schemas.example.com/owner.json","type":"string"}}}
     Pet.properties.name (`#name`: $anchor in the $id scope) = {"$anchor":"name","type":"string"}
     Pet.properties.tag (`tag.json` relative to the $id, Schema Object conjunction) = {"allOf":[{"$id":"https://schemas.example.com/tag.json","type":"string"}],"description":"The tag"}
     Pet.properties.friends.items (`#` = this resource: cycle) = {"$ref":"#","cycle":true}
+    /pets requestBody schema (a target under a $id, reached first from paths: `owner.json` resolves against the TARGET's base) = {"$id":"https://schemas.example.com/owner.json","type":"string"}
     x-vendor (data: verbatim) = {"$ref":"#/components/schemas/Tag"}
     unresolved = []
     serialises: true

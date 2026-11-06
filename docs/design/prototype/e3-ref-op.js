@@ -41,6 +41,9 @@ const record = () => Object.create(null)
 const put = (o, k, v) => (Object.defineProperty(o, k, { value: v, enumerable: true, writable: true, configurable: true }), o)
 const copy = (...srcs) => { const o = record(); for (const s of srcs) for (const k of Object.keys(s)) put(o, k, s[k]); return o }
 
+// RFC 6901: `~` then `/` escaped, segments joined by `/`, the root is ``.
+const pointer = (path) => path.map((k) => '/' + String(k).replace(/~/g, '~0').replace(/\//g, '~1')).join('')
+
 const toOp = (n, token) => {
   const sib = record()
   for (const k of Object.keys(n)) if ('$ref' !== k) put(sib, k, n[k])
@@ -78,9 +81,12 @@ function isDataSlot(path) {
 }
 const SCHEMA_TAIL = /(^|\/)(schemas\/[^/]+|definitions\/[^/]+|schema|items|additionalProperties|additionalItems|contains|propertyNames|not|if|then|else|contentSchema|unevaluatedItems|unevaluatedProperties|properties\/[^/]+|patternProperties\/[^/]+|dependentSchemas\/[^/]+|\$defs\/[^/]+|(allOf|oneOf|anyOf|prefixItems)\/\d+)$/
 function siteKind(path) {
-  const p = path.join('/')
-  if (SCHEMA_TAIL.test(p)) return 'schema'
-  if (/^paths\/[^/]+$/.test(p) || /^webhooks\/[^/]+$/.test(p) || /^components\/pathItems\/[^/]+$/.test(p)) return 'pathItem'
+  // Path Item slots are tested on the array: a path key begins with `/`,
+  // which defeats any test on the joined string (the second review found
+  // the first draft never classifying a Path Item).
+  if (2 === path.length && ('paths' === path[0] || 'webhooks' === path[0])) return 'pathItem'
+  if (3 === path.length && 'components' === path[0] && 'pathItems' === path[1]) return 'pathItem'
+  if (SCHEMA_TAIL.test(path.join('/'))) return 'schema'
   return 'reference'
 }
 
@@ -180,7 +186,7 @@ function resolve(rawTree, opts = {}) {
   }
 
   function backEdge(uri, siblings, path, targetPath) {
-    cuts.push({ at: path.join('/'), ref: uri, target: targetPath ? targetPath.join('/') : undefined })
+    cuts.push({ at: pointer(path), ref: uri, target: targetPath ? pointer(targetPath) : undefined })
     return copy({ $ref: uri }, siblings)
   }
 
@@ -199,31 +205,40 @@ function resolve(rawTree, opts = {}) {
     return out
   }
 
+  // `node` is the ORIGINAL operator node, so a site reached twice (once
+  // by the walk, once through a pointer that passes through it) resolves
+  // once and every site naming it shares the result. The second draft
+  // memoised on a fresh array built per call, so a reference-site target
+  // was resolved again and recorded twice.
   function deref(node, path) {
     if (memo.has(node)) return memo.get(node)
     const [op, uri, sib] = node
     const siblings = walk(sib, path)
-    if (active.has(uri)) return backEdge(uri, siblings, path)
-    active.add(uri)
-    const found = locate(uri)
+    const site = { at: pointer(path), ref: uri, kind: siteKind(path), line: op.token ? op.token.rI : undefined, col: op.token ? op.token.cI : undefined }
     let out
-    if (undefined !== found.node && walking.has(found.node)) {
-      out = 'keep' === cycle ? memo.get(found.node) : backEdge(uri, siblings, path, found.path)
-    }
+    if (active.has(uri)) { site.cycle = 'chain'; out = backEdge(uri, siblings, path) }
     else {
-      const hit = undefined === found.node ? undefined : walk(found.node, found.path)
-      if (undefined === hit) { unresolved.push({ at: path.join('/'), ref: uri, why: found.why }); out = copy({ $ref: uri }, siblings) }
-      else out = combine(hit, siblings, siteKind(path))
+      active.add(uri)
+      const found = locate(uri)
+      if (undefined !== found.node && walking.has(found.node)) {
+        site.cycle = 'node'
+        out = 'keep' === cycle ? memo.get(found.node) : backEdge(uri, siblings, path, found.path)
+      }
+      else {
+        const hit = undefined === found.node ? undefined : walk(found.node, found.path)
+        if (undefined === hit) { site.unresolved = found.why; unresolved.push({ at: site.at, ref: uri, why: found.why }); out = copy({ $ref: uri }, siblings) }
+        else out = combine(hit, siblings, site.kind)
+      }
+      active.delete(uri)
     }
-    active.delete(uri)
-    if (undefined !== found.node) provenance.push({ at: path.join('/'), ref: uri, kind: siteKind(path), line: op.token ? op.token.rI : undefined, col: op.token ? op.token.cI : undefined })
+    provenance.push(site)                                  // once per site, resolved or not
     memo.set(node, out)
     return out
   }
 
   function walk(node, path) {
     if (memo.has(node)) return memo.get(node)
-    if (isRefOp(node)) return evaluation(null, null, node, (_r, _c, op, terms) => deref([op, terms[0], terms[1]], path))
+    if (isRefOp(node)) return evaluation(null, null, node, (_r, _c, _op, _terms) => deref(node, path))
     if (Array.isArray(node)) {
       const out = []
       memo.set(node, out); walking.add(node)
@@ -266,7 +281,13 @@ paths:
       responses:
         '200':
           $ref: '#/paths/~1pets/get/responses/200'
+  /pets/{id}/photos:
+    $ref: '#/components/pathItems/Photos'
+    summary: Photos of one pet
 components:
+  pathItems:
+    Photos:
+      get: { responses: { '200': { description: Photos } } }
   parameters:
     Limit: { name: limit, in: query, schema: { type: integer } }
   responses:
@@ -338,12 +359,14 @@ show('   Node.properties.child (recursion met top-down) =', res.components.schem
 show('   Encoded (%2F is a separator) =', res.components.schemas.Encoded)
 show('   x-vendor (extension: data, verbatim) =', res['x-vendor'])
 show('   PetList example (payload: data, verbatim) =', res.components.responses.PetList.content['application/json'].example)
+show('   /pets/{id}/photos (Path Item: adjacent fields merge) =', res.paths['/pets/{id}/photos'])
 console.log('   __proto__ survives as an own key:', Object.keys(res.components.schemas).includes('__proto__'))
 show('   unresolved =', report.unresolved)
 show('   cuts =', report.cuts)
+console.log('   provenance entries:', report.provenance.length, '(one per site, resolved, unresolved and cut alike); sites in document:', countRefs(rawY) - 2)
 show('   provenance[0..2] =', report.provenance.slice(0, 3))
 console.log('   one target, one object: /pets 200 content === PetList content:', res.paths['/pets'].get.responses['200'].content === res.components.responses.PetList.content)
-console.log('   /pets/{id} 200 === /pets 200:', res.paths['/pets/{id}'].get.responses['200'] === res.paths['/pets'].get.responses['200'], '(a Reference Object with overriding siblings is a copy of its target, by design)')
+console.log('   /pets/{id} 200 === /pets 200:', res.paths['/pets/{id}'].get.responses['200'] === res.paths['/pets'].get.responses['200'], '(a pointer ending at a reference site resolves to that site\'s one result)')
 
 // 4. the version axis: the same sites under 3.0 and under Swagger 2.0.
 const v30 = resolve(rawY ? Object.assign(Object.create(null), rawY, { openapi: '3.0.3' }) : rawY)

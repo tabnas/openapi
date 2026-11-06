@@ -45,10 +45,27 @@ ok   "$request.body#/a,b"
 FAIL "$request.body#/a//b"
       -> ["#",[".","$request","body"],["/",["/","a"],["/","b"]]]
       want ["#",[".","$request","body"],["/",["/",["/","a"],""],"b"]]
-FAIL "$request.query."
+ok   "$request.query."
       -> [".",[".","$request","query"]]
-      want "ERROR"
-15/21 as expected
+ok   "$response.body#/status"
+      -> ["#",[".","$response","body"],["/","status"]]
+ok   "$response.header.Server"
+      -> [".",[".","$response","header"],"Server"]
+ok   "$request.path.eventType"
+      -> [".",[".","$request","path"],"eventType"]
+ok   "$request.header.content-type"
+      -> [".",[".","$request","header"],"content-type"]
+ok   "$request.body#/failedUrl"
+      -> ["#",[".","$request","body"],["/","failedUrl"]]
+ok   "$response.header.Location"
+      -> [".",[".","$response","header"],"Location"]
+ok   "$response.body#/uuid"
+      -> ["#",[".","$response","body"],["/","uuid"]]
+ok   "$response.body#/username"
+      -> ["#",[".","$response","body"],["/","username"]]
+ok   "$request.body#/url"
+      -> ["#",[".","$request","body"],["/","url"]]
+25/30 as expected
 
 ## (b) $ref URIs (RFC 3986 + RFC 6901 fragment)
 ok   "#/components/schemas/Pet"
