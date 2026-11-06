@@ -13,6 +13,7 @@ declares what they import.
 | `e2-eager.js` | What does `expr`'s eager `evaluate` see of the document when an expression closes? | `e2-eager.result.txt` |
 | `e3-ref-op.js` | `$ref` as an `expr` operator node over YAML and JSON input, resolved by a post-parse fold: end of parse through the engine's `ruleDone` subscriber, version-aware sibling rules, cycle cuts, a provenance side table, an `unresolved` report. Also exports `resolve(raw, opts)`. | `e3-ref-op.result.txt` |
 | `e4-expr-struct.js` | Can `expr` be extended to carry `$ref`? A lexical attempt, then a structural-operator layer over `expr`'s public surface with a tree fold and an inherited base URI (`$self`, `$id`, `$anchor`) | `e4-expr-struct.result.txt` |
+| `e6-expr-fold.js [doc.yaml]` | The OpenAPI resolver as a vocabulary over `expr`'s tree layer (key operators and `fold`, `tabnas/expr` pull request 100): version-aware siblings, `$self`/`$id`/`$anchor` bases, data slots, cycles, `$dynamicRef`, an external reference, provenance; on `e6-doc.yaml` and on Stripe's description from `JSON.parse` output. Needs the `expr` checkout: see the note's appendix. | `e6-expr-fold.result.txt` |
 | `bench.js <spec.json>` | Parse and resolve cost on a large real description, and the serialised size of shared (diamond) structure | `bench.result.txt` (Stripe's `spec3.json`, fetched from the `stripe/openapi` repository; not committed) |
 
 Run them from a scratch directory with the five published packages

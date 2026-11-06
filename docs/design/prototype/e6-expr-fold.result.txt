@@ -1,0 +1,21 @@
+fold: 2 ms; version 3.1+; raw unchanged: true; serialises: true
+parameters[0] (block-sequence entry, by shape) = {"name":"limit","in":"query","schema":{"type":"integer"}}
+/pets 200 (Reference Object override) = {"description":"Overrides the component description","content":{"application/json":{"schema":{"type":"array","items":{"$id":"https://schemas.example.com/pet.json","type":"object","properties":{"name":{"$anchor":"name","type":"string"},"friends":{"type":"array","items":{"$ref":"#"}},"owner":{"$ref":"https://example.com/schemas/person.json"},"tag":{"allOf":[{"$id":"https://schemas.example.com/tag.json","type":"string"}],"description":"The pet's tag"},"any":{"$dynamicRef":"#meta"}},"$defs":{"Name":{"$anchor":"name","type":"string"},"Owner":{"$id":"https://schemas.example.com/owner.json","type":"string"}}}},"example":{"$ref":"#/components/schemas/Pet","note":"data"}}}}
+/pets 404 (ref -> ref) = {"description":"Not found"}
+/pets/{id} 200 is /pets 200's one result: true
+/pets/{id}/photos (Path Item merge) = {"get":{"responses":{"200":{"description":"Photos"}}},"summary":"Photos of one pet"}
+requestBody schema (target under a $id, reached first: its own base) = {"$id":"https://schemas.example.com/owner.json","type":"string"}
+Pet.tag (3.1 Schema Object conjunction) = {"allOf":[{"$id":"https://schemas.example.com/tag.json","type":"string"}],"description":"The pet's tag"}
+Pet.name (#name anchor) = {"$anchor":"name","type":"string"}
+Pet.friends.items (cycle) = {"$ref":"#"}
+Pet.any ($dynamicRef, verbatim) = {"$dynamicRef":"#meta"}
+Pet.owner (external) = {"$ref":"https://example.com/schemas/person.json"}
+Encoded (%2F) = {"$id":"https://schemas.example.com/tag.json","type":"string"}
+x-vendor (data) = {"$ref":"#/components/schemas/Tag","keep":"literal"}
+example (data) = {"$ref":"#/components/schemas/Pet","note":"data"}
+__proto__ kept: true
+report = {"cycles":[{"at":"/components/schemas/Pet/properties/friends/items","target":"/components/schemas/Pet"}],"unresolved":[],"dynamic":[{"at":"/components/schemas/Pet/properties/any","src":"$dynamicRef"}]}
+external = [{"at":["components","schemas","Pet","properties","owner"],"uri":"https://example.com/schemas/person.json"}]
+provenance entries: 13
+as 3.0.3: Pet.tag = {"$id":"https://schemas.example.com/tag.json","type":"string"}
+stripe spec3.json via expr.fold on JSON.parse output: 658 ms; version 3.0 ; sites 3673 ; cycles 125 ; unresolved 0 ; dynamic 0 ; external 0

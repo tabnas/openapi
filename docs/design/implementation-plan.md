@@ -9,8 +9,14 @@ measured findings it builds on, and to the prototype under
 [`prototype/`](prototype/), whose `resolve()` is the sketch of the
 resolver this plan specifies.
 
-Status: a proposal for the maintainer, 6 November 2026, third revision.
-The first was reviewed by three independent readers (a fleet maintainer,
+Status: a proposal for the maintainer, 6 November 2026, fourth revision.
+This revision follows the maintainer's direction that `expr` is vital and
+central: the tree layer is built in `expr` first (`tabnas/expr` pull
+request 100, TypeScript), the resolver is an OpenAPI vocabulary over
+`expr.fold`, and `expr` becomes a runtime dependency; Phase E below is
+the prerequisite that was Phase 5's last row, and Decisions 6 and 7 are
+re-taken. The extension is recorded in
+[`expr-tree-layer.md`](expr-tree-layer.md). The first revision was reviewed by three independent readers (a fleet maintainer,
 an apidef maintainer, a specification reader), a completeness critic, and
 a design panel on the `expr` question; their corrections are folded in and
 marked where they change a decision. Every point marked **Decision** is one the maintainer
@@ -30,9 +36,12 @@ the experimental part, using `@tabnas/expr` where it fits. The design
 note settled the experimental part: `expr` reads the operator-shaped
 skeleton of a runtime expression and misreads the ABNF-legal names inside
 it, so the embedded languages get lexical readers; `$ref` is not an
-operator the lexical `expr` can carry; the resolver's fold is built to an
-interface written in `expr`'s vocabulary so `expr` can adopt it later
-(section 4, Phase 5).
+operator the lexical `expr` can carry. The maintainer then directed that
+`expr` is central and is to be extended to carry it: `expr` now has key
+operators recognised by shape and a `fold` over the finished tree, with
+a site, an inherited bag, a memo by pointer, a cycle policy and a report
+(Phase E), and the resolver here is the OpenAPI vocabulary over that fold
+(Phase 2).
 
 The plugin is done, at its first stable release, when all of the
 following hold.
@@ -78,6 +87,20 @@ work:
   rule the final `ruleDone` handed over, not `ctx.Root`. The function form
   below is therefore the primary API in all three runtimes and the
   in-parse option is sugar in TypeScript and Go only.
+- The generic half of resolution is `expr`'s. `expr`'s tree layer
+  (`tabnas/expr` pull request 100) declares a key operator by `{ key:
+  true, src: '$ref' }`, recognises it by a map's shape at fold time, and
+  reduces it bottom-up with `evaluate(site, op, [value, siblings])`,
+  where the site carries the root, the path, the verbatim node, a bag
+  `inherit` built from the site's own ancestors, the opening token when
+  `positions` is on, and `at(path)`, which folds another location through
+  any sites on the way, with one result per RFC 6901 pointer, an active
+  set and a cyclic set for cycles, and a report of cycles, unresolved and
+  dynamic sites. Its deferred mode (`ExprOptions.fold`) runs on the
+  `ruleDone` event above. Prototype E6 runs the OpenAPI resolver over it
+  on the YAML document beside it and on Stripe's description (3673 sites,
+  125 cycles, 658 ms from `JSON.parse` output). The layer is TypeScript
+  only until its ports land, which fixes the order of the work below.
 - What `$ref` means depends on the document version, the schema dialect
   and the object at the site: Swagger 2.0 is JSON Reference everywhere
   (siblings ignored); 3.0.x makes a `$ref` map a Reference Object wherever
@@ -146,16 +169,19 @@ work:
 
 ```
 @tabnas/parser  (engine)
-  └── @tabnas/json → @tabnas/jsonic → @tabnas/yaml
-                                         └── @tabnas/openapi   (this repository)
-@tabnas/expr    (no runtime dependency; the fold is written to its vocabulary)
+  ├── @tabnas/json → @tabnas/jsonic → @tabnas/yaml ─┐
+  └── @tabnas/expr  (key operators and fold)        ├── @tabnas/openapi   (this repository)
+                                                    ┘
 ```
 
 `@tabnas/openapi` is a plugin on `jsonic`+`yaml`, as the ZON template is a
 plugin on `jsonic`. A strict variant on `json` alone serves callers who
 want a `.json` file held to RFC 8259; it makes `json` a runtime dependency
-in all three ports (Decision 1). The plugin has no manifest entry for
-`expr` (Decision 7).
+in all three ports (Decision 1). `expr` is a runtime dependency for the
+tree layer, in all three ports, once the layer is published (Decision 7);
+the plugin's own instance of `expr` declares the key operators and no
+token operators, since `expr`'s default table breaks `/pets:` under the
+document grammar.
 
 ### 3.2 Public surface
 
@@ -198,9 +224,10 @@ runs on `JSON.parse` and only the grammar can report a row and column or
 a syntax position. The engine's own `tn.parse()` always runs the grammar
 and returns the verbatim tree with nothing raised by the plugin; the three
 fixture runners call the wrapper. In TypeScript and Go the wrapper's
-in-parse resolve goes through the `ruleDone` subscriber, in Go writing
-the final done rule's node; in Rust the wrapper calls `resolve` on the
-returned tree. Reports travel through the return value or an
+in-parse resolve is `expr`'s deferred mode (`ExprOptions.fold` with the
+plugin's callbacks), which runs on the `ruleDone` subscriber, in Go
+writing the final done rule's node; in Rust the wrapper calls `resolve`
+on the returned tree. Reports travel through the return value or an
 `onResolved` callback, never through plugin options, which `use()`
 deep-copies. `resolveAll(text, options)` is the asynchronous wrapper that
 loads every reachable document first and then calls the synchronous
@@ -358,8 +385,11 @@ found the first draft of this phase short, and the repository is still
    its path filters for the renamed files; `ci/rust/run.sh` adds `yaml` to
    its sibling list and to the crates its lock comparison exempts. Run
    `node tools/port-deps.cjs`; no register entry is expected, since all
-   three ports gain the same dependencies. No `expr` entry in any manifest
-   (Decision 7).
+   three ports gain the same dependencies. `@tabnas/expr` enters the same
+   manifests on the same instruction once the release carrying the tree
+   layer exists (Decision 7, Phase E); until then Phase 2 is written
+   against the checkout through the admin repository's local wiring, and
+   no manifest names it.
 5. **Admin-stamped files (a maintainer instruction to the admin
    repository).** `go/clib/` and `.github/workflows/clib.yml` and
    `clib-release.yml` carry `tabnas-clib-template` markers and hardcode
@@ -441,6 +471,37 @@ found the first draft of this phase short, and the repository is still
    examples corpus (section 7) parses without error; Stripe's description
    parses in under 100 ms on the fast path and under 5 s on the grammar.
 
+### Phase E: the `expr` tree layer (L; TypeScript landed, then port L each)
+
+The prerequisite of Phase 2 in every runtime, in `tabnas/expr`, on the
+maintainer's direction. Its contract and port notes are in
+[`expr-tree-layer.md`](expr-tree-layer.md) and in `expr`'s `AGENTS.md`.
+
+1. **TypeScript** (landed, pull request 100): `OpDef.key` and `dynamic`;
+   `fold(root, options)` with `Site`, `inherit`, memo by pointer, the
+   active and cyclic sets, `cycle: 'verbatim' | 'error'`, `tokens`,
+   `positions`, `report`; `ExprOptions.fold` through `ruleDone`;
+   `evaluation(..., { objects: true })`; `opify`, `isOp`, `keyOpOf`,
+   `makeKeyMap` exported; fixtures in `test/tree/` and `tree.test.ts`;
+   the reference, concepts, guide and agents guide.
+2. **Go port**: `Key` and `Dynamic`; `Fold` with `FoldEvaluate` and
+   `Inherit`; recognition over `*OrderedMap`, `map[string]any` and
+   `MapRef`; siblings a new `*OrderedMap`; the deferred mode writing the
+   final done rule's node, measured on a yaml stream with directives
+   first; the occurrence token on `ListRef.Meta` (which `positions`
+   needs); `DIVERGENCE.md`'s `Op` shape pins updated for the two fields;
+   a `test/tree/` runner.
+3. **Rust port**: `key` and `dynamic`; `fold` with `FoldEvaluate` over
+   `(&Site, &Op, Vec<Value>)` extending `EvalSite`; recognition over
+   `Value::Object` and `Value::MapRef`; the function form only; a runner.
+4. **Fixtures move** from `test/tree/` into `test/spec/` once both ports
+   run them, under the parity rule.
+5. **Release** `expr` with the layer, through its own `release.yml`,
+   after `main` is green; then the dependency instruction here
+   (Decision 7).
+6. Acceptance: the three suites green on the tree fixtures; E6 green
+   against the published package rather than the checkout.
+
 ### Phase 2: the resolver on one document (L, then port L)
 
 The prototype's `resolve()` is the sketch; this phase makes it exact. The
@@ -448,26 +509,22 @@ specification reader moved the base-URI machinery here from Phase 3: a
 single 3.1 document with `$id`s already needs it (Appendix F.1: a
 fragment under an `$id` resolves within that resource, not the document).
 
-1. **The fold** (`ts/src/fold.ts`, `go/fold.go`, `rs/src/fold.rs`), with
-   no OpenAPI knowledge and no import of `expr`, written to the interface
-   the design panel converged on so a later lift into `expr` is a move:
-   operators declared as `{ key: true, src: '$ref' }` entries, with
-   `dynamic: true` for keys recognised and reported but never evaluated
-   (`$dynamicRef`); recognition by node shape at fold time, never by a
-   parse hook, so grammar topology (yaml's bare-pair sequence entries) and
-   the fast path are irrelevant; `evaluate(site, op, [value, siblings])`
-   bottom-up, siblings a new ordered map without the key; `inherit(site,
-   node, k)` computing the inherited bag as a memoised function of the
-   PATH from each node's own ancestors, so a target forced out of order
-   gets its own ancestors' base URI (prototype E4's corrected case);
-   memoisation by path string, not object identity, since Rust values are
-   copy-on-write and yaml aliases are copies; an `active` set of every
-   container being folded plus the URI chain for cycles; `site.at(path)`
-   to resolve another part of the tree through intermediate references,
-   `site.locate(path)` for a raw read; `tokens: true` to reduce `expr`
-   operator arrays met in the walk through `expr`'s own `evaluation`; a
-   report of cycles, unresolved and dynamic sites. Values built with
-   defined members into null-prototype objects so `__proto__` stays data.
+1. **The fold is `expr`'s** (Phase E), and this repository writes no
+   generic walk: `resolve(raw, options)` is `expr.fold(raw, { op,
+   evaluate, inherit, k, cycle, positions, report })` with the OpenAPI
+   vocabulary in the callbacks, as prototype E6 shows. The operator table
+   declares `$ref` as `{ key: true, src: '$ref' }` and `$dynamicRef` as
+   `dynamic: true`; `inherit` sets the base URI, the schema dialect and
+   the kind of object at the path in the bag each subtree sees; `evaluate`
+   leaves data slots verbatim, resolves the URI against `site.k.base`,
+   reaches the target through `site.at`, applies the sibling rule by
+   version and kind, records provenance once per site, and hands a cycle
+   or a miss back as the verbatim site; the fold's report (`cycles`,
+   `unresolved`, `dynamic`) feeds the plugin's. The layer keeps one
+   result per path, so sharing is a property of the fold, and never
+   changes the raw tree. `__proto__` survives as a key because the layer
+   defines members rather than assigning them; the plugin's own tables are
+   null-prototype objects for the same reason.
 2. **The object model** (M on its own; the first thing this phase needs).
    A generated classifier of every position in a document for each
    supported version, saying whether the slot is a Reference Object, a
@@ -637,15 +694,16 @@ fragment under an `$id` resolves within that resource, not the document).
 ### Phase 5: upstream enhancements (each its own PR, each a maintainer instruction)
 
 None blocks the phases above; each removes a workaround or widens reuse.
-The design panel's two judges disagreed on how much of this belongs in
-`expr` now (Decision 6) and agreed on the order.
+The `expr` rows that were here, the operator constructor and predicate,
+the opt-in object fold and the tree layer, have landed in TypeScript and
+moved to Phase E as the prerequisite of Phase 2, by the maintainer's
+direction (Decision 6); the Go occurrence token is now part of the Go
+port there. The rows below are the ones that remain.
 
 | Repository | Change | Why | Size | Breaking |
 |---|---|---|---|---|
-| expr | export `opify` and `isOp` in TypeScript (`IsOp` in Go; Rust has both) as a documented constructor and predicate with one contract in all three runtimes | no runtime offers a stable operator constructor today: TypeScript stamps a private marker through `testing.opify`, Go's exported `Opify` is documented as a test mirror and the `*Op` type is the mark, Rust's `opify` returns an `Op` not a node | S | no |
-| expr | `evaluation(..., { objects: true })`, opt-in, descending into plain objects into new objects (prototype kept, `__info__` copied) | the fold disagrees with the eager option on every map and the guide promises parse-once-evaluate-many; opt-in because an unconditional walk changes 180 of 1061 existing fixture rows; Go keeps `OrderedMap`; a post-parse fixture runner is new in all three suites; the TypeScript `Evaluate` type becomes `(rule, ctx, op, terms: any[])` | M | no, as an option |
-| expr | the occurrence token on the Go operator node (`ListRef.Meta`) | TypeScript and Rust give a resolver the token; Go gives none | S | no |
-| expr | the tree layer: `key: true` and `dynamic: true` on `OpDef`/`Op`, `fold()` with the contract of Phase 2 item 1, deferred mode through `ruleDone` in TypeScript and Go (Go writing the final done rule's node, measured on a yaml stream first) and the function form in Rust | lets `$ref`-like keyword operators share `expr`'s S-expression, `simplify` and fixtures with JSON Schema, AsyncAPI and other `$`-keyword formats; the plugin's `fold.ts` lifts in as `tree.ts` | L (about 220 TypeScript, 380 Go, 450 Rust lines plus runners) | no, additive; `Op` gains fields that stale the recorded Go shape pins |
+| expr | a key operator declared by a predicate on the map as well as by a member name, for formats whose operation is a shape without one keyword | the note's section 6.1 anticipated a list whose head is a keyword; the layer offers `src` only | S | no |
+| expr | lazy pointer and bag construction in `fold` | 658 ms on Stripe against 256 ms for the in-place resolver | S | no |
 | parser | a `parse.complete` hook (not `finish`, which `rule.finish` already uses): `(tabnas, ctx, meta) => result | void`, after the trailing-content check, before `result.fail`, never on a throw, `{ value, errors }` under recovery, insertion order in all three runtimes (repairing `prepare`'s Go sort with it), a mutable root in Rust | a declarative, grammar-level end of parse that can replace the result in Rust, which `ruleDone` cannot | M | no |
 | parser | `MarshalJSON` for Go's `MapRef`/`ListRef` emitting the value | with `info` on, Go's raw tree is not verbatim as JSON | S | no |
 | yaml | the block-sequence builders attach the `info` marker or build through `@object$`/`@array$`; the column drift; the leading-newline JSON text; a plain-scalar schema option (YAML 1.2 core or JSON schema) | the marker is absent on the `- $ref:` shape; columns are off by one per `: `; a legal JSON text fails; `yes`/`no`/`on`/`off` read as booleans and `.inf` as null where OAS requires YAML 1.2 | S each | the scalar option no, as an option |
@@ -752,8 +810,8 @@ first changes nothing there; Stripe's 492 would).
 | 3 | Loader: sync, async or both | sync `resolve`, async `resolveAll` wrapper |
 | 4 | Swagger 2.0: full position model, or raw plus local JSON Reference resolution only | full model, since apidef reads 2.0 today |
 | 5 | Default `siblings` and `slots` policy | `spec`; apidef migrates with the `compat: 'apidef'` preset and decides later |
-| 6 | Which upstream enhancements to instruct, and when; in particular whether the tree layer lands in `expr` now (the second judge's preference) or after the plugin's `fold.ts` has settled the interface (the first judge's) | `opify`/`isOp`, the opt-in object fold and the Go token first; the tree layer when a second `$`-keyword format wants it |
-| 7 | Whether `expr` reads the runtime-expression skeleton | no: lexical readers only; no `expr` entry in any manifest |
+| 6 | Taken by the maintainer's direction: the tree layer lands in `expr` first, as the prerequisite of the resolver (Phase E). Still to decide: the order of the Go and Rust ports, and whether `expr` releases the TypeScript layer before both ports run the tree fixtures | ports in the order Go then Rust, as the family's other layers went; release after both, so the fixtures are shared from the first release that carries them |
+| 7 | `expr` as a runtime dependency, and what it reads | yes, for the tree layer, in all three manifests on the instruction that follows the `expr` release; the runtime-expression skeleton stays with the lexical readers, since the misreads of the note's E1 are a property of global binding power and do not change with the layer |
 | 8 | Whether the in-parse resolve option on `use()` ships in v1 | yes, in TypeScript and Go, as sugar over `ruleDone`; Rust has the function form |
 | 9 | Provenance positions always, or only when asked | only when asked (`positions: true`), since it costs a subscriber call per rule |
 | 10 | Keep or drop the translation parts the template carries | drop |
@@ -812,14 +870,17 @@ runners and held to the docs by a test):
 | The first release stalls on registries that do not know the package | the prerequisites checklist in Phase 7, done before any dispatch |
 | The yaml plugin's YAML 1.1 scalars and inherited engine divergences make D1 false on real documents | pinned in `raw-yaml-scalars.tsv` and the `divergent.tsv` register, counted in the ledger, repaired upstream in Phase 5 |
 | Admin-stamped files keep building ZON's library | the clib rollout row and restamp in Phase 0, before the first release |
-| The engine or expr changes land in a different order than planned | nothing in Phases 0 to 4 depends on Phase 5 |
+| The engine changes land in a different order than planned | nothing in Phases 0 to 4 depends on Phase 5 |
+| The `expr` ports lag the TypeScript layer | Phase 2 in Go and Rust waits on Phase E; the TypeScript resolver proceeds against the checkout, and the parity gate for the resolve fixtures runs when the ports land |
 
 ## 9. Sequence
 
 ```
-Phase 0  bootstrap (incl. admin rollout row)   M        ─┐
-Phase 1  raw mode (TS)                          M         │ one PR each, in order
-Phase 2  resolver, bases, dialects (TS)         L         │
+Phase E  expr tree layer (TS)                   L  landed  ─┐ in tabnas/expr
+Phase 0  bootstrap (incl. admin rollout row)   M        ─┐  │
+Phase 1  raw mode (TS)                          M         │  │ one PR each, in order
+Phase 2  resolver over expr.fold (TS)           L         │  │ against the expr checkout
+Phase E  expr ports (Go, Rust), release         L + L    ─┼──┘ then the dependency instruction
 Phase 1+2 ports (Go, Rust)                      L        ─┘ parity gate: shared and resolve fixtures
 Phase 3  documents and loader                   M + port M
 Phase 4  embedded languages                     M + port S

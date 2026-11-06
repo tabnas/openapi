@@ -10,7 +10,14 @@ packages, what the OpenAPI 3.2.0 specification requires, and what
 `voxgig/apidef` does today, and ends with recommendations. The
 [implementation plan](implementation-plan.md) builds on it.
 
-This is the fourth revision. The second was reviewed by three independent
+This is the fifth revision. After the fourth, the maintainer directed
+that `expr` is vital and central to this work, a forcing function to make
+`expr` more general; the tree layer of section 6 was then built in `expr`
+itself (`tabnas/expr` pull request 100, TypeScript) and measured against
+the OpenAPI requirements as experiment E6. The recommendations of 6.4 and
+8.2 are superseded by that direction and marked where they stand; the
+extension itself is recorded in
+[`expr-tree-layer.md`](expr-tree-layer.md). The second revision was reviewed by three independent
 readers and sixteen claim-by-claim verifiers, and a three-designer panel
 with two judges took up the question of section 6; several statements did
 not survive: an engine facility the note had missed, a wrong reason in one
@@ -54,17 +61,23 @@ prototype and its captured results are in [`prototype/`](prototype/).
   prototype's `resolve()` sketches. Experiment E4 shows what making `expr`
   carry `$ref` would mean: not a new kind of value, since terms may
   already be containers, but operators recognised by node shape and a fold
-  that walks the tree carrying context down as well as values up.
+  that walks the tree carrying context down as well as values up. **That
+  extension now exists in `expr`** (fifth revision): key operators
+  declared `{ key: true, src: '$ref' }`, `fold(root, options)` with a
+  site, an inherited bag, a memo by pointer and a cycle policy, and a
+  deferred mode through the engine's `ruleDone` event; experiment E6 runs
+  the OpenAPI resolver as a vocabulary over it.
 - **Recommendation: build `@tabnas/openapi` as a layer over `jsonic`+`yaml`
   with `parse()` returning the verbatim document and an exported
   `resolve(raw, options)` returning a report around a derived tree; type
   every site by the document's version and the object model's position;
   keep loading off by default; treat the resolved result as a graph and
   give any serialised form a sharing policy; read runtime expressions and
-  templates lexically.** The `expr` changes worth making are a public
-  `opify` and `isOp`, an object-walking fold as a consistency repair, and
-  a Go occurrence token; the structural extension of section 6 is an
-  option for later. None is a precondition for starting.
+  templates lexically; and, by the maintainer's direction, build the
+  resolver on `expr`'s tree layer, with `expr` a runtime dependency.**
+  The layer is in `expr`'s TypeScript; the Go and Rust ports and the Go
+  occurrence token are what remain upstream, and the plugin's Phase 2 is
+  written against the checkout until the layer is published.
 
 ## 1. What OpenAPI needs
 
@@ -545,6 +558,38 @@ target once and keep `$ref` thereafter, or inline within a byte budget).
 And the grammars cost two orders of magnitude more than `JSON.parse` on
 JSON input for an identical value.
 
+### E6: the OpenAPI resolver as a vocabulary over `expr`'s tree layer
+
+Added in the fifth revision. `prototype/e6-expr-fold.js` is the resolver
+of E3 rewritten with no generic machinery of its own: `$ref` and
+`$dynamicRef` declared as key operators, `expr.fold` doing the walk, the
+memo, the cycle detection, the report and the inherited bag, and about a
+hundred and twenty lines of OpenAPI around it (the version, the kind of
+object at a path, the `$self`, `$id` and `$anchor` index, RFC 3986 and
+RFC 6901, the sibling rule by version and kind, the loader hand-off). It
+needs the `expr` checkout that carries the layer; see the appendix.
+
+On the YAML document beside it, every requirement the earlier experiments
+had to add by hand holds through the layer: a block-sequence entry
+resolves by shape; a Reference Object's `description` overrides; a
+reference to a reference reaches the final target; two sites share one
+object; a Path Item merges its sibling; a target under an `$id`, reached
+first from outside its resource, resolves against its own `$id`; a 3.1
+Schema Object conjoins its sibling and the same document as 3.0.3 drops
+it; `#name` resolves through the anchor index; `#` from inside the schema
+is a cycle and stays verbatim; `$dynamicRef` is reported and left; an
+external reference is handed to the loader; `%2F` decodes before the
+split; `x-` and `example` slots keep their `$ref`; `__proto__` survives;
+the raw tree is unchanged and the result serialises. On Stripe's
+`spec3.json`, folded from `JSON.parse` output with no grammar involved,
+3673 sites resolve with 125 cycles in 658 ms, against E3's 3570 sites and
+256 ms in place; the site counts differ by the data-slot sketch (E6 types
+389 maps as data, E3 492), which the plan's object model settles, and
+the time by the fold building a new tree with a pointer string and an
+inherited bag per container. The captured output is
+`prototype/e6-expr-fold.result.txt`; the extension it exercises is
+recorded in [`expr-tree-layer.md`](expr-tree-layer.md).
+
 ## 5. Findings
 
 1. **The specification mandates post-parse resolution.** Everything must
@@ -745,8 +790,12 @@ Three homes are possible, and the choice is the maintainer's:
   AsyncAPI and the other `$`-keyword formats, and keeps `expr` out of
   `$ref` entirely.
 
-This note recommends the third for the first release and the first as
-the later step, in two moves: land `opify`, `isOp` and the object-walking
+**Superseded in the fifth revision.** The maintainer's direction is the
+first home, now: the layer lives inside `expr`, as part of `expr.ts`
+rather than a second module, and is built (pull request 100). The
+paragraph below and the panel's staging after it are kept as the record
+of what was weighed. This note had recommended the third for the first
+release and the first as the later step, in two moves: land `opify`, `isOp` and the object-walking
 `evaluation` in `expr` when the maintainer instructs it, since every home
 needs them, and build the structural kind and the fold as the second
 module once the openapi plugin's resolver has settled what the site and
@@ -885,8 +934,18 @@ an array, which the first `expr` change should correct.
 
 ### 8.2 Enhancements to `@tabnas/expr`
 
-Re-ranked by the review. Each is its own pull request and its own
-maintainer instruction; nothing in 8.1 depends on them.
+**Revised in the fifth revision.** By the maintainer's direction the tree
+layer is the foundation of the resolver, not a later option, and most of
+this list has landed in `expr`'s TypeScript as pull request 100:
+`opify` and `isOp` exported (item 1); `evaluation(..., { objects: true })`
+as an opt-in (item 2, the option form, since the unconditional walk
+changed 180 rows); and the structural kind and the fold (item 4), as
+key operators and `fold`, with the deferred mode, `positions`, the
+report and the `tokens` option, specified in
+[`expr-tree-layer.md`](expr-tree-layer.md). What remains upstream is the
+Go occurrence token (item 3) and the Go and Rust ports of the layer,
+each on its own instruction, and then the `expr` release the plugin's
+manifests can name. The list as it stood is kept below for the record.
 
 1. **A documented operator constructor and predicate in all three
    runtimes**: export `opify` and `isOp` in TypeScript (the constructor
@@ -1001,8 +1060,10 @@ measured step against apidef's fixtures.
 - Does the resolved report validate implicit connections (dangling
   security scheme names, tags, `operationId`, discriminator names) beside
   `unresolved`? apidef's `operationFacts` would use it.
-- Which home in section 6.4 does the tree extension get, and in what
-  order?
+- The Go and Rust ports of the tree layer: in which order, and does
+  `expr` release the TypeScript layer before both ports land, given the
+  parity rule that shared fixtures run in every runtime (which is why
+  `test/tree/` sits outside `test/spec/` for now)?
 - What is the Go shape of a structural operator node, given the wrapped
   array `DIVERGENCE.md` records for token operators?
 
@@ -1023,6 +1084,16 @@ node e2-eager.js
 node e3-ref-op.js
 node e4-expr-struct.js
 node bench.js <path to a large description, such as Stripe's spec3.json>
+```
+
+`e6-expr-fold.js` needs the tree layer, which is in `tabnas/expr` pull
+request 100 and not yet in a published `@tabnas/expr`. Until it is, build
+that branch's `ts/` and point the script at it:
+
+```sh
+TABNAS_EXPR=<expr checkout>/ts \
+NODE_PATH=<expr checkout>/ts/node_modules:/tmp/openapi-proto/node_modules \
+node e6-expr-fold.js            # the document beside it, e6-doc.yaml
 ```
 
 Each script's output as captured for this document is in the
