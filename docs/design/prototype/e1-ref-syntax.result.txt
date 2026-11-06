@@ -28,7 +28,27 @@ ok   "http://notificationServer.com?transactionId={$request.body#/id}&email={$re
       -> ERROR unexpected
 ok   "$request.body#/a~1b"
       -> ["#",[".","$request","body"],["/","a~1b"]]
-14/14 as expected
+FAIL "$request.query.a.b"
+      -> [".",[".",[".","$request","query"],"a"],"b"]
+      want [".",[".","$request","query"],"a.b"]
+FAIL "$request.header.X.Y"
+      -> [".",[".",[".","$request","header"],"X"],"Y"]
+      want [".",[".","$request","header"],"X.Y"]
+FAIL "$request.header.X#Y"
+      -> ["#",[".",[".","$request","header"],"X"],"Y"]
+      want [".",[".","$request","header"],"X#Y"]
+FAIL "$request.body#/user.name"
+      -> ["#",[".","$request","body"],["/",[".","user","name"]]]
+      want ["#",[".","$request","body"],["/","user.name"]]
+ok   "$request.body#/a,b"
+      -> ["#",[".","$request","body"],["/","a,b"]]
+FAIL "$request.body#/a//b"
+      -> ["#",[".","$request","body"],["/",["/","a"],["/","b"]]]
+      want ["#",[".","$request","body"],["/",["/",["/","a"],""],"b"]]
+FAIL "$request.query."
+      -> [".",[".","$request","query"]]
+      want "ERROR"
+15/21 as expected
 
 ## (b) $ref URIs (RFC 3986 + RFC 6901 fragment)
 ok   "#/components/schemas/Pet"
@@ -52,16 +72,17 @@ ok   "#/components/schemas/true"
 FAIL "#/components/schemas/a b"
       -> [["#",["/",["/",["/","components"],"schemas"],"a"]],"b"]
       want "ERROR"
-FAIL "#"
+ok   "#/components/schemas/a,b"
+      -> ["#",["/",["/",["/","components"],"schemas"],"a,b"]]
+ok   "#"
       -> ["#"]
-      want "ERROR"
 FAIL "https://example.com/schemas/pet.json"
       -> ["/",["/",["/","https:",["/","example.com"]],"schemas"],"pet.json"]
       want "ERROR"
 FAIL "#/paths/~1pets~1{id}/get"
       -> ["#",["/",["/",["/","paths"],"~1pets~1{id}"],"get"]]
       want "ERROR"
-9/13 as expected
+11/14 as expected
 
 ## (c) path templates (OAS 4.8.2 ABNF)
 ok   "/pets"

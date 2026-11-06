@@ -1,0 +1,16 @@
+$ node bench.js spec3.json     # Stripe's published OpenAPI 3.0.0 description, Node 22, this container
+document: spec3.json, 7.9 MiB of JSON text
+  JSON.parse                 30 ms
+  strict json grammar      3215 ms
+  jsonic+yaml grammar      3831 ms
+  all three equal as JSON text: true
+  openapi 3.0.0, 431 paths, 1538 schemas, 4062 $ref maps
+  resolve (cycle: cut)      256 ms
+    version 3.0; 3570 sites resolved, 0 unresolved, 125 cycle cuts
+    JSON.stringify(resolved) FAILED after 90405 ms: Invalid string length
+  resolve (cycle: keep)     259 ms
+    version 3.0; 3570 sites resolved, 0 unresolved, 103 cycle cuts
+    JSON.stringify(resolved) FAILED after 1 ms: Converting circular structure to JSON
+  diamond depth  8: 16 $ref sites, raw 997 B -> resolved JSON 0.0 MiB in 0 ms (DAG in memory: 16 sites, 9 schema objects)
+  diamond depth 12: 24 $ref sites, raw 1470 B -> resolved JSON 0.5 MiB in 5 ms (DAG in memory: 24 sites, 13 schema objects)
+  diamond depth 16: 32 $ref sites, raw 1946 B -> resolved JSON 7.4 MiB in 82 ms (DAG in memory: 32 sites, 17 schema objects)

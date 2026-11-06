@@ -4,17 +4,26 @@
 // jsonic, jsonic+yaml). In `ops` mode it rewrites each map carrying a
 // `$ref` key into an expr op node `[refOp, target, siblings]`, marked with
 // expr's OP_MARK so expr's `simplify` and `evaluation` recognise it. In
-// `resolve` mode it also folds the finished tree at the root rule's
-// after-close, so `parse()` returns the resolved document.
+// `resolve` mode it folds the finished tree when the parse completes and
+// hands the result back through `ctx.root().node`. The fold is also
+// exported as `resolve(raw, opts)` for a host that parses first and
+// resolves later, which is how apidef's pipeline is shaped.
+//
+// Third revision. The second review found: the start rule's after-close
+// is not an end-of-parse hook (yaml's `stream` rule is replaced on
+// directives and document markers, and parse() returns the ORIGINAL root
+// rule's node); plugin options are deep-copied by `use()`, so a mutable
+// array handed in through them never reaches the caller; a `$ref` sibling
+// rule has to know the document VERSION (3.0.x has no Schema Object
+// conjunction, Swagger 2.0 is JSON Reference everywhere); writes with
+// `out[k] = v` drop a `__proto__` key. Each is addressed below and has a
+// case in the output.
 const { Tabnas } = require('@tabnas/parser')
 const { jsonic } = require('@tabnas/jsonic')
 const { Yaml } = require('@tabnas/yaml')
 const { json } = require('@tabnas/json')
 const { evaluation, simplify, testing } = require('@tabnas/expr')
 
-// `testing.opify` is the only way a host can mint an op that expr
-// recognises (OP_MARK is module-private) and is documented as "not part of
-// the stable API". Go exports `Opify` and Rust `opify` publicly.
 const REF_OP = testing.opify({
   name: 'ref-meta', src: '$ref', terms: 2,
   prefix: false, infix: false, suffix: false, ternary: false, paren: false,
@@ -24,65 +33,38 @@ const REF_OP = testing.opify({
 })
 const isRecord = (v) => null != v && 'object' === typeof v && !Array.isArray(v)
 const isRefOp = (v) => Array.isArray(v) && null != v[0] && 'ref-meta' === v[0].name
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k)
+
+// Null-prototype containers with defined (not assigned) members, so a key
+// named `__proto__` stays data on the way through, as the raw tree keeps it.
+const record = () => Object.create(null)
+const put = (o, k, v) => (Object.defineProperty(o, k, { value: v, enumerable: true, writable: true, configurable: true }), o)
+const copy = (...srcs) => { const o = record(); for (const s of srcs) for (const k of Object.keys(s)) put(o, k, s[k]); return o }
+
 const toOp = (n, token) => {
-  const sib = {}
-  for (const k of Object.keys(n)) if ('$ref' !== k) sib[k] = n[k]
+  const sib = record()
+  for (const k of Object.keys(n)) if ('$ref' !== k) put(sib, k, n[k])
   return [{ ...REF_OP, token }, n.$ref, sib]
 }
 
-// Grammar-neutral lift, for the maps no `val` close sees (below).
-function lift(node, path = []) {
-  if (isRefOp(node) || isDataSlot(path)) return node
-  if (Array.isArray(node)) return node.map((v, i) => lift(v, [...path, String(i)]))
-  if (isRecord(node)) {
-    const out = {}
-    for (const k of Object.keys(node)) out[k] = '$ref' === k ? node[k] : lift(node[k], [...path, k])
-    return 'string' === typeof out.$ref ? toOp(out, undefined) : out
-  }
-  return node
+// ---- which document, which slot ----------------------------------------
+// The version decides what a `$ref` means. Swagger 2.0: JSON Reference,
+// siblings ignored everywhere, targets under #/definitions etc. 3.0.x: a
+// Reference Object wherever it stands, siblings ignored, no $id/$anchor.
+// 3.1 and later: Reference Object (summary/description override) except a
+// Schema Object, where $ref is a JSON Schema keyword and siblings apply.
+function docVersion(root) {
+  if (!isRecord(root)) return 'unknown'
+  if (null != root.swagger) return '2.0'                      // `swagger: 2.0` unquoted reads as the number 2
+  const v = String(root.openapi || '')
+  if (v.startsWith('3.0')) return '3.0'
+  if (v.startsWith('3.')) return '3.1+'
+  return 'unknown'
 }
 
-const OpenApiMeta = (tn, opts) => {
-  const mode = opts.mode || 'raw'
-  if ('raw' === mode) return                 // the document, verbatim
-  tn.rule('val', (rs) => rs.ac((r, ctx) => {
-    const n = r.node
-    // Every value coalesces in `val`... except a mapping that starts a
-    // YAML block-sequence entry (`- $ref: x`), which yaml's own
-    // yamlElemMap/yamlElemPair rules build and push without a `val`.
-    if (isRecord(n) && 'string' === typeof n.$ref && !isDataSlot(ancestorKeys(r, ctx))) r.node = toOp(n, r.o0)
-  }))
-  // The START rule's after-close is the de facto end-of-parse hook. The
-  // engine has `parse.prepare` hooks but no `finish`, and which rule is
-  // the root is the grammar's choice: `val` for json and jsonic, `stream`
-  // for yaml. Reading rule.start at install time depends on install order.
-  if ('resolve' === mode) {
-    const start = tn.options.rule.start
-    tn.rule(start, (rs) => rs.ac((r) => {
-      if (0 !== r.d) return
-      const out = makeResolver(lift(r.node), opts.marker || '__info__')
-      r.node = out.resolve()
-      if (opts.unresolved) opts.unresolved.push(...out.unresolved)
-    }))
-  }
-}
-
-// ---- resolution --------------------------------------------------------
-// RFC 6901 section 6: a URI fragment percent-encodes the whole pointer, so
-// decode first (an encoded `/`, %2F, is a separator), then split, then
-// undo the pointer's own `~1` `~0` escapes token by token.
-function pointerParts(frag) {
-  let pointer
-  try { pointer = decodeURIComponent(frag) } catch (_e) { return null }
-  if ('' === pointer) return []
-  if (!pointer.startsWith('/')) return null
-  return pointer.slice(1).split('/').map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'))
-}
-
-// Slots whose content is application data, where a `$ref` key is a literal
-// and not a reference: specification extensions, example payloads and the
-// literal-valued schema keywords. A real plugin drives this from the
-// OpenAPI object model; this is the prototype's approximation of it.
+// Slots whose content is data, where a `$ref` key is a literal. A real
+// plugin derives this, and the schema/pathItem kinds below, from the full
+// object model of the version in hand; these keyword tests approximate it.
 function isDataSlot(path) {
   for (let i = 0; i < path.length; i++) {
     const k = path[i]
@@ -90,13 +72,19 @@ function isDataSlot(path) {
     if ('example' === k || 'const' === k || 'enum' === k) return true
     if ('default' === k && 'responses' !== path[i - 1]) return true
     if ('value' === k && 'examples' === path[i - 2]) return true
+    if (('dataValue' === k || 'serializedValue' === k) && 'examples' === path[i - 2]) return true
   }
   return false
 }
+const SCHEMA_TAIL = /(^|\/)(schemas\/[^/]+|definitions\/[^/]+|schema|items|additionalProperties|additionalItems|contains|propertyNames|not|if|then|else|contentSchema|unevaluatedItems|unevaluatedProperties|properties\/[^/]+|patternProperties\/[^/]+|dependentSchemas\/[^/]+|\$defs\/[^/]+|(allOf|oneOf|anyOf|prefixItems)\/\d+)$/
+function siteKind(path) {
+  const p = path.join('/')
+  if (SCHEMA_TAIL.test(p)) return 'schema'
+  if (/^paths\/[^/]+$/.test(p) || /^webhooks\/[^/]+$/.test(p) || /^components\/pathItems\/[^/]+$/.test(p)) return 'pathItem'
+  return 'reference'
+}
 
-// The keys from the root to a rule, read off the rule stack: a pair-like
-// rule holds its key in `u.key` while its value is being parsed; a list
-// element's index is not known on the stack, so it stands as `*`.
+// The keys from the root to a rule, read off the rule stack.
 function ancestorKeys(r, ctx) {
   const keys = []
   for (let p = r.parent; p && p !== ctx.NORULE; p = p.parent) {
@@ -106,23 +94,71 @@ function ancestorKeys(r, ctx) {
   return keys
 }
 
-// Which OpenAPI object a site is: decides what `$ref` siblings mean.
-//   Reference Object: only summary/description survive, as overrides.
-//   Schema Object:    every sibling keyword applies (2020-12), so the
-//                     honest resolved form is a conjunction, spelt allOf.
-//   Path Item:        adjacent fields: behaviour undefined; keep site keys.
-function siteKind(path) {
-  const p = path.join('/')
-  if (/(^|\/)(schemas\/[^/]+|schema|items|properties\/[^/]+|additionalProperties|allOf\/\d+|oneOf\/\d+|anyOf\/\d+|not|prefixItems\/\d+|\$defs\/[^/]+)$/.test(p)) return 'schema'
-  if (/^paths\/[^/]+$/.test(p) || /^components\/pathItems\/[^/]+$/.test(p)) return 'pathItem'
-  return 'reference'
+// Grammar-neutral lift of the maps no `val` close saw.
+function lift(node, path = []) {
+  if (isRefOp(node) || isDataSlot(path)) return node
+  if (Array.isArray(node)) return node.map((v, i) => lift(v, [...path, String(i)]))
+  if (isRecord(node)) {
+    const out = record()
+    for (const k of Object.keys(node)) put(out, k, '$ref' === k ? node[k] : lift(node[k], [...path, k]))
+    return 'string' === typeof out.$ref ? toOp(out, undefined) : out
+  }
+  return node
 }
 
-function makeResolver(root, marker) {
+// ---- the plugin ---------------------------------------------------------
+const OpenApiMeta = (tn, opts) => {
+  const mode = opts.mode || 'raw'
+  if ('raw' === mode) return
+  tn.rule('val', (rs) => rs.ac((r, ctx) => {
+    const n = r.node
+    if (isRecord(n) && 'string' === typeof n.$ref && !isDataSlot(ancestorKeys(r, ctx))) r.node = toOp(n, r.o0)
+  }))
+  if ('resolve' === mode) {
+    // End of parse, grammar-neutrally: the engine's post-process rule
+    // subscriber fires after every pass; the LAST pass of a parse is a
+    // depth-0 close whose alternate neither pushes nor replaces, outside
+    // any probe and not synthesised by recovery. The start rule's own
+    // after-close is NOT that: yaml replaces `stream` on `%YAML`, `---`
+    // and `...`, and parse() returns the original root rule's node.
+    tn.sub({ ruleDone: (r, ctx, done) => {
+      if (0 !== r.d || 'c' !== done.state || !done.alt || done.alt.p || done.alt.r || done.probe || done.forced) return
+      const out = resolve(ctx.root().node, opts)
+      ctx.root().node = out.tree
+      // Plugin options are deep-copied by use(), so an array passed in
+      // never reaches the caller; a function does (copied by reference).
+      if ('function' === typeof opts.onResolved) opts.onResolved(out)
+    } })
+  }
+}
+
+// ---- resolution --------------------------------------------------------
+// RFC 6901 section 6: percent-decode the whole fragment, then split, then
+// undo `~1` `~0` per token.
+function pointerParts(frag) {
+  let pointer
+  try { pointer = decodeURIComponent(frag) } catch (_e) { return null }
+  if ('' === pointer) return []
+  if (!pointer.startsWith('/')) return null
+  return pointer.slice(1).split('/').map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'))
+}
+
+// `resolve(raw, opts)`: the exported entry point. Returns
+// { tree, unresolved, provenance, cuts, version }. `tree` is a DAG: one
+// object per target, shared by every site naming it. A cycle is cut to the
+// verbatim `{ $ref }` by default (`cycle: 'cut'`) and recorded in `cuts`
+// (holder path, key, target path) so a consumer can read through it;
+// `cycle: 'keep'` leaves the object graph cyclic. `provenance` is a side
+// table keyed by path, not a marker on the nodes, so Go and Rust can carry
+// it without changing node types.
+function resolve(rawTree, opts = {}) {
+  const root = lift(rawTree)
+  const version = opts.version || docVersion(rawTree)
+  const cycle = opts.cycle || 'cut'
   const memo = new Map()     // source node -> resolved value (shared)
-  const active = new Set()   // refs on the current chain: a repeat is a cycle
+  const active = new Set()   // ref URIs on the current chain
   const walking = new Set()  // source nodes whose value is still being built
-  const unresolved = []
+  const unresolved = [], provenance = [], cuts = []
 
   function locate(uri) {
     const hash = uri.indexOf('#')
@@ -135,7 +171,7 @@ function makeResolver(root, marker) {
     for (const part of parts) {
       node = isRefOp(node) ? deref(node, path) : node
       if (Array.isArray(node)) node = /^(0|[1-9]\d*)$/.test(part) ? node[Number(part)] : undefined
-      else if (isRecord(node)) node = Object.prototype.hasOwnProperty.call(node, part) ? node[part] : undefined
+      else if (isRecord(node)) node = own(node, part) ? node[part] : undefined
       else node = undefined
       path = [...path, part]
       if (undefined === node) return { why: 'names nothing' }
@@ -143,93 +179,76 @@ function makeResolver(root, marker) {
     return { node, path }
   }
 
-  // The value an op node stands for, with its target walked first so a
-  // ref inside the target is resolved too and every site naming one
-  // target shares one result. A cycle keeps the back edge verbatim.
+  function backEdge(uri, siblings, path, targetPath) {
+    cuts.push({ at: path.join('/'), ref: uri, target: targetPath ? targetPath.join('/') : undefined })
+    return copy({ $ref: uri }, siblings)
+  }
+
+  // What `$ref` plus siblings mean, by version and by the object at the site.
+  function combine(hit, siblings, kind) {
+    const keys = Object.keys(siblings)
+    if (!isRecord(hit) || 0 === keys.length) return hit
+    if ('2.0' === version) return hit                                   // JSON Reference: siblings ignored
+    if ('pathItem' === kind) return copy(hit, siblings)                 // adjacent fields: undefined; keep both
+    if ('schema' === kind && '3.1+' === version) {                      // 2020-12: a conjunction
+      const { allOf = [], ...rest } = siblings
+      return copy({ allOf: [hit, ...allOf] }, rest)
+    }
+    const out = copy(hit)                                               // Reference Object (3.0 schema included)
+    if ('3.0' !== version) for (const k of ['summary', 'description']) if (own(siblings, k)) put(out, k, siblings[k])
+    return out
+  }
+
   function deref(node, path) {
     if (memo.has(node)) return memo.get(node)
     const [op, uri, sib] = node
     const siblings = walk(sib, path)
-    let out
-    if (active.has(uri)) {
-      out = { $ref: uri, ...siblings }
-      Object.defineProperty(out, marker, { value: { ref: uri, cycle: true }, writable: true })
-      return out                                   // not memoised: a back edge, not a value
-    }
+    if (active.has(uri)) return backEdge(uri, siblings, path)
     active.add(uri)
     const found = locate(uri)
+    let out
     if (undefined !== found.node && walking.has(found.node)) {
-      // The target is an ancestor still being walked (a recursive schema
-      // reached top-down, before any reference to it): a cycle by node
-      // rather than by URI. Keep the back edge verbatim.
-      active.delete(uri)
-      out = { $ref: uri, ...siblings }
-      Object.defineProperty(out, marker, { value: { ref: uri, cycle: true }, writable: true })
-      return out
+      out = 'keep' === cycle ? memo.get(found.node) : backEdge(uri, siblings, path, found.path)
     }
-    const hit = undefined === found.node ? undefined : walk(found.node, found.path)
+    else {
+      const hit = undefined === found.node ? undefined : walk(found.node, found.path)
+      if (undefined === hit) { unresolved.push({ at: path.join('/'), ref: uri, why: found.why }); out = copy({ $ref: uri }, siblings) }
+      else out = combine(hit, siblings, siteKind(path))
+    }
     active.delete(uri)
-    if (undefined === hit) {
-      unresolved.push({ uri, why: found.why })
-      out = { $ref: uri, ...siblings }
-    }
-    else if (!isRecord(hit)) out = hit
-    else switch (siteKind(path)) {
-      case 'schema': {
-        // 2020-12: every sibling keyword applies alongside the reference,
-        // so the resolved form is a conjunction. An `allOf` the site
-        // already carries joins the target in one list.
-        const { allOf = [], ...rest } = siblings
-        out = 0 === Object.keys(siblings).length ? hit : { allOf: [hit, ...allOf], ...rest }
-        break
-      }
-      case 'reference': {
-        out = { ...hit }
-        for (const k of ['summary', 'description']) if (k in siblings) out[k] = siblings[k]
-        break
-      }
-      default: out = { ...hit, ...siblings }
-    }
-    if (isRecord(out) && !Object.prototype.hasOwnProperty.call(out, marker)) {
-      Object.defineProperty(out, marker, {
-        value: { ref: uri, kind: siteKind(path), at: op.token ? { line: op.token.rI, col: op.token.cI } : undefined },
-        writable: true })
-    }
+    if (undefined !== found.node) provenance.push({ at: path.join('/'), ref: uri, kind: siteKind(path), line: op.token ? op.token.rI : undefined, col: op.token ? op.token.cI : undefined })
     memo.set(node, out)
     return out
   }
 
-  // expr's `evaluation` folds op nodes and arrays, NOT objects: walk the
-  // objects here and hand each op node to `evaluation`, with the path.
   function walk(node, path) {
     if (memo.has(node)) return memo.get(node)
-    if (isRefOp(node)) {
-      return evaluation(null, null, node, (_r, _c, op, terms) => deref([op, terms[0], terms[1]], path))
-    }
+    if (isRefOp(node)) return evaluation(null, null, node, (_r, _c, op, terms) => deref([op, terms[0], terms[1]], path))
     if (Array.isArray(node)) {
       const out = []
-      memo.set(node, out)
-      walking.add(node)
+      memo.set(node, out); walking.add(node)
       for (let i = 0; i < node.length; i++) out.push(walk(node[i], [...path, String(i)]))
       walking.delete(node)
       return out
     }
     if (isRecord(node)) {
-      const out = {}
-      memo.set(node, out)
-      walking.add(node)
-      for (const k of Object.keys(node)) out[k] = walk(node[k], [...path, k])
+      const out = record()
+      memo.set(node, out); walking.add(node)
+      for (const k of Object.keys(node)) put(out, k, walk(node[k], [...path, k]))
       walking.delete(node)
       return out
     }
     return node
   }
-  return { resolve: () => walk(root, []), unresolved }
+  return { tree: walk(root, []), unresolved, provenance, cuts, version }
 }
+
+module.exports = { OpenApiMeta, resolve, lift, isRefOp, REF_OP }
+if (require.main !== module) return
 
 // ---- the document, in YAML (components AFTER paths, as usual) ----------
 const yamlSrc = `
-openapi: 3.2.0
+openapi: 3.1.0
 info: { title: Pets, version: "1" }
 paths:
   /pets:
@@ -274,6 +293,7 @@ components:
       properties:
         child: { $ref: '#/components/schemas/Node' }
     Encoded: { $ref: '#/components%2Fschemas/Tag' }
+    __proto__: { type: string, description: a key named __proto__ is data }
 x-vendor: { $ref: '#/components/schemas/Tag', keep: literal }
 `
 const jsonSrc = JSON.stringify(new Tabnas().use(jsonic).use(Yaml).parse(yamlSrc), null, 2)
@@ -288,41 +308,59 @@ const J = (opts) => new Tabnas().use(json).use(OpenApiMeta, opts)
 
 // 1. raw mode is verbatim, from YAML and from pretty-printed JSON.
 const rawY = Y({ mode: 'raw' }).parse(yamlSrc), rawJ = J({ mode: 'raw' }).parse(jsonSrc)
-console.log('1. raw: yaml == json == JSON.parse:', JSON.stringify(rawY) === JSON.stringify(rawJ), JSON.stringify(rawJ) === JSON.stringify(JSON.parse(jsonSrc)),
+console.log('1. raw: yaml == json == JSON.parse (as JSON text):', JSON.stringify(rawY) === JSON.stringify(rawJ), JSON.stringify(rawJ) === JSON.stringify(JSON.parse(jsonSrc)),
   '; also via jsonic+Yaml on the JSON text:', JSON.stringify(Y({ mode: 'raw' }).parse(jsonSrc)) === JSON.stringify(rawJ))
+console.log('   containers have a null prototype:', null === Object.getPrototypeOf(rawY), '; __proto__ is an own key of components.schemas:', Object.keys(rawY.components.schemas).includes('__proto__'))
 
-// 2. ops mode: how many of the 8 $ref maps did the `val` hook catch?
+// 2. ops mode.
 const opsY = Y({ mode: 'ops' }).parse(yamlSrc), opsJ = J({ mode: 'ops' }).parse(jsonSrc)
 console.log(`2. ops: $ref maps in document: ${countRefs(rawY)} (2 of them data: an x- extension and an example payload); op nodes built at parse time: yaml ${countOps(opsY)} (missed ${countRefs(opsY) - 2}: the block-sequence entry), json ${countOps(opsJ)}`)
 show('   simplify(/pets 200) =', simplify(opsY).paths['/pets'].get.responses['200'])
 show('   simplify(parameters) =', simplify(opsY).paths['/pets'].get.parameters, '<- yaml: still a map')
 show('   simplify(parameters) =', simplify(opsJ).paths['/pets'].get.parameters, '<- json: an op')
-console.log('   JSON.stringify(op node) is the op-array, not the document:', JSON.stringify(opsJ.paths['/pets'].get.parameters[0], (k, v) => 'token' === k || 'OP_MARK' === k ? undefined : v).slice(0, 60) + '...')
 console.log('   simplify(ops) yaml == json after lift():', JSON.stringify(simplify(lift(opsY))) === JSON.stringify(simplify(lift(opsJ))))
 
-// 3. resolve mode: parse() returns the resolved document.
-const unresolved = []
-const res = Y({ mode: 'resolve', unresolved }).parse(yamlSrc)
+// 3. resolve mode: parse() returns the resolved document; the report
+//    arrives through the callback.
+let report
+const res = Y({ mode: 'resolve', onResolved: (out) => { report = out } }).parse(yamlSrc)
 const resJ = J({ mode: 'resolve' }).parse(jsonSrc)
-console.log('3. resolved yaml == resolved json:', JSON.stringify(res) === JSON.stringify(resJ), '; JSON.stringify is finite:', 'string' === typeof JSON.stringify(res))
+console.log('3. resolved yaml == resolved json:', JSON.stringify(res) === JSON.stringify(resJ), '; JSON.stringify is finite:', 'string' === typeof JSON.stringify(res), '; version:', report.version)
 show('   /pets 200 (Reference Object: description overrides) =', res.paths['/pets'].get.responses['200'])
 show('   /pets 404 (ref -> ref) =', res.paths['/pets'].get.responses['404'])
 show('   /pets/{id} 200 (~1 pointer into paths) =', res.paths['/pets/{id}'].get.responses['200'])
 show('   parameters[0] =', res.paths['/pets'].get.parameters[0])
-show('   provenance (hidden) =', res.paths['/pets'].get.parameters[0].__info__)
 show('   Pet.friends.items (cycle: back edge kept) =', res.components.schemas.Pet.properties.friends.items)
-show('   Pet.tag (Schema Object: sibling is a conjunction) =', res.components.schemas.Pet.properties.tag)
+show('   Pet.tag (Schema Object, 3.1: sibling is a conjunction) =', res.components.schemas.Pet.properties.tag)
 show('   Pet.owner (external, verbatim) =', res.components.schemas.Pet.properties.owner)
 show('   Derived (site allOf joins the target) =', res.components.schemas.Derived)
-show('   Node.properties.child (recursion met top-down, before any reference) =', res.components.schemas.Node.properties.child)
-show('   Encoded (%2F is a separator, RFC 6901 s6) =', res.components.schemas.Encoded)
+show('   Node.properties.child (recursion met top-down) =', res.components.schemas.Node.properties.child)
+show('   Encoded (%2F is a separator) =', res.components.schemas.Encoded)
 show('   x-vendor (extension: data, verbatim) =', res['x-vendor'])
 show('   PetList example (payload: data, verbatim) =', res.components.responses.PetList.content['application/json'].example)
-show('   unresolved =', unresolved)
+console.log('   __proto__ survives as an own key:', Object.keys(res.components.schemas).includes('__proto__'))
+show('   unresolved =', report.unresolved)
+show('   cuts =', report.cuts)
+show('   provenance[0..2] =', report.provenance.slice(0, 3))
 console.log('   one target, one object: /pets 200 content === PetList content:', res.paths['/pets'].get.responses['200'].content === res.components.responses.PetList.content)
-console.log('   /pets/{id} 200 === /pets 200:', res.paths['/pets/{id}'].get.responses['200'] === res.paths['/pets'].get.responses['200'])
+console.log('   /pets/{id} 200 === /pets 200:', res.paths['/pets/{id}'].get.responses['200'] === res.paths['/pets'].get.responses['200'], '(a Reference Object with overriding siblings is a copy of its target, by design)')
 
-// 4. evaluation() alone, on the whole tree, does nothing to the maps.
-const viaEvaluation = evaluation(null, null, opsJ, () => 'X')
-console.log('4. evaluation(root) leaves ops inside maps:', isRefOp(viaEvaluation.paths['/pets'].get.responses['200']),
+// 4. the version axis: the same sites under 3.0 and under Swagger 2.0.
+const v30 = resolve(rawY ? Object.assign(Object.create(null), rawY, { openapi: '3.0.3' }) : rawY)
+show('4. 3.0.3: Pet.tag (a Reference Object: siblings ignored) =', v30.tree.components.schemas.Pet.properties.tag)
+show('   3.0.3: /pets 200 (siblings ignored too) =', v30.tree.paths['/pets'].get.responses['200'].description)
+const v20 = resolve(Object.assign(Object.create(null), rawY, { openapi: undefined, swagger: 2 }))
+show('   swagger 2 (unquoted 2.0 reads as the number 2): version =', v20.version, '; Derived =')
+show('   ', v20.tree.components.schemas.Derived)
+
+// 5. YAML directives and document markers: the start rule is replaced,
+//    the ruleDone trigger still resolves exactly once.
+for (const src of ['%YAML 1.2\n---\na: { $ref: "#/b" }\nb: 1\n', 'a: { $ref: "#/b" }\nb: 1\n...\n', '---\na: { $ref: "#/b" }\nb: 1\n']) {
+  let n = 0
+  const out = Y({ mode: 'resolve', onResolved: () => n++ }).parse(src)
+  console.log('5. yaml', JSON.stringify(src.split('\n')[0]).padEnd(22), '-> resolved', JSON.stringify(out), '; trigger fired', n, 'time(s)')
+}
+
+// 6. expr's own fold on the whole tree does nothing to the maps.
+console.log('6. evaluation(root) leaves ops inside maps:', isRefOp(evaluation(null, null, opsJ, () => 'X').paths['/pets'].get.responses['200']),
   '; reduces a LIST of ops:', JSON.stringify(evaluation(null, null, opsJ.paths['/pets'].get.parameters, () => 'X')))

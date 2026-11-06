@@ -19,18 +19,25 @@ const src = `{
 }`
 
 // 1. eager: evaluate at expression close, looking at the tree built SO FAR.
-let seenRootKeys
+//    `ctx.root()` is the start RULE; its node is set only when that rule
+//    coalesces its child at its own close, so it is undefined here. The
+//    partial document is the outermost container on the rule stack: the
+//    root map is allocated at map open and filled pair by pair, and the
+//    engine's own recovery path reads it from `ctx.rs` exactly so.
+let seenRootKeys, seenStackKeys
+const partialRoot = (ctx) => { for (let d = 0; d < ctx.rsI; d++) { const n = ctx.rs[d] && ctx.rs[d].node; if (null != n && 'object' === typeof n) return n } }
 const eager = new Tabnas().use(jsonic).use(Expr, {
   op,
   evaluate: (rule, ctx, o, terms) => {
-    const root = ctx.root().node
-    seenRootKeys = root && Object.keys(root)
-    return resolve(root)(rule, ctx, o, terms)
+    seenRootKeys = ctx.root().node && Object.keys(ctx.root().node)
+    const partial = partialRoot(ctx)
+    seenStackKeys = partial && Object.keys(partial)
+    return resolve(partial)(rule, ctx, o, terms)
   },
 })
 const eagerOut = eager.parse(src)
-console.log('eager: root keys visible when @Pet closed:', JSON.stringify(seenRootKeys))
-console.log('eager: paths./pets.get.schema =', JSON.stringify(eagerOut.paths['/pets'].get.schema))
+console.log('eager: ctx.root().node keys when @Pet closed:', JSON.stringify(seenRootKeys), '; outermost stack node keys:', JSON.stringify(seenStackKeys))
+console.log('eager: paths./pets.get.schema =', JSON.stringify(eagerOut.paths['/pets'].get.schema), '(the target is parsed later)')
 
 // 2. deferred: parse to an op tree, then fold it with the finished root.
 const lazy = new Tabnas().use(jsonic).use(Expr, { op })
@@ -43,6 +50,7 @@ console.log('deferred: ...and the op inside the map is', JSON.stringify(simplify
 const direct = evaluation(null, null, tree.paths['/pets'].get.schema, resolve(tree))
 console.log('deferred: evaluation() on the op node itself:', JSON.stringify(direct))
 
-// 3. a same-document BACKWARD reference works eagerly — order dependence.
+// 3. a same-document BACKWARD reference resolves eagerly through the stack:
+//    eager evaluation sees exactly what precedes the site, and nothing after.
 const back = eager.parse(`{ components: { schemas: { Pet: { type: object } } }, paths: { "/pets": { get: { schema: @Pet } } } }`)
-console.log('eager, components first: schema =', JSON.stringify(back.paths['/pets'].get.schema))
+console.log('eager, components first: outermost stack node keys:', JSON.stringify(seenStackKeys), '; schema =', JSON.stringify(back.paths['/pets'].get.schema))

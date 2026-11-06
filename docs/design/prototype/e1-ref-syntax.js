@@ -15,7 +15,7 @@ function instance(ops, extra = {}) {
   const tn = new Tabnas().use(jsonic)
   tn.options({
     comment: { lex: false },               // `#` must not start a comment
-    fixed: { token: { '#CL': null, '#OB': null, '#CB': null, '#OS': null, '#CS': null } },
+    fixed: { token: { '#CL': null, '#OB': null, '#CB': null, '#OS': null, '#CS': null, '#CA': null } },
     rule: { exclude: 'imp' },              // no implicit maps/lists
     number: { lex: false },                // a pointer segment "1" is text, not 1
     value: { lex: false },                 // ... and "true" is text, not true
@@ -61,6 +61,18 @@ run('(a) runtime expressions (OAS 4.20.3 ABNF)', rt, [
   ['{$request.query.queryUrl}', ['{', ['.', ['.', '$request', 'query'], 'queryUrl']]],
   ['http://notificationServer.com?transactionId={$request.body#/id}&email={$request.body#/email}', 'ERROR'],
   ['$request.body#/a~1b', ['#', ['.', '$request', 'body'], ['/', 'a~1b']]],  // ~1 must still be decoded by the evaluator
+  // ABNF-legal names the operator table MUST misread: after `header.`,
+  // `query.` and `path.` the rest of the string is ONE name (name = *char,
+  // token = 1*tchar with "." "#" "~" among tchar), and a JSON Pointer
+  // reference-token may hold "." or ",". A binding power is global, so `.`
+  // cannot be an operator left of `#` and inert right of it.
+  ['$request.query.a.b', ['.', ['.', '$request', 'query'], 'a.b']],
+  ['$request.header.X.Y', ['.', ['.', '$request', 'header'], 'X.Y']],
+  ['$request.header.X#Y', ['.', ['.', '$request', 'header'], 'X#Y']],
+  ['$request.body#/user.name', ['#', ['.', '$request', 'body'], ['/', 'user.name']]],
+  ['$request.body#/a,b', ['#', ['.', '$request', 'body'], ['/', 'a,b']]],
+  ['$request.body#/a//b', ['#', ['.', '$request', 'body'], ['/', ['/', ['/', 'a'], ''], 'b']]],
+  ['$request.query.', 'ERROR'],
 ])
 
 // (b) $ref URIs. No `.` op (file names carry dots); `/`, `#` as above.
@@ -80,8 +92,9 @@ run('(b) $ref URIs (RFC 3986 + RFC 6901 fragment)', ref, [
   ['#/components/schemas/Foo%20Bar', ['#', ['/', ['/', ['/', 'components'], 'schemas'], 'Foo%20Bar']]],
   ['#/components/schemas/1', ['#', ['/', ['/', ['/', 'components'], 'schemas'], '1']]],
   ['#/components/schemas/true', ['#', ['/', ['/', ['/', 'components'], 'schemas'], 'true']]],
-  ['#/components/schemas/a b', 'ERROR'],   // a space inside a segment is not a list of two refs
-  ['#', 'ERROR'],                          // a dangling operator
+  ['#/components/schemas/a b', 'ERROR'],   // a raw space is illegal in a URI; expr reads an implicit list instead
+  ['#/components/schemas/a,b', ['#', ['/', ['/', ['/', 'components'], 'schemas'], 'a,b']]],  // `,` is legal in a token
+  ['#', ['#']],                            // the empty fragment names the whole document: legal, one-term `#`
   ['https://example.com/schemas/pet.json', 'ERROR'],  // scheme and authority are not path segments
   ['#/paths/~1pets~1{id}/get', 'ERROR'],  // `{` inside a segment: must be %7B
 ])

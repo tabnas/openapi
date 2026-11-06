@@ -1,7 +1,7 @@
-eager: root keys visible when @Pet closed: undefined
-eager: paths./pets.get.schema = "<unresolved Pet>"
+eager: ctx.root().node keys when @Pet closed: undefined ; outermost stack node keys: []
+eager: paths./pets.get.schema = "<unresolved Pet>" (the target is parsed later)
 deferred: op tree  = ["@","Pet"]
 deferred: evaluation() over the ROOT returns: "<the same root object>"
 deferred: ...and the op inside the map is ["@","Pet"] (evaluation does not descend into objects)
 deferred: evaluation() on the op node itself: {"type":"object"}
-eager, components first: schema = "<unresolved Pet>"
+eager, components first: outermost stack node keys: ["components"] ; schema = {"type":"object"}

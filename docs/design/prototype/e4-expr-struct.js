@@ -73,10 +73,15 @@ const ExprStruct = (tn, options) => {
   }))
 
   if (options.evaluate && 'end' === options.evaluate.when) {
-    tn.rule(tn.options.rule.start, (rs) => rs.ac((r) => {
-      if (0 !== r.d) return
-      r.node = treeEvaluation(r.node, options.evaluate.fn, { root: r.node, env: options.evaluate.env || {} })
-    }))
+    // End of parse through the engine's post-process rule subscriber: the
+    // last pass is a depth-0 close whose alternate neither pushes nor
+    // replaces, outside any probe. (The start rule's own after-close is
+    // not reliable: yaml replaces `stream` on directives and markers.)
+    tn.sub({ ruleDone: (r, ctx, done) => {
+      if (0 !== r.d || 'c' !== done.state || !done.alt || done.alt.p || done.alt.r || done.probe || done.forced) return
+      const root = ctx.root().node
+      ctx.root().node = treeEvaluation(root, options.evaluate.fn, { root, env: options.evaluate.env || {} })
+    } })
   }
 }
 
