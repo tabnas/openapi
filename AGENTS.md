@@ -92,15 +92,32 @@ experiments, each with its recorded result.
 |---|---|---|
 | E | expr tree layer (key operators, `fold`), TypeScript | in review in tabnas/expr |
 | 0 | this repository bootstrapped from the ZON template, all three runtimes | done |
-| 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | next |
+| 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | done in TypeScript and Go; the Rust port is under way |
 | 2 | the resolver over `fold`, against the expr checkout | after E ships |
 | 3 to 7 | ports of the resolver, documents, bundling, release | see the plan |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
 `ts/test/debug-model.test.ts` and `rs/tests/debug_model_test.rs` hold
 `make()`'s grammar model equal to jsonic with yaml alone, and the strict
-model to json alone. Raw mode's checks are a wrapper over the parse, so
-that stays true until the plan says otherwise.
+model to json alone. Raw mode keeps it: its checks run from a
+rule-completion subscriber, and it sets options (its error table and the
+last-wins merge), never rules.
+
+### Raw mode, in one paragraph
+
+`parse(text, { strict, fast, instance })` (Go `Parse`, Rust `parse`) is
+the entry every fixture runner calls. It passes a per-parse state as the
+engine's parse metadata (TypeScript `tn.parse(text, { openapi })`, Go
+`ParseMeta`), and the plugin's subscriber acts only when that state is
+there, so a parser's own parse raises nothing of the plugin. The
+subscriber counts the YAML stream's documents (`stream` open passes that
+push `val`), checks a repeated key at a `pair` open pass under strict,
+and checks the root when the depth-0 rule closes for the last time. An
+empty text is parsed as `"\n"`, because the engine runs no rule on an
+empty source. JSON text opening with `{` goes to the runtime's JSON
+decoder first (`JSON.parse`, `encoding/json` into `*tabnas.OrderedMap`,
+`serde_json`), rebuilt into the grammar's own tree family, and to the
+grammar on any refusal, so every error comes from the grammar.
 
 ## Repository map
 
@@ -184,23 +201,28 @@ file. CI does the linked model with the siblings `ci.yml` names.
 
 ## Repo-specific gotchas
 
-- **The default reader is lenient, and some of that is yaml defects
-  rather than design.** Measured in TypeScript on the bootstrap: an
-  unclosed `"abc` reads as `"abc"`; a malformed `"\u12"` reads as
-  `"\u0012"`; `.inf` reads as `null`; `yes` and `on` read as `true`, the
-  YAML 1.1 rule rather than 1.2; a tab of indentation is accepted; and a
-  JSON text whose first line is blank (`\n{"a":1}`) fails with
-  `unexpected`. Phase 1 decides, per item, what raw mode pins, refuses or
-  reports upstream, and pins it in a shared fixture. Until then no
-  fixture or published page states them.
-- **Empty input differs by runtime.** TypeScript returns `undefined` and
-  Go returns `nil` from the default parser; strict TypeScript raises
-  `unexpected`. Raw mode's root check settles it; do not pin it before
-  then.
-- **A member named `__proto__` is kept as data.** The yaml grammar
-  returns such a map with a non-standard prototype in TypeScript. Phase 1
-  normalises the raw tree; anything that merges maps meanwhile must use
-  object spread or `Object.defineProperty`, never `Object.assign`.
+- **The default reader is lenient, and some of that is the base
+  grammars' defects rather than design.** An unclosed `"abc` reads as
+  `"abc"` and a malformed `"\u12"` as `"\u0012"`; `yes`, `on`, `no` and
+  `off` follow YAML 1.1 (`test/spec/raw-yaml-scalars.tsv` pins them); a
+  tab of indentation is accepted. Where the yaml ports disagree with each
+  other, `DIVERGENCE.md` has the measurement and each runtime's suite
+  pins its own side (Go: `goDivergent` in `go/parity_test.go`).
+- **Values JSON cannot carry are pinned in-language.** `.inf`, `-.inf`,
+  `.nan`, `1e400` and lone surrogates differ across runtimes or vanish in
+  the fixtures' JSON round trip, so each runtime's package tests assert
+  what that runtime gives.
+- **A member named `__proto__` is data.** Every map in a TypeScript raw
+  tree has no prototype, on both paths. Anything that merges maps must
+  still use object spread or `Object.defineProperty`, never
+  `Object.assign`.
+- **A Go parser runs one parse at a time.** The yaml grammar keeps the
+  state of a parse on the instance, so two goroutines sharing one parser
+  can read each other's documents (measured: 138 of 3,200 concurrent
+  parses wrong). `Parse` takes a parser from a `sync.Pool` per call; a
+  caller's `Instance` is used as it is. `yaml.Parse`'s comment in the Go
+  yaml module claims its shared instance is safe for concurrent use; it
+  is not, and that belongs upstream.
 - **Go maps are `*tabnas.OrderedMap`**, in strict and default mode alike:
   `Keys` in document order, `Vals`, `Get`. A type switch on
   `map[string]any` matches nothing.
@@ -213,9 +235,10 @@ file. CI does the linked model with the siblings `ci.yml` names.
   `yaml` in Rust. Match a plugin list by the name its runtime gives.
 - **`tabnas_json::make()` also sets `lex.window`,** for parsing from a
   reader. It changes nothing for a string parse.
-- **The engine's errors are the only error codes so far.** The plugin
-  declares none; Phase 1 adds its own, with hints, and pins each in a
-  fixture.
+- **Integer-like member names enumerate first in TypeScript.** A
+  JavaScript object puts `"200"` before `"default"` whatever the document
+  order, on both paths; Go's `OrderedMap` and Rust's map keep document
+  order. The fixtures compare without order, so no row sees it.
 
 ## Build & test
 
@@ -373,17 +396,24 @@ the Makefile because removing them is a separate change.
 
 ## Error codes
 
-The plugin declares no codes yet; every error is the engine's or a
-grammar's. `test/spec/raw-errors.tsv` pins the codes the reference pages
-name: `unterminated_string`, `invalid_unicode` and `unexpected` under
-strict, `unterminated_comment` by default.
+The plugin declares four codes, with a message and a hint each, in
+`ERRORS` and `HINTS` in `ts/src/openapi.ts`, mirrored text for text in
+`go/openapi.go` and `rs/src/lib.rs`:
 
-When the plugin adds codes (Phase 1: a root that is not a map, a stream
-of several documents, and the version checks), each one gets a message
-and a hint in all three runtimes, a row in `test/spec/`, and an entry in
-the descriptor through admin. **The code is the contract**, not the
-message: two runtimes that refuse the same text with different codes have
-agreed on nothing.
+| Code | Raised by `parse` when |
+| --- | --- |
+| `openapi_root` | the root of the document is not a map (`{kind}`) |
+| `openapi_stream` | the text is a YAML stream of more than one document |
+| `openapi_version` | under strict, the root names no version this package reads (`{found}`) |
+| `openapi_duplicate_key` | under strict, a map holds one member name twice (`{key}`) |
+
+Every code is pinned by `ERROR:<code>` rows in `test/spec/raw-errors.tsv`
+and `raw-versions.tsv`, which also pin the engine's codes the reference
+pages name. A member name in a message is document content: it is
+JSON-quoted and cut to 57 characters and `...` past 60. The descriptor
+lists the codes once admin regenerates it. **The code is the contract**,
+not the message: two runtimes that refuse the same text with different
+codes have agreed on nothing.
 
 ## Untrusted input
 

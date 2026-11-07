@@ -35,6 +35,34 @@ A mapping comes back as a `*tabnas.OrderedMap` rather than a Go map
 because a Go map forgets order. Member order is part of what an author
 wrote, and a reader expects the paths of an API in that order.
 
+## Checks the grammar cannot make
+
+A grammar reads text. It does not know that the text is meant to be an
+OpenAPI description, so it reads a list, a lone string, or a stream of
+three YAML documents as happily as a map. `Parse` knows, and refuses
+each of them with a code of its own. The checks run inside the engine's
+parse, as each rule finishes, so an error carries the engine's row and
+column and a hint like any other. The `Parse` method of a parser from
+`Make` stays the plain grammar, for a tool that wants the document
+whatever its shape.
+
+## Two paths, one tree
+
+`encoding/json` reads JSON several times faster than a grammar can, so
+`Parse` gives JSON text that opens with `{` to `encoding/json` first, and
+to the grammar only when that refuses it. The fast path decodes into the
+same `*tabnas.OrderedMap` the grammar builds, and a repeated member name
+keeps its last value on both paths, at the place where the name first
+appeared. Every refusal comes from the grammar, because the fast path
+gives up rather than raise anything.
+
+## Parsers and goroutines
+
+The yaml grammar keeps the state of a parse on the parser it is
+installed on, so a parser runs one parse at a time. `Parse` keeps a pool
+of parsers and takes one per call, which is why it is safe from many
+goroutines at once and a parser you pass it is not.
+
 ## Resolution is a separate pass
 
 Resolving a reference means replacing it with what it names. That cannot

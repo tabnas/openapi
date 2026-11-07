@@ -15,9 +15,9 @@ go get github.com/tabnas/openapi/go
 
 The package name is `tabnasopenapi`. The examples import it as `openapi`.
 
-## Make a parser and read YAML
+## Read YAML
 
-`Make` builds a parser with everything installed:
+`Parse` reads a description and returns its tree:
 
 ```go
 package main
@@ -30,9 +30,7 @@ import (
 )
 
 func main() {
-	parser := openapi.Make()
-
-	doc, err := parser.Parse("openapi: 3.1.0\ninfo:\n  title: Pets\n  version: \"1\"\npaths: {}")
+	doc, err := openapi.Parse("openapi: 3.1.0\ninfo:\n  title: Pets\n  version: \"1\"\npaths: {}")
 	if err != nil {
 		panic(err)
 	}
@@ -43,28 +41,29 @@ func main() {
 }
 ```
 
-Build the parser once and keep it. Building the grammar costs more than a
-parse.
+Each YAML mapping becomes a `*tabnas.OrderedMap`, which keeps its
+members in the order the document wrote them, and each sequence a
+`[]any`.
 
 ## Read JSON
 
-We did not tell the parser which format to expect, and we do not need to.
-The same parser reads JSON:
+We did not tell `Parse` which format to expect, and we do not need to:
 
 ```go
-doc, err := parser.Parse(`{"openapi":"3.1.0","paths":{}}`)
+doc, err := openapi.Parse(`{"openapi":"3.1.0","paths":{}}`)
 // {"openapi":"3.1.0","paths":{}}
 ```
 
 JSON text is also YAML, and the yaml grammar reads it to the same tree
-the JSON grammar gives.
+the JSON grammar gives. JSON text that opens with `{` takes a fast path
+through `encoding/json`, and comes out the same.
 
 ## References stay as written
 
 A `$ref` comes back exactly as the document wrote it:
 
 ```go
-doc, err := openapi.Make().Parse("parameters:\n  - $ref: '#/components/parameters/Limit'")
+doc, err := openapi.Parse("parameters:\n  - $ref: '#/components/parameters/Limit'")
 // {"parameters":[{"$ref":"#/components/parameters/Limit"}]}
 ```
 
@@ -74,43 +73,52 @@ starts a comment, and the value would be empty.
 
 ## Keep versions as text
 
-YAML reads `3.1` as a number:
+YAML reads `3.1` as a number. `Version` reads the version a description
+names, from a string and a number alike:
 
 ```go
-for _, src := range []string{"openapi: 3.1", "openapi: '3.1'", "openapi: 3.1.0"} {
-	doc, _ := parser.Parse(src)
-	out, _ := json.Marshal(doc)
-	fmt.Println(string(out))
+for _, src := range []string{"openapi: 3.1.0", "openapi: 3.1", "swagger: '2.0'", "openapi: 4.0.0"} {
+	doc, _ := openapi.Parse(src)
+	v := openapi.Version(doc)
+	fmt.Printf("%s %q %v\n", v.Version, v.Field, v.Value)
 }
-// {"openapi":3.1}
-// {"openapi":"3.1"}
-// {"openapi":"3.1.0"}
+// 3.1 "openapi" 3.1.0
+// 3.1 "openapi" 3.1
+// 2.0 "swagger" 2.0
+// unknown "openapi" 4.0.0
 ```
 
-Quote a version to keep it a string. `3.1.0` is not a number, so it stays
-a string either way.
+Quote a version in YAML to keep the member itself a string.
 
-## Insist on JSON
+## What Parse refuses
 
-`Strict` reads JSON alone, by RFC 8259, and refuses anything else:
+A description is one document with a map at its root. `Parse` refuses
+anything else with a `*tabnas.TabnasError`, whose `Code` says why. Here
+`tabnas` is the engine, `github.com/tabnas/parser/go`:
 
 ```go
-strict := openapi.Make(openapi.MakeOptions{Strict: true})
-
-_, err := strict.Parse("openapi: 3.1.0")
+_, err := openapi.Parse("openapi: 3.1.0\n---\nopenapi: 3.0.0")
 var te *tabnas.TabnasError
 if errors.As(err, &te) {
 	fmt.Println(te.Code, te.Row, te.Col)
 }
-// unexpected 1 1
+// openapi_stream 3 1
 ```
 
-`tabnas` here is the engine, `github.com/tabnas/parser/go`. Every parse
-error is a `*tabnas.TabnasError` with a `Code`, and the code is what to
-test for.
+The code is what to test for. The message is written for people.
+
+## Insist on JSON
+
+`Strict` reads JSON alone, by RFC 8259. It also requires a version this
+package reads, and each member name once per map:
+
+```go
+_, err := openapi.Parse(`{"openapi":"4.0.0","paths":{}}`, openapi.ParseOptions{Strict: true})
+// openapi_version 1 1
+```
 
 ## Where next
 
-The [how-to guide](guide.md) reads a description from a file and installs
-the plugin on a parser you already have. The [reference](reference.md)
+The [how-to guide](guide.md) reads a description from a file, uses a
+parser of your own and walks the tree. The [reference](reference.md)
 lists every export and the types in the tree.

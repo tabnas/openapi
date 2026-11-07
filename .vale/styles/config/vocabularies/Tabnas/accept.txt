@@ -25,6 +25,8 @@
 [Cc]onfig
 [Dd]eps
 [Ee]num
+[Gg]oroutine
+[Gg]oroutines
 [Jj]sonic
 (?:[Jj]son|JSON)
 [Ll]exes
