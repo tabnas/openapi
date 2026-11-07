@@ -14,7 +14,7 @@ This revision follows the maintainer's direction that `expr` is vital and
 central: the tree layer is built in `expr` first (`tabnas/expr` pull
 request 100, TypeScript), the resolver is an OpenAPI vocabulary over
 `expr.fold`, and `expr` becomes a runtime dependency; Phase E below is
-the prerequisite that was Phase 5's last row, and Decisions 6 and 7 are
+the prerequisite that was Phase 5's tree-layer row, and Decisions 6 and 7 are
 re-taken. The extension is recorded in
 [`expr-tree-layer.md`](expr-tree-layer.md). The first revision was reviewed by three independent readers (a fleet maintainer,
 an apidef maintainer, a specification reader), a completeness critic, and
@@ -39,8 +39,8 @@ it, so the embedded languages get lexical readers; `$ref` is not an
 operator the lexical `expr` can carry. The maintainer then directed that
 `expr` is central and is to be extended to carry it: `expr` now has key
 operators recognised by shape and a `fold` over the finished tree, with
-a site, an inherited bag, a memo by pointer, a cycle policy and a report
-(Phase E), and the resolver here is the OpenAPI vocabulary over that fold
+a site, an inherited bag, one result per location, a cycle rule, several
+documents and a report (Phase E), and the resolver here is the OpenAPI vocabulary over that fold
 (Phase 2).
 
 The plugin is done, at its first stable release, when all of the
@@ -91,16 +91,22 @@ work:
   (`tabnas/expr` pull request 100) declares a key operator by `{ key:
   true, src: '$ref' }`, recognises it by a map's shape at fold time, and
   reduces it bottom-up with `evaluate(site, op, [value, siblings])`,
-  where the site carries the root, the path, the verbatim node, a bag
-  `inherit` built from the site's own ancestors, the opening token when
-  `positions` is on, and `at(path)`, which folds another location through
-  any sites on the way, with one result per RFC 6901 pointer, an active
-  set and a cyclic set for cycles, and a report of cycles, unresolved and
-  dynamic sites. Its deferred mode (`ExprOptions.fold`) runs on the
-  `ruleDone` event above. Prototype E6 runs the OpenAPI resolver over it
-  on the YAML document beside it and on Stripe's description (3673 sites,
-  125 cycles, 658 ms from `JSON.parse` output). The layer is TypeScript
-  only until its ports land, which fixes the order of the work below.
+  where the site carries the document's root and key, the path, the
+  verbatim node, a bag `inherit` built from the root down to and
+  including the site's own map, the opening token when `positions` gives
+  one, `at(path, doc?)`, which folds another location, in this document
+  or another the host's `load` supplies, through any sites on the way,
+  and `plain()`, the map folded as a plain map. The host's `recognise`
+  refuses a site where the keyword is data. One result per location, a
+  cycle rule that cuts a container cycle once, a report whose rows name
+  both documents, coded `FoldError`s and a depth bound complete it. Its
+  deferred mode (`ExprOptions.fold`) runs on the `ruleDone` event above,
+  and never on a parse that fails. Prototype E6 runs the OpenAPI resolver
+  over it on the YAML document beside it and on Stripe's description
+  (3673 sites, 125 cycles, 389 `$ref` maps left as data, about 150 to
+  350 ms from `JSON.parse` output in this container, against 200 to
+  300 ms for E3's in-place resolver). The layer is TypeScript only until
+  its ports land, which fixes the order of the work below.
 - What `$ref` means depends on the document version, the schema dialect
   and the object at the site: Swagger 2.0 is JSON Reference everywhere
   (siblings ignored); 3.0.x makes a `$ref` map a Reference Object wherever
@@ -117,10 +123,10 @@ work:
   schema `default`, Link `parameters` values and `requestBody`, and Server
   Variable `default` and `enum`, a `$ref` key is data; so is a property
   named `$ref` under `properties`, `patternProperties`, `$defs` or
-  `mapping`. In Stripe's description 492 of 4062 `$ref` maps sit in data
+  `mapping`. In Stripe's description 389 of 4062 `$ref` maps sit in data
   slots.
 - A resolved document is a graph. Stripe's description resolves in
-  256 ms to a DAG with 125 cycle cuts, and `JSON.stringify` of that DAG
+  about 300 ms to a DAG with 125 cycle cuts, and `JSON.stringify` of that DAG
   fails after 90 s with "Invalid string length"; a 1.9 KB document whose
   schemas each refer twice to the next serialises to 7.4 MiB at depth 16.
   Shared targets inline exponentially. The resolved result is for
@@ -477,23 +483,36 @@ The prerequisite of Phase 2 in every runtime, in `tabnas/expr`, on the
 maintainer's direction. Its contract and port notes are in
 [`expr-tree-layer.md`](expr-tree-layer.md) and in `expr`'s `AGENTS.md`.
 
-1. **TypeScript** (landed, pull request 100): `OpDef.key` and `dynamic`;
-   `fold(root, options)` with `Site`, `inherit`, memo by pointer, the
-   active and cyclic sets, `cycle: 'verbatim' | 'error'`, `tokens`,
-   `positions`, `report`; `ExprOptions.fold` through `ruleDone`;
+1. **TypeScript** (landed, pull request 100, revised after a five-lens
+   review): `OpDef.key` and `dynamic`; `fold(root, options)` with `Site`,
+   `inherit`, `recognise`, `site.plain()`, several documents (`doc`,
+   `load`), one result per location in a trie, the cycle rule (a loop of
+   references alone, a container cycle cut once), `cycle: 'verbatim' |
+   'error'`, `tokens`, `positions` as a lookup and `recordPositions`,
+   `maxDepth`, `report` with document keys; `FoldError` with codes;
+   `ExprOptions.fold` through `ruleDone`, never on a failing parse;
    `evaluation(..., { objects: true })`; `opify`, `isOp`, `keyOpOf`,
-   `makeKeyMap` exported; fixtures in `test/tree/` and `tree.test.ts`;
-   the reference, concepts, guide and agents guide.
-2. **Go port**: `Key` and `Dynamic`; `Fold` with `FoldEvaluate` and
-   `Inherit`; recognition over `*OrderedMap`, `map[string]any` and
-   `MapRef`; siblings a new `*OrderedMap`; the deferred mode writing the
-   final done rule's node, measured on a yaml stream with directives
-   first; the occurrence token on `ListRef.Meta` (which `positions`
-   needs); `DIVERGENCE.md`'s `Op` shape pins updated for the two fields;
-   a `test/tree/` runner.
-3. **Rust port**: `key` and `dynamic`; `fold` with `FoldEvaluate` over
-   `(&Site, &Op, Vec<Value>)` extending `EvalSite`; recognition over
-   `Value::Object` and `Value::MapRef`; the function form only; a runner.
+   `makeKeyMap` exported; fixtures in `test/tree/` (an `ERROR:<code>`
+   file among them) and `tree.test.ts`; the reference, concepts, guide
+   and agents guide.
+2. **Go port** (port notes in `expr-tree-layer.md` section 5): `Key` and
+   `Dynamic`; `Fold` and `FoldEvaluate` with an error return, a deferred
+   failure panicked as a `*TabnasError` carrying the fold code;
+   recognition over `*OrderedMap`, and over `map[string]any` and `MapRef`
+   with their member names sorted; siblings a new `*OrderedMap`; the
+   parser requirement moved to the latest release, which carries
+   `RuleDone.Probe`; the deferred mode writing the final done rule's node,
+   measured to match one pass per parse with and without a start-rule
+   replace; the positions table in `ctx.U`; the occurrence token on
+   `ListRef.Meta`; `DIVERGENCE.md`'s prose for the two new `Op` fields; a
+   `test/tree/` runner.
+3. **Rust port**: `key` and `dynamic`; first, whether the fold runs on
+   the arena-live value inside `parse_scope` or recognises the realized
+   operator form, since every public parse realizes operator nodes;
+   `fold` and `FoldEvaluate` returning `Result`; recognition over
+   `Value::Object` and `Value::MapRef`; the function form only;
+   positions, recorded at a container's close pass or by path, measured;
+   `key` and `dynamic` in `Op::to_value`; a runner.
 4. **Fixtures move** from `test/tree/` into `test/spec/` once both ports
    run them, under the parity rule.
 5. **Release** `expr` with the layer, through its own `release.yml`,
@@ -510,16 +529,19 @@ single 3.1 document with `$id`s already needs it (Appendix F.1: a
 fragment under an `$id` resolves within that resource, not the document).
 
 1. **The fold is `expr`'s** (Phase E), and this repository writes no
-   generic walk: `resolve(raw, options)` is `expr.fold(raw, { op,
-   evaluate, inherit, k, cycle, positions, report })` with the OpenAPI
-   vocabulary in the callbacks, as prototype E6 shows. The operator table
-   declares `$ref` as `{ key: true, src: '$ref' }` and `$dynamicRef` as
-   `dynamic: true`; `inherit` sets the base URI, the schema dialect and
-   the kind of object at the path in the bag each subtree sees; `evaluate`
-   leaves data slots verbatim, resolves the URI against `site.k.base`,
-   reaches the target through `site.at`, applies the sibling rule by
-   version and kind, records provenance once per site, and hands a cycle
-   or a miss back as the verbatim site; the fold's report (`cycles`,
+   generic walk: `resolve(raw, options)` is `expr.fold(raw, { op, doc,
+   evaluate, inherit, recognise, load, k, cycle, positions, maxDepth,
+   report })` with the OpenAPI vocabulary in the callbacks, as prototype
+   E6 shows. The operator table declares `$ref` as `{ key: true, src:
+   '$ref' }` and `$dynamicRef` as `dynamic: true`; `inherit` sets the base
+   URI, the schema dialect and the kind and type of object at the path in
+   the bag each map passes down; `recognise` refuses a `$ref` in a data
+   slot or as a name in a map of names; `evaluate` resolves the URI
+   against `site.k.base`, reaches the target through `site.at` (in another
+   document through `load`, Phase 3), applies the sibling rule by version,
+   kind and target type, records provenance once per site, hands a cycle
+   or a miss back as the verbatim site, and returns `site.plain()` for a
+   `$ref` that is not a string; the fold's report (`cycles`,
    `unresolved`, `dynamic`) feeds the plugin's. The layer keeps one
    result per path, so sharing is a property of the fold, and never
    changes the raw tree. `__proto__` survives as a key because the layer
@@ -552,7 +574,7 @@ fragment under an `$id` resolves within that resource, not the document).
    without a matching position fails). The tool handles `if/then/else`,
    `oneOf/anyOf/allOf`, `additionalProperties` and `patternProperties`.
    Acceptance: the classifier types every `$ref` map in Stripe, GitHub and
-   the OAI examples, with the data-slot count a pinned census (Stripe: 492
+   the OAI examples, with the data-slot count a pinned census (Stripe: 389
    of 4062). **Decision 2:** which versions (default 2.0, 3.0, 3.1, 3.2).
 3. **Bases and dialects.** Per node: the base URI from the nearest `$id`,
    else the document's `$self`, else its retrieval URI (`retrievalUri` is
@@ -617,7 +639,10 @@ fragment under an `$id` resolves within that resource, not the document).
 ### Phase 3: several documents (M, then port M)
 
 1. A documents table keyed by `$self`, falling back to the retrieval URI,
-   each entry carrying its root kind (OpenAPI Object or Schema Object),
+   behind the fold's `load` (Phase E): the fold asks for each document key
+   once, keeps one result per location across documents, detects a cycle
+   that crosses documents, and names both documents in every report row;
+   each entry carries its root kind (OpenAPI Object or Schema Object),
    base URI and index; the entry document first. Root kind detection: a
    root `openapi` field means an OpenAPI Object; otherwise a Schema
    Object; otherwise, by the referring site's kind, marked `inferred` in
@@ -703,7 +728,6 @@ port there. The rows below are the ones that remain.
 | Repository | Change | Why | Size | Breaking |
 |---|---|---|---|---|
 | expr | a key operator declared by a predicate on the map as well as by a member name, for formats whose operation is a shape without one keyword | the note's section 6.1 anticipated a list whose head is a keyword; the layer offers `src` only | S | no |
-| expr | lazy pointer and bag construction in `fold` | 658 ms on Stripe against 256 ms for the in-place resolver | S | no |
 | parser | a `parse.complete` hook (not `finish`, which `rule.finish` already uses): `(tabnas, ctx, meta) => result | void`, after the trailing-content check, before `result.fail`, never on a throw, `{ value, errors }` under recovery, insertion order in all three runtimes (repairing `prepare`'s Go sort with it), a mutable root in Rust | a declarative, grammar-level end of parse that can replace the result in Rust, which `ruleDone` cannot | M | no |
 | parser | `MarshalJSON` for Go's `MapRef`/`ListRef` emitting the value | with `info` on, Go's raw tree is not verbatim as JSON | S | no |
 | yaml | the block-sequence builders attach the `info` marker or build through `@object$`/`@array$`; the column drift; the leading-newline JSON text; a plain-scalar schema option (YAML 1.2 core or JSON schema) | the marker is absent on the `- $ref:` shape; columns are off by one per `: `; a legal JSON text fails; `yes`/`no`/`on`/`off` read as booleans and `.inf` as null where OAS requires YAML 1.2 | S each | the scalar option no, as an option |
@@ -745,7 +769,7 @@ alone) and Go's `TestParseRefChains` included;
 then, as separate measured steps, `slots: 'spec'` and `siblings: 'spec'`
 tried against the fixtures to see what the specification's semantics
 change (apidef's 45 documents contain no `$ref` in a data slot, so the
-first changes nothing there; Stripe's 492 would).
+first changes nothing there; Stripe's 389 would).
 
 ### Phase 7: docs, tooling, first release (S each, plus the bootstrap)
 

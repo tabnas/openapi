@@ -10,14 +10,18 @@ packages, what the OpenAPI 3.2.0 specification requires, and what
 `voxgig/apidef` does today, and ends with recommendations. The
 [implementation plan](implementation-plan.md) builds on it.
 
-This is the fifth revision. After the fourth, the maintainer directed
+This is the sixth revision. The fifth followed the maintainer's direction
 that `expr` is vital and central to this work, a forcing function to make
-`expr` more general; the tree layer of section 6 was then built in `expr`
+`expr` more general: the tree layer of section 6 was built in `expr`
 itself (`tabnas/expr` pull request 100, TypeScript) and measured against
 the OpenAPI requirements as experiment E6. The recommendations of 6.4 and
 8.2 are superseded by that direction and marked where they stand; the
 extension itself is recorded in
-[`expr-tree-layer.md`](expr-tree-layer.md). The second revision was reviewed by three independent
+[`expr-tree-layer.md`](expr-tree-layer.md). The sixth revision follows a
+five-lens review of the layer and of the fifth revision, which found,
+among other things, that the Stripe figures compared E6 with a capture of
+E3 taken before E3 was repaired; E5 was re-run, and E5 and E6 now give
+today's numbers. The second revision was reviewed by three independent
 readers and sixteen claim-by-claim verifiers, and a three-designer panel
 with two judges took up the question of section 6; several statements did
 not survive: an engine facility the note had missed, a wrong reason in one
@@ -64,9 +68,10 @@ prototype and its captured results are in [`prototype/`](prototype/).
   that walks the tree carrying context down as well as values up. **That
   extension now exists in `expr`** (fifth revision): key operators
   declared `{ key: true, src: '$ref' }`, `fold(root, options)` with a
-  site, an inherited bag, a memo by pointer and a cycle policy, and a
-  deferred mode through the engine's `ruleDone` event; experiment E6 runs
-  the OpenAPI resolver as a vocabulary over it.
+  site, an inherited bag, one result per location, a cycle rule, several
+  documents, a host's say over what is a site, and a deferred mode
+  through the engine's `ruleDone` event; experiment E6 runs the OpenAPI
+  resolver as a vocabulary over it.
 - **Recommendation: build `@tabnas/openapi` as a layer over `jsonic`+`yaml`
   with `parse()` returning the verbatim document and an exported
   `resolve(raw, options)` returning a report around a derived tree; type
@@ -545,7 +550,7 @@ this container:
 | `JSON.parse` | 30 ms | |
 | strict `json` grammar | 3215 ms | same value as JSON text |
 | `jsonic`+`yaml` grammar | 3831 ms | same value as JSON text |
-| `resolve`, cycles cut | 256 ms | 3570 sites resolved, 492 left as data by the slot rule, 0 unresolved, 125 cuts |
+| `resolve`, cycles cut | 302 ms | 3673 sites resolved, 389 left as data by the slot rule, 0 unresolved, 125 cuts |
 | `JSON.stringify` of that result | failed after 90 s | "Invalid string length" |
 | `resolve`, cycles kept | 259 ms | `JSON.stringify` fails at once on the cycle |
 
@@ -560,33 +565,41 @@ JSON input for an identical value.
 
 ### E6: the OpenAPI resolver as a vocabulary over `expr`'s tree layer
 
-Added in the fifth revision. `prototype/e6-expr-fold.js` is the resolver
-of E3 rewritten with no generic machinery of its own: `$ref` and
-`$dynamicRef` declared as key operators, `expr.fold` doing the walk, the
-memo, the cycle detection, the report and the inherited bag, and about a
-hundred and twenty lines of OpenAPI around it (the version, the kind of
-object at a path, the `$self`, `$id` and `$anchor` index, RFC 3986 and
-RFC 6901, the sibling rule by version and kind, the loader hand-off). It
+Added in the fifth revision, revised in the sixth after the review of
+the layer. `prototype/e6-expr-fold.js` is the resolver of E3 rewritten
+with no generic machinery of its own: `$ref` and `$dynamicRef` declared as
+key operators, `expr.fold` doing the walk, the memory, the cycle rule, the
+documents, the report and the inherited bag, and about two hundred lines
+of OpenAPI, JSON Schema and RFC 3986 around it (the version, what a
+position holds, the identifier index, URI resolution, the sibling rule by
+version, kind and target type, the reasons a reference is unresolved). It
 needs the `expr` checkout that carries the layer; see the appendix.
 
-On the YAML document beside it, every requirement the earlier experiments
-had to add by hand holds through the layer: a block-sequence entry
-resolves by shape; a Reference Object's `description` overrides; a
-reference to a reference reaches the final target; two sites share one
-object; a Path Item merges its sibling; a target under an `$id`, reached
-first from outside its resource, resolves against its own `$id`; a 3.1
-Schema Object conjoins its sibling and the same document as 3.0.3 drops
-it; `#name` resolves through the anchor index; `#` from inside the schema
-is a cycle and stays verbatim; `$dynamicRef` is reported and left; an
-external reference is handed to the loader; `%2F` decodes before the
-split; `x-` and `example` slots keep their `$ref`; `__proto__` survives;
-the raw tree is unchanged and the result serialises. On Stripe's
-`spec3.json`, folded from `JSON.parse` output with no grammar involved,
-3673 sites resolve with 125 cycles in 658 ms, against E3's 3570 sites and
-256 ms in place; the site counts differ by the data-slot sketch (E6 types
-389 maps as data, E3 492), which the plan's object model settles, and
-the time by the fold building a new tree with a pointer string and an
-inherited bag per container. The captured output is
+On the YAML document beside it, a 3.2 description, every requirement the
+earlier experiments had to add by hand holds through the layer: a
+block-sequence entry resolves by shape; a Reference Object's `summary`
+and `description` override a Response's, as 3.2 allows; a reference to a
+reference reaches the final target; two sites share one object; a Path
+Item merges its sibling, in 2.0 as in 3.x; a target under an `$id`,
+reached first from outside its resource, resolves against its own `$id`;
+`../` resolves with its dot segments removed; a Schema Object conjoins its
+sibling; read as 3.0.3 the document has no `$id`, so a relative reference
+resolves against the document's URI; `#name` resolves through the anchor
+index; `#` from inside the schema is a cycle through it and is cut;
+`$dynamicRef` is reported and left; another document is loaded once
+through the fold's `load`; a property named `example` is a schema and one
+named `$ref` a name; a `$ref` that is not a string, an unknown anchor and
+a malformed fragment are reported with a reason; `%2F` decodes before the
+split; `x-` and `example` data keep their `$ref`; `__proto__` survives;
+the raw tree is unchanged and the result serialises.
+
+On Stripe's `spec3.json`, folded from `JSON.parse` output with no grammar
+involved (`node e6-expr-fold.js spec3.json`), 3673 sites resolve with 125
+cycles and 389 `$ref` maps left as data, the same counts as E3, in about
+150 to 350 ms against E3's 200 to 300 ms in place, in this container. The
+fifth revision compared E6 with a capture of E3 taken before E3's memory
+was repaired (3570 sites), and gave E6 at 658 ms, when the fold still
+built a pointer string per node. The captured output is
 `prototype/e6-expr-fold.result.txt`; the extension it exercises is
 recorded in [`expr-tree-layer.md`](expr-tree-layer.md).
 
@@ -635,7 +648,7 @@ recorded in [`expr-tree-layer.md`](expr-tree-layer.md).
    ignored-siblings under 3.0 and Swagger 2.0, an override under a 3.1
    `responses` entry, a conjunction under a 3.1 `schemas` entry, and
    under `x-vendor`, `example` or `enum` it is data. Stripe's description
-   has 492 of 4062 `$ref` maps in slots the prototype's rule treats as
+   has 389 of 4062 `$ref` maps in slots the prototype's rule treats as
    data; the review's wider slot list put about a quarter there.
 7. **`expr` reads the skeleton of the embedded languages and misreads
    their tokens.** Runtime expressions are `source ["#" pointer]` around
@@ -809,7 +822,8 @@ one for the skeptic, and converged on one synthesis, which this note and
 the plan adopt. First, the generic changes every home needs, each its own
 instruction: a public constructor and predicate; `evaluation` over
 objects as an opt-in, because a designer measured an unconditional walk
-changing 180 of 1061 existing fixture rows; the Go occurrence token.
+changing 180 of the 1136 rows in `test/spec/*.tsv` (those whose expected
+value holds an operator node inside a map); the Go occurrence token.
 Second, the fold's contract, written in `expr`'s vocabulary whichever
 home it gets: operators declared as `{ key: true, src: '$ref' }` entries
 with `dynamic: true` for keys recognised and reported but never evaluated
@@ -1091,10 +1105,14 @@ request 100 and not yet in a published `@tabnas/expr`. Until it is, build
 that branch's `ts/` and point the script at it:
 
 ```sh
-TABNAS_EXPR=<expr checkout>/ts \
-NODE_PATH=<expr checkout>/ts/node_modules:/tmp/openapi-proto/node_modules \
-node e6-expr-fold.js            # the document beside it, e6-doc.yaml
+cd <this-repo>/docs/design/prototype
+export TABNAS_EXPR=<expr checkout>/ts
+export NODE_PATH=<expr checkout>/ts/node_modules:/tmp/openapi-proto/node_modules
+node e6-expr-fold.js                      # the document beside it, e6-doc.yaml
+node e6-expr-fold.js <path to spec3.json> # a JSON description: the one summary line
 ```
+
+It runs from its own directory, which holds `e6-doc.yaml`.
 
 Each script's output as captured for this document is in the
 `*.result.txt` file beside it; `bench.result.txt` names the document it
