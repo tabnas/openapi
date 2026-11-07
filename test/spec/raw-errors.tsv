@@ -5,3 +5,23 @@ input	expected	opts
 {"a":"\u12"}	ERROR:invalid_unicode	{"strict":true}
 {"a":1} // note	ERROR:unexpected	{"strict":true}
 /* x	ERROR:unterminated_comment
+# openapi_root: a description is a map at its root.
+- a\n- b	ERROR:openapi_root
+hello	ERROR:openapi_root
+42	ERROR:openapi_root
+~	ERROR:openapi_root
+# only a comment	ERROR:openapi_root
+	ERROR:openapi_root
+[1,2]	ERROR:openapi_root
+[1,2]	ERROR:openapi_root	{"fast":true}
+[1,2]	ERROR:openapi_root	{"strict":true}
+"text"	ERROR:openapi_root	{"strict":true}
+# openapi_stream: a description is one YAML document.
+openapi: 3.1.0\n---\nopenapi: 3.0.0	ERROR:openapi_stream
+---\na: 1\n---\nb: 2	ERROR:openapi_stream
+a: 1\n---\n	ERROR:openapi_stream
+# openapi_duplicate_key: under strict, a member name appears once per map.
+{"openapi":"3.1.0","a":1,"a":2}	ERROR:openapi_duplicate_key	{"strict":true}
+{"openapi":"3.1.0","x":{"b":1,"b":1}}	ERROR:openapi_duplicate_key	{"strict":true}
+{"openapi":"3.1.0","a":null,"a":null}	ERROR:openapi_duplicate_key	{"strict":true}
+{"openapi":"3.1.0","__proto__":1,"__proto__":2}	ERROR:openapi_duplicate_key	{"strict":true}

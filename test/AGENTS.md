@@ -23,7 +23,7 @@ Blank lines are skipped, and so are comment lines — a line starting with
 |---|---|
 | `input` | The description text. Escapes `\n` `\r` `\t` `\\` are decoded; any other backslash passes through, so `\u12` reaches the parser as written. |
 | `expected` | A JSON value (the parse result), or `ERROR` / `ERROR:<code>` for inputs that must fail. The code is compared **exactly**: it is the error's code, not a substring of its message. |
-| `opts` | Optional JSON object of `make` options, `{"strict":true}` for the strict reader. Empty means the default reader. |
+| `opts` | Optional JSON object of `parse` options: `{"strict":true}` for the strict reader, `{"fast":false}` to keep JSON text off the fast path. Empty means the defaults. |
 
 `expected` and `opts` are **not** escape-decoded: they are raw JSON, so
 JSON's own escape rules apply. Results are compared after a JSON round
@@ -36,11 +36,13 @@ do not affect the comparison.
 |---|---|
 | `raw-json.tsv` | JSON text under both readers, and what only the strict reader refuses |
 | `raw-yaml.tsv` | YAML under the default reader, its refusal under strict, and the YAML typing rules an OpenAPI author meets |
-| `raw-errors.tsv` | the error codes the reference pages name |
+| `raw-errors.tsv` | the engine's codes the reference pages name, and the plugin's `openapi_root`, `openapi_stream` and `openapi_duplicate_key` |
+| `raw-versions.tsv` | version detection: lenient by default, `openapi_version` under strict |
+| `raw-fast.tsv` | JSON text the fast path and the grammar must read to one tree; every runner runs it three times, with the row's options and with `fast` forced on and off |
+| `raw-yaml-scalars.tsv` | what the published yaml grammar makes of plain scalars, YAML 1.1 forms included |
 
-Phase 1 of the plan adds raw mode's own files: its root, stream and
-version checks, the YAML scalar rules it decides to pin, and the fast
-path for JSON text.
+Every row runs through each runtime's `parse` wrapper, never the
+engine's own parse, since only the wrapper raises the plugin's codes.
 
 ## Who runs what
 
@@ -64,10 +66,14 @@ indistinguishable from coverage that was never there.
 - Prefer a fixture here over a one-off in-language assertion whenever a
   case is expressible as input to output. That is what keeps the
   runtimes honest against each other.
-- A row pins behaviour every runtime agrees on and the project means to
-  keep. A base-grammar defect is not pinned as expected behaviour; it is
-  recorded in `AGENTS.md` and reported upstream, and raw mode decides
-  what to do with it.
+- A row pins behaviour every runtime agrees on. Where that behaviour is a
+  base grammar's defect or a YAML 1.1 rule a description can meet, the
+  row says so in a comment above it and stays: its repair upstream then
+  turns the row red here, which is how this repository finds out. Report
+  the defect upstream as well.
+- A value JSON cannot carry (an infinity, `NaN`) or that the runtimes
+  give differently (a lone surrogate) cannot be a row. Pin it in each
+  runtime's own tests, and record a difference in `DIVERGENCE.md`.
 - TypeScript is canonical. If the runtimes disagree, the TypeScript value
   is the expected one, unless another port has exposed a TypeScript
   defect, in which case fix TypeScript first and pin the corrected value.

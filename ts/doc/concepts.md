@@ -32,8 +32,52 @@ every member keeps its place, and nothing is fetched or followed.
 The raw tree comes first because several kinds of tool need exactly it.
 An editor or a linter reports problems where the author wrote them. A
 formatter writes the document back. A bundling tool decides for itself
-which references to inline. Each would have to undo resolution if the parser
-had already done it.
+which references to inline. Each would have to undo resolution if the
+parser had already done it.
+
+## Checks the grammar cannot make
+
+A grammar reads text. It does not know that the text is meant to be an
+OpenAPI description, so it reads a list, a lone string, or a stream of
+three YAML documents as happily as a map. `parse` knows, and refuses
+each of them with a code of its own.
+
+The checks run inside the engine's parse, as each rule finishes, so an
+error carries the engine's row and column and a hint like any other. They
+run only when `parse` asks for them. The `parse` method of a parser from
+`make` stays the plain grammar, which is what a tool that wants the
+document whatever its shape should call.
+
+`strict` adds two more: a version this package reads, and each member
+name once per map. Both are about publishing, not reading, which is why
+they come with the strict grammar.
+
+## Two paths, one tree
+
+Most large descriptions are JSON, and `JSON.parse` reads JSON two orders
+of magnitude faster than a grammar can. So `parse` gives JSON text that
+opens with `{` to `JSON.parse` first, and to the grammar only when
+`JSON.parse` refuses it.
+
+Two readers are a promise as much as a speed-up: the tree must not depend
+on which one read it. Three things make that hold. The fast path rebuilds
+every map without a prototype, as the grammar builds them, so a member
+named `__proto__` is data on both. A repeated member name keeps its last
+value on both, because the plugin tells the grammar to do what
+`JSON.parse` does. And every refusal comes from the grammar, because the
+fast path gives up rather than raise anything.
+
+## Repeated names
+
+YAML forbids a map from holding one name twice, JSON leaves it
+undefined, and readers disagree. `JSON.parse` keeps the last value. The
+grammars beneath this package merged two maps given under one name,
+which the common JSON and YAML readers do not.
+
+The plugin picks the reading most tools share: the last value wins,
+whole, at the place where the name first appeared. Under `strict` a
+repeated name is an error, since a description meant for other tools
+should not depend on which one reads it.
 
 ## Resolution is a separate pass
 

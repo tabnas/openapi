@@ -5,8 +5,8 @@ A [Tabnas](https://github.com/tabnas/parser) plugin that reads
 descriptions, in YAML or in JSON, with one parser for both.
 
 This release returns the raw tree: the document as written, with every
-`$ref` kept as a reference. It does not yet check the document or resolve
-its references.
+`$ref` kept as a reference, after checking that it is one description
+with a map at its root. It does not resolve references yet.
 
 ## Install
 
@@ -20,23 +20,23 @@ peer dependencies. Node.js 24 or later.
 ## One example
 
 ```js
-const { make } = require('@tabnas/openapi')
+const { parse, version } = require('@tabnas/openapi')
 
-const parser = make()
-
-parser.parse('openapi: 3.1.0\npaths: {}') // => { openapi: '3.1.0', paths: {} }
-parser.parse('{"openapi":"3.1.0","paths":{}}') // => { openapi: '3.1.0', paths: {} }
-parser.parse("$ref: '#/components/schemas/Pet'") // => { $ref: '#/components/schemas/Pet' }
+parse('openapi: 3.1.0\npaths: {}') // => { openapi: '3.1.0', paths: {} }
+parse('{"openapi":"3.1.0","paths":{}}') // => { openapi: '3.1.0', paths: {} }
+parse("$ref: '#/components/schemas/Pet'") // => { $ref: '#/components/schemas/Pet' }
+version(parse('swagger: "2.0"')).version // => '2.0'
 ```
 
-YAML and JSON, one parser, and the reference kept as written.
-`make({ strict: true })` reads JSON alone, by RFC 8259.
+YAML and JSON, one function, and the reference kept as written.
+`parse(text, { strict: true })` reads JSON alone, by RFC 8259, and
+requires a known version.
 
 ## Documentation
 
 - [Tutorial](doc/tutorial.md): read a description in both formats.
-- [How-to guide](doc/guide.md): files, strict JSON, your own parser,
-  error codes.
+- [How-to guide](doc/guide.md): files, strict JSON, versions, your own
+  parser, error codes.
 - [Reference](doc/reference.md): every export, the tree, the errors.
 - [Concepts](doc/concepts.md): why one parser, and why the raw tree
   comes first.

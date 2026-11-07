@@ -1,13 +1,19 @@
 input	expected	opts
 # JSON text. The default reader is jsonic with the yaml grammar; strict
-# is the json grammar alone. Both give the same tree for JSON text.
+# is the json grammar alone, and also requires a known version. Both
+# give the same tree for JSON text.
 {"openapi":"3.1.0","info":{"title":"t","version":"1"},"paths":{}}	{"openapi":"3.1.0","info":{"title":"t","version":"1"},"paths":{}}
 {"openapi":"3.1.0","info":{"title":"t","version":"1"},"paths":{}}	{"openapi":"3.1.0","info":{"title":"t","version":"1"},"paths":{}}	{"strict":true}
-{"parameters":[{"$ref":"#/components/parameters/Limit"}]}	{"parameters":[{"$ref":"#/components/parameters/Limit"}]}
-{"parameters":[{"$ref":"#/components/parameters/Limit"}]}	{"parameters":[{"$ref":"#/components/parameters/Limit"}]}	{"strict":true}
-{"a":[1,2.5,-3,1e3,true,false,null,"x"]}	{"a":[1,2.5,-3,1000,true,false,null,"x"]}
-{"a":[1,2.5,-3,1e3,true,false,null,"x"]}	{"a":[1,2.5,-3,1000,true,false,null,"x"]}	{"strict":true}
+{"openapi":"3.1.0","parameters":[{"$ref":"#/components/parameters/Limit"}]}	{"openapi":"3.1.0","parameters":[{"$ref":"#/components/parameters/Limit"}]}
+{"openapi":"3.1.0","parameters":[{"$ref":"#/components/parameters/Limit"}]}	{"openapi":"3.1.0","parameters":[{"$ref":"#/components/parameters/Limit"}]}	{"strict":true}
+{"openapi":"3.1.0","a":[1,2.5,-3,1e3,true,false,null,"x"]}	{"openapi":"3.1.0","a":[1,2.5,-3,1000,true,false,null,"x"]}
+{"openapi":"3.1.0","a":[1,2.5,-3,1e3,true,false,null,"x"]}	{"openapi":"3.1.0","a":[1,2.5,-3,1000,true,false,null,"x"]}	{"strict":true}
 # What strict refuses: a trailing comma, and anything that is not JSON.
 {"a":1,}	{"a":1}
-{"a":1,}	ERROR:unexpected	{"strict":true}
+{"openapi":"3.1.0","a":1,}	ERROR:unexpected	{"strict":true}
 a: 1	ERROR:unexpected	{"strict":true}
+# A JSON text whose first line is empty. The fast path reads it; the
+# yaml grammar refuses it, a defect of the published yaml grammar that
+# this row pins so that its repair shows here.
+\n{"a":1}	{"a":1}
+\n{"a":1}	ERROR:unexpected	{"fast":false}

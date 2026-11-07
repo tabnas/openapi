@@ -14,8 +14,9 @@ Available for TypeScript, Go and Rust, with the same tree from the same
 text in all three.
 
 This is an early release. It reads a description and returns the raw
-tree: the document as written, with every `$ref` kept as a reference. It
-does not yet check the document or resolve its references.
+tree: the document as written, with every `$ref` kept as a reference,
+after checking that the text is one description with a map at its root.
+It does not resolve references yet.
 
 ## Install
 
@@ -33,11 +34,9 @@ from sibling checkouts; [`rs/README.md`](rs/README.md) has the setup.
 ## One example
 
 ```js
-const { make } = require('@tabnas/openapi')
+const { parse } = require('@tabnas/openapi')
 
-const parser = make()
-
-const doc = parser.parse(`
+const doc = parse(`
 openapi: 3.1.0
 info: { title: Pets, version: "1" }
 paths:
@@ -50,11 +49,11 @@ paths:
 doc.info.title // => 'Pets'
 doc.paths['/pets'].get.parameters // => [{ $ref: '#/components/parameters/Limit' }]
 
-parser.parse('{"openapi":"3.1.0","paths":{}}') // => { openapi: '3.1.0', paths: {} }
+parse('{"openapi":"3.1.0","paths":{}}') // => { openapi: '3.1.0', paths: {} }
 ```
 
-The same parser read YAML and then JSON, without being told which.
-`make({ strict: true })` reads JSON alone, by RFC 8259.
+`parse` read YAML and then JSON, without being told which.
+`parse(text, { strict: true })` reads JSON alone, by RFC 8259.
 
 ## Documentation
 

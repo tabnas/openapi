@@ -17,28 +17,14 @@ npm install @tabnas/openapi @tabnas/parser @tabnas/jsonic @tabnas/yaml @tabnas/j
 The last four are peer dependencies, so your project decides their
 versions.
 
-## Make a parser
-
-`make` builds a parser with everything installed:
-
-```js
-const { make } = require('@tabnas/openapi')
-
-const parser = make()
-parser.parse('openapi: 3.1.0') // => { openapi: '3.1.0' }
-```
-
-Build it once and keep it. Building the grammar costs more than a parse,
-and one parser serves every parse after that.
-
 ## Read YAML
 
-Here is a small description in YAML:
+`parse` reads a description and returns its tree:
 
 ```js
-const { make } = require('@tabnas/openapi')
+const { parse } = require('@tabnas/openapi')
 
-const doc = make().parse(`
+const doc = parse(`
 openapi: 3.1.0
 info:
   title: Pets
@@ -55,33 +41,34 @@ doc.info.title // => 'Pets'
 doc.paths['/pets'].get.responses['200'].description // => 'A list of pets'
 ```
 
-Each YAML mapping becomes a plain object and each sequence an array. The
-version is quoted, and the next section but one shows why.
+Each YAML mapping becomes an object and each sequence an array. The
+version is quoted, and the section after next shows why.
 
 ## Read JSON
 
-We did not tell the parser which format to expect, and we do not need to:
+We did not tell `parse` which format to expect, and we do not need to:
 
 ```js
-const { make } = require('@tabnas/openapi')
+const { parse } = require('@tabnas/openapi')
 
-const doc = make().parse(
+const doc = parse(
   '{"openapi":"3.1.0","info":{"title":"Pets","version":"1"},"paths":{}}')
 
 doc.info // => { title: 'Pets', version: '1' }
 ```
 
 JSON text is also YAML, and the yaml grammar reads it to the same tree
-the JSON grammar gives.
+the JSON grammar gives. JSON text that opens with `{` takes a fast path
+through `JSON.parse`, and comes out the same.
 
 ## References stay as written
 
 A `$ref` comes back exactly as the document wrote it:
 
 ```js
-const { make } = require('@tabnas/openapi')
+const { parse } = require('@tabnas/openapi')
 
-const doc = make().parse(`
+const doc = parse(`
 parameters:
   - $ref: '#/components/parameters/Limit'
 `)
@@ -98,39 +85,59 @@ space starts a comment, and the value would be empty.
 YAML reads `3.1` as a number. Quote a version to keep it a string:
 
 ```js
-const { make } = require('@tabnas/openapi')
+const { parse, version } = require('@tabnas/openapi')
 
-make().parse('openapi: 3.1') // => { openapi: 3.1 }
-make().parse("openapi: '3.1'") // => { openapi: '3.1' }
-make().parse('openapi: 3.1.0') // => { openapi: '3.1.0' }
+parse('openapi: 3.1') // => { openapi: 3.1 }
+parse("openapi: '3.1'") // => { openapi: '3.1' }
+version(parse('openapi: 3.1.0')).version // => '3.1'
 ```
 
-`3.1.0` is not a number, so it stays a string either way.
+`version` reads the version a description names. It reads a string and
+a number alike, so both of the first two read as `'3.1'`.
+
+## What parse refuses
+
+A description is one document with a map at its root. `parse` refuses
+anything else, with an error whose `code` says why:
+
+```js
+const { parse } = require('@tabnas/openapi')
+
+function codeOf(text) {
+  try {
+    parse(text)
+  } catch (err) {
+    return err.code
+  }
+}
+
+codeOf('- a list\n- of things') // => 'openapi_root'
+codeOf('openapi: 3.1.0\n---\nopenapi: 3.0.0') // => 'openapi_stream'
+```
+
+The code is what to test for. The message is written for people.
 
 ## Insist on JSON
 
-`strict` reads JSON alone, by RFC 8259, and refuses anything else:
+`strict` reads JSON alone, by RFC 8259. It also requires a version this
+package reads, and each member name once per map:
 
 ```js
-const { make } = require('@tabnas/openapi')
+const { parse } = require('@tabnas/openapi')
 
-const strict = make({ strict: true })
-strict.parse('{"openapi":"3.1.0"}') // => { openapi: '3.1.0' }
+parse('{"openapi":"3.1.0"}', { strict: true }) // => { openapi: '3.1.0' }
 
 let code
 try {
-  strict.parse('openapi: 3.1.0')
+  parse('openapi: 3.1.0', { strict: true })
 } catch (err) {
   code = err.code
 }
 code // => 'unexpected'
 ```
 
-Every parse error carries a code like this one, and the code is what to
-test for.
-
 ## Where next
 
-The [how-to guide](guide.md) reads a description from a file and installs
-the plugin on a parser you already have. The [reference](reference.md)
+The [how-to guide](guide.md) reads a description from a file, checks its
+version and keeps a parser for reuse. The [reference](reference.md)
 lists every export.
