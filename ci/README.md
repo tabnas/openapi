@@ -5,9 +5,29 @@ this repository's own CI workflows. `.github/workflows/rust.yml` calls
 that script, and you can run it locally too.
 
 The workflows themselves live in `.github/workflows/`. To change CI, edit
-them there in a reviewed pull request: session credentials can push
-workflow changes (admin `DECISIONS.md` ADR-8, as amended on 2026-09-24),
-so staging a workflow here for a maintainer to promote is optional.
+them there in a reviewed pull request. Whether a session can push such an
+edit depends on its token: admin `DECISIONS.md` ADR-8, as amended on
+2026-09-24, allows it, but a token without GitHub's `workflow` scope is
+refused, by `git push` and by the API alike. A session refused that way
+stages the workflow here, under [`workflows/`](workflows/), for a
+maintainer to promote.
+
+## Staged, waiting for promotion
+
+The Phase 0 bootstrap ran in a session whose token lacked the `workflow`
+scope, so its three workflow edits are staged rather than live:
+
+| Staged | Promote by |
+|---|---|
+| [`workflows/ci.yml`](workflows/ci.yml) | copying it over `.github/workflows/ci.yml`: `yaml` joins the siblings in `deps` |
+| [`workflows/rust.yml`](workflows/rust.yml) | copying it over `.github/workflows/rust.yml`: the yaml clone, the `openapi/` checkout, and path filters for this repository's files |
+| the removal of `.github/workflows/clib.yml` | deleting it: it builds `go/clib/`, which went with the ZON grammar |
+
+Until then the live `rust.yml` stops at the gate script's sibling check,
+because it clones no `yaml`, and the live `clib.yml` fails on a pull
+request that touches `go/`, because `go/clib/` is gone. Both failures are
+expected and name their cause. After promotion, delete `workflows/` and
+this section in the same change.
 
 `crates-release.yml`, `release.yml`, `notify-status.yml`,
 `scorecard.yml` and `deps-gate.yml` are stamped by admin, and still carry

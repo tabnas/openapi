@@ -430,6 +430,13 @@ when the sibling checkout is missing. There is no Go equivalent.
 - `.github/workflows/docs.yml` runs Vale and the counts check on any
   change to a gated page or the prose configuration.
 
+**Three workflow edits are staged, not live.** The session that
+bootstrapped this repository could not push `.github/workflows/` (its
+token lacked the `workflow` scope), so the `ci.yml` and `rust.yml` above
+are the versions in [`ci/workflows/`](ci/workflows/), and `clib.yml` is
+still live. [`ci/README.md`](ci/README.md) says how to promote them and
+which failures to expect until then.
+
 ## Agent tooling
 
 An agent working in this repository does not have to drive it by hand. The
