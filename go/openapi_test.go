@@ -684,3 +684,20 @@ func TestParseIsSafeForConcurrentUse(t *testing.T) {
 		t.Errorf("%d of %d parses went wrong, first %s", len(bad), goroutines*each, bad[0])
 	}
 }
+
+// A second install must not subscribe twice, which would count every YAML
+// document twice and refuse a single document as a stream.
+func TestInstallingTwiceChangesNothing(t *testing.T) {
+	j := Make()
+	if err := j.UseDefaults(OpenApi, Defaults); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Parse("openapi: 3.1.0\npaths: {}", ParseOptions{Instance: j}); err != nil {
+		t.Fatalf("a single document after a second install: %v", err)
+	}
+	_, err := Parse("a: 1\n---\nb: 2", ParseOptions{Instance: j})
+	var te *tabnas.TabnasError
+	if !errors.As(err, &te) || "openapi_stream" != te.Code {
+		t.Errorf("a stream after a second install: want openapi_stream, got %v", err)
+	}
+}

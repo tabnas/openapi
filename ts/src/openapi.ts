@@ -62,11 +62,20 @@ type ParseState = {
   docs: number
 }
 
+// The instances the plugin is installed on.
+const INSTALLED = new WeakSet<Tabnas>()
+
 // The plugin. It installs after the base grammar, adds no rule, and
 // records nothing on the parsed tree. It declares its error codes, makes
 // a repeated member name keep its last value, as JSON.parse does, and
 // subscribes to rule completion for the checks `parse` asks for.
 const OpenApi: Plugin = function OpenApi(tn: Tabnas, _options: OpenApiOptions) {
+  // Once per instance: a second subscriber would count every YAML
+  // document twice and refuse a single document as a stream.
+  if (INSTALLED.has(tn)) {
+    return
+  }
+  INSTALLED.add(tn)
   tn.options({
     error: ERRORS,
     hint: HINTS,

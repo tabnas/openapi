@@ -7,29 +7,55 @@
 // SAME files, so the three implementations cannot drift without one of
 // them going red, and neither can the loaders.
 //
-// What is left here is only what is specific to openapi: how to build
-// the parser for a row's options.
+// What is left here is only what is specific to openapi: every row runs
+// through the `parse` wrapper with the options in its `opts` column, and
+// `raw-fast.tsv` runs twice more, with the fast path forced on and off,
+// since its rows hold that both paths give one tree.
 
 mod common;
 
-use tabnas_openapi::make_with;
-use tabnas_support::Runner;
+use tabnas_openapi::{parse, Fast};
+use tabnas_support::{report, Runner};
 
 use common::{row_options, spec_dir, to_failure, to_value};
+
+/// A runner over `parse` with each row's options, and with `fast` over
+/// them when it is given.
+fn runner(fast: Option<Fast>) -> Runner {
+    Runner::new_with_row(move |input, row| {
+        let mut options = row_options(row.named("opts"))?;
+        if let Some(fast) = fast {
+            options.fast = fast;
+        }
+        parse(input, &options)
+            .map(|value| to_value(&value))
+            .map_err(to_failure)
+    })
+}
 
 /// Every fixture in the spec directory. `dir` discovers the files by
 /// listing, so adding a .tsv runs it in every runtime without touching
 /// any runner, and an empty directory fails rather than passing.
 #[test]
 fn spec() {
-    // A fresh parser per row: the `opts` column is per-case, and options
-    // must not leak from one row into the next.
-    let runner = Runner::new_with_row(|input, row| {
-        let options = row_options(row.named("opts"))?;
-        make_with(&options)
-            .parse(input)
-            .map(|value| to_value(&value))
-            .map_err(to_failure)
-    });
-    runner.dir(spec_dir());
+    runner(None).dir(spec_dir());
+}
+
+/// `raw-fast.tsv` with the fast path forced on and then off, whatever its
+/// rows ask for: the two paths must read each row to one tree. Rust's
+/// harness has no subtests, so both runs are reported together, each
+/// failure prefixed with the setting it ran under.
+#[test]
+fn raw_fast_both_paths() {
+    let path = spec_dir().join("raw-fast.tsv");
+    let mut failures = Vec::new();
+    for fast in [Fast::On, Fast::Off] {
+        match runner(Some(fast)).run_file(&path) {
+            Ok(rows) => {
+                failures.extend(rows.into_iter().map(|row| format!("fast {fast:?}: {row}")))
+            }
+            Err(error) => failures.push(format!("fast {fast:?}: {error}")),
+        }
+    }
+    report(Ok(failures));
 }

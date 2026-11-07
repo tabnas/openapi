@@ -66,6 +66,10 @@ var (
 	}
 )
 
+// installedKey marks an instance the plugin is installed on, so that a
+// second install changes nothing.
+const installedKey = "openapi-installed"
+
 // metaKey names the per-parse state in the engine's parse metadata, as
 // `openapi` does in TypeScript (`tn.parse(text, { openapi: state })`).
 const metaKey = "openapi"
@@ -89,6 +93,12 @@ type parseState struct {
 // does, and subscribes to rule completion for the checks Parse asks for.
 // Mirrors `OpenApi` in ts/src/openapi.ts.
 func OpenApi(j *tabnas.Tabnas, _ map[string]any) error {
+	// Once per instance: a second subscriber would count every YAML
+	// document twice and refuse a single document as a stream.
+	if true == j.Decoration(installedKey) {
+		return nil
+	}
+	j.Decorate(installedKey, true)
 	j.SetOptions(tabnas.Options{
 		// Copies: the engine keeps the maps it is given, and a later
 		// option merge must not reach these tables.

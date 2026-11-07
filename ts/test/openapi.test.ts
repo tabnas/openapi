@@ -172,6 +172,15 @@ describe('raw mode', () => {
     )
   })
 
+  test('installing the plugin twice changes nothing', () => {
+    const tn = make().use(OpenApi)
+    assert.deepEqual(C(parse('openapi: 3.1.0\npaths: {}', { instance: tn })), {
+      openapi: '3.1.0',
+      paths: {},
+    })
+    assert.equal(failure(() => parse('a: 1\n---\nb: 2', { instance: tn })).code, 'openapi_stream')
+  })
+
   test('a given instance is used', () => {
     const tn = make()
     assert.deepEqual(C(parse('a: 1', { instance: tn, fast: false })), { a: 1 })

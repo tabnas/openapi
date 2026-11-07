@@ -7,14 +7,13 @@ why that difference is allowed to stand.
 
 ## Where these are pinned
 
-Each entry is measured, not inferred from the source, and each runtime's
-side is pinned in that runtime's own suite: a shared fixture row pins
-the TypeScript value, and `goDivergent` in `go/parity_test.go` holds Go
-to its own value for the same row. A pin fails when its runtime starts
-to give the fixture's value, so a repair upstream forces the entry's
-deletion here, with its pin, in the same change.
-
-The Rust column is filled in when the Rust port of raw mode lands.
+Each entry is measured through all three runtimes, not inferred from
+the source, and each runtime's side is pinned in that runtime's own
+suite: a shared fixture row pins the value TypeScript and Rust give, and
+`goDivergent` in `go/parity_test.go` holds Go to its own value for the
+same row. A pin fails when its runtime starts to give the fixture's
+value, so a repair upstream forces the entry's deletion here, with its
+pin, in the same change.
 
 ## Two JSON maps on two lines
 
@@ -24,11 +23,13 @@ fast settings (the fast path refuses the text, so the grammar decides).
 | Runtime | Result |
 |---|---|
 | TypeScript | `unexpected` at 2:1 |
+| Rust | `unexpected` at 2:1 |
 | Go | `openapi_root` at 1:1: the Go yaml grammar reads the two maps as a list |
 
 A YAML document has one root node, so the text is an error; TypeScript
-gives the right code. **Repair: the Go yaml grammar** (tabnas/yaml, Go
-port 0.5.27). Pinned: the row (TypeScript), `goDivergent` (Go).
+and Rust give the right code. **Repair: the Go yaml grammar**
+(tabnas/yaml, Go port 0.5.27). Pinned: the row (TypeScript, Rust),
+`goDivergent` (Go).
 
 ## JSON text after a blank first line
 
@@ -38,12 +39,13 @@ path every runtime reads it.
 | Runtime | Result |
 |---|---|
 | TypeScript | `unexpected` at 2:1 |
+| Rust | `unexpected` at 2:1 |
 | Go | `{"a":1}` |
 
 The text is valid JSON and valid YAML; Go is right. **Repair: the
-TypeScript yaml grammar** (tabnas/yaml, 0.5.27). Pinned: the row, which
-holds the defect so that its repair shows (TypeScript), and
-`goDivergent` (Go).
+TypeScript and Rust yaml grammars** (tabnas/yaml, 0.5.27). Pinned: the
+row, which holds the defect so that its repair shows (TypeScript, Rust),
+and `goDivergent` (Go).
 
 ## Values the fixtures cannot carry
 
@@ -51,15 +53,36 @@ These are measured, and asserted in each runtime's package tests, since
 the fixtures' JSON round trip cannot hold them:
 
 - A lone surrogate escape, `"\ud800"`: TypeScript keeps the lone
-  surrogate; Go gives U+FFFD, on both paths and under strict, since a Go
-  string cannot hold one. The engine's own divergence record covers it.
-- `1e400` under strict: TypeScript gives `Infinity`; Go's strict json
-  grammar refuses it as `unexpected`, deliberately, as the json
-  repository records. Without strict, both give an infinity on both
+  surrogate; Go and Rust give U+FFFD, on both paths and under strict,
+  since neither runtime's strings can hold one. The engine's own
+  divergence record covers it.
+- `1e400` under strict: TypeScript and Rust give an infinity; Go's strict
+  json grammar refuses it as `unexpected`, deliberately, as the json
+  repository records. Without strict, all three give an infinity on both
   paths.
 - Member order: TypeScript enumerates integer-like member names first,
-  as every JavaScript object does; Go keeps document order. The fixtures
-  compare without order.
+  as every JavaScript object does; Go and Rust keep document order. The
+  fixtures compare without order.
+- Nesting 128 levels deep or more: Rust refuses it as `cancel`, on every
+  path, by the depth guard its grammars carry (and `serde_json`'s own
+  limit of 128 sends the fast path to the grammar); TypeScript reads it.
+  Up to 127 levels all three read it.
+
+## Informative error fields
+
+The code, row and column agree in all three runtimes on every error the
+fixtures and the package tests raise, and so do the message and hint.
+Fields the diagnostics schema calls informative differ for an error the
+plugin raises in the middle of a parse: TypeScript's `ruleStack` repeats
+the failing rule and reports the state after the pass (`pair~c`), where
+Rust reports it during the pass (`pair~o`), each following its engine's
+convention for errors from these callbacks. The offset `pos` of an error
+placed at a `---` marker differs in Go, since its yaml grammar places
+that token differently. A member name cut inside a character outside the
+Basic Multilingual Plane keeps half of it in TypeScript and stops before
+it in Go and Rust. Refusing an instance without the plugin is a plain
+error in TypeScript and Go and an error coded `internal` in Rust, whose
+error type requires a code.
 
 ## What reaches this package from below
 

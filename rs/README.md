@@ -7,8 +7,8 @@ descriptions, in YAML or in JSON, with one parser for both. The crate is
 `tabnas-openapi`; the library is `tabnas_openapi`.
 
 This release returns the raw tree: the document as written, with every
-`$ref` kept as a reference. It does not yet check the document or resolve
-its references.
+`$ref` kept as a reference, after checking that the text is one
+description with a map at its root. It does not resolve references yet.
 
 ## Set up
 
@@ -40,6 +40,20 @@ assert_eq!(doc.to_string(), r#"{"openapi":"3.1.0","paths":{}}"#);
 ```
 
 Build it once and keep it. Building the grammar costs more than a parse.
+
+`parse` does the same with a parser it keeps for you, and refuses text
+that is not one description:
+
+```rust
+use tabnas_openapi::{parse, ParseOptions};
+
+let doc = parse("openapi: 3.1.0\npaths: {}", &ParseOptions::default())?;
+assert_eq!(doc.to_string(), r#"{"openapi":"3.1.0","paths":{}}"#);
+
+let err = parse("- a\n- b", &ParseOptions::default()).unwrap_err();
+assert_eq!(err.code, "openapi_root");
+# Ok::<(), tabnas_openapi::OpenApiError>(())
+```
 
 ## References stay as written
 

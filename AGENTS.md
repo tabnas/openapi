@@ -92,7 +92,7 @@ experiments, each with its recorded result.
 |---|---|---|
 | E | expr tree layer (key operators, `fold`), TypeScript | in review in tabnas/expr |
 | 0 | this repository bootstrapped from the ZON template, all three runtimes | done |
-| 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | done in TypeScript and Go; the Rust port is under way |
+| 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | done in all three runtimes |
 | 2 | the resolver over `fold`, against the expr checkout | after E ships |
 | 3 to 7 | ports of the resolver, documents, bundling, release | see the plan |
 
@@ -123,9 +123,9 @@ grammar on any refusal, so every error comes from the grammar.
 
 | Path | What it is |
 |---|---|
-| [`ts/`](ts/) | **Canonical** TypeScript implementation, the `@tabnas/openapi` package. Source in `src/openapi.ts`: the `OpenApi` plugin, `make(options)`, `VERSION`. Tests in `test/`, compiled to `dist-test/`. |
-| [`go/`](go/) | Go port, module `github.com/tabnas/openapi/go`, package `tabnasopenapi`. Source in `openapi.go`: `OpenApi`, `Defaults`, `Make(MakeOptions)`, `VERSION`. `example_test.go` runs the examples the Go docs show. |
-| [`rs/`](rs/) | Rust port, crate `tabnas-openapi`, library `tabnas_openapi`: `openapi` / `plugin()`, `make` / `make_with(&MakeOptions)`, `OpenApiOptions`, `VERSION`, `OpenApiError`. `rs/AGENTS.md` has the crate's own notes. The README's examples run as doctests. |
+| [`ts/`](ts/) | **Canonical** TypeScript implementation, the `@tabnas/openapi` package. Source in `src/openapi.ts`: `parse(text, options)`, `version(tree)`, the `OpenApi` plugin, `make(options)`, `VERSION`. Tests in `test/`, compiled to `dist-test/`. |
+| [`go/`](go/) | Go port, module `github.com/tabnas/openapi/go`, package `tabnasopenapi`. Source in `openapi.go`: `Parse(ParseOptions)`, `Fast`, `Version`, `OpenApi`, `Defaults`, `Make(MakeOptions)`, `VERSION`. `example_test.go` runs the examples the Go docs show. |
+| [`rs/`](rs/) | Rust port, crate `tabnas-openapi`, library `tabnas_openapi`: `parse(&ParseOptions)`, `Fast`, `version`, `openapi` / `plugin()`, `make` / `make_with(&MakeOptions)`, `OpenApiOptions`, `VERSION`, `OpenApiError`. `rs/AGENTS.md` has the crate's own notes, including how raw mode works around the engine's Rust API. The README's examples run as doctests. |
 | [`test/spec/`](test/spec/) | Shared `.tsv` fixtures. All three runners discover and run every file, so a row added here covers TypeScript, Go and Rust together. See [`test/AGENTS.md`](test/AGENTS.md). |
 | [`test/petstore/`](test/petstore/) | One OpenAPI 3.1 description in YAML and the same in JSON. Every runtime's suite reads both and holds them to `JSON.parse` of the JSON form. |
 | [`docs/design/`](docs/design/) | The design notes, the plan and the prototypes. Working documents, outside the prose gate. |
@@ -235,6 +235,10 @@ file. CI does the linked model with the siblings `ci.yml` names.
   `yaml` in Rust. Match a plugin list by the name its runtime gives.
 - **`tabnas_json::make()` also sets `lex.window`,** for parsing from a
   reader. It changes nothing for a string parse.
+- **The plugin installs once per instance.** A second `use` changes
+  nothing (a WeakSet in TypeScript, the `openapi-installed` decoration in
+  Go and Rust): a second subscriber would count every YAML document
+  twice and refuse one document as a stream.
 - **Integer-like member names enumerate first in TypeScript.** A
   JavaScript object puts `"200"` before `"default"` whatever the document
   order, on both paths; Go's `OrderedMap` and Rust's map keep document
