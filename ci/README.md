@@ -9,13 +9,14 @@ them there in a reviewed pull request: session credentials can push
 workflow changes (admin `DECISIONS.md` ADR-8, as amended on 2026-09-24),
 so staging a workflow here for a maintainer to promote is optional.
 
-`ci.yml`, `crates-release.yml`, `release.yml`, `notify-status.yml`,
-`scorecard.yml` and `deps-gate.yml` also have a template in admin
-`rollout/workflows/zon__<file>`. Mirror a change there in the same change:
-admin `scripts/verify.sh` compares the two, and
-`rollout/apply-workflows.sh --apply` pushes the template's text back.
-`clib.yml` and `clib-release.yml` are stamped from admin
-`tasks/clib-template/`, so change the template and restamp.
+`crates-release.yml`, `release.yml`, `notify-status.yml`,
+`scorecard.yml` and `deps-gate.yml` are stamped by admin, and still carry
+the `Target: tabnas/zon` line of the template this repository was copied
+from, as `clib-release.yml` still builds `libtabnaszon`. Admin restamps
+them for this repository; until then do not dispatch a release, and do
+not hand-edit them. `clib.yml` and `go/clib/` were removed with the ZON
+grammar the stamped C library imported, and come back from admin's
+`tasks/clib-template/` as `libtabnasopenapi`.
 
 Sessions still cannot push tags. Releases therefore go through
 `workflow_dispatch`, and a workflow that runs only on a tag push needs a
@@ -35,10 +36,10 @@ Both of these were staged here and now run from `.github/workflows/`:
   suite runs the other half of the gate (`ts/test/docs.test.js`).
 
 - **`rust.yml`**, the Rust gate: `ci/rust/run.sh` (formatting,
-  build, the shared fixtures, the zig reference corpora, doctests, clippy,
-  and a lockfile check that exempts only the sibling crates' versions) on
-  the MSRV pinned in `rs/Cargo.toml`. It clones `tabnas/parser`,
-  `tabnas/json`, `tabnas/jsonic`, `tabnas/support` and `tabnas/debug`
+  build, the shared fixtures, doctests, clippy, and a lockfile check that
+  exempts only the sibling crates' versions) on the MSRV pinned in
+  `rs/Cargo.toml`. It clones `tabnas/parser`, `tabnas/json`,
+  `tabnas/jsonic`, `tabnas/yaml`, `tabnas/support` and `tabnas/debug`
   beside the checkout, because the committed manifest takes them as path
   dependencies, although all of them are on crates.io.
   `make test-rs` is the fast local loop; the script is what CI runs.

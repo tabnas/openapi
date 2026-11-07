@@ -1,8 +1,8 @@
 See [AGENTS.md](AGENTS.md) for the full guide to working in this
-repository: the zig-oracle conformance claim, layout, the
-TypeScript-canonical / Go-port contract, the embedded-grammar workflow,
-its role as the template scaffold for new plugins, build & test and
-verification commands, error codes, and how to treat untrusted input.
+repository: what the plugin is and where the plan stands, layout, the
+tabnas dependencies, the TypeScript-canonical contract across the three
+runtimes, build & test and verification commands, why releasing waits
+for admin, error codes, and how to treat untrusted input.
 
 ## Core principle: dependencies change only on explicit instruction
 

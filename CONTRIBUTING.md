@@ -1,9 +1,9 @@
-# Contributing to zon
+# Contributing to openapi
 
 Thanks for your interest in contributing! The organization-wide conventions
 in [tabnas/.github](https://github.com/tabnas/.github/blob/main/CONTRIBUTING.md) are
 canonical and apply here. This file adds what is specific to
-**tabnas/zon**.
+**tabnas/openapi**.
 
 Start with [`AGENTS.md`](AGENTS.md) — it is the working guide to this
 repository for humans and agents alike.
@@ -33,13 +33,13 @@ run admin's `scripts/link.sh`, which links them over
 `ts/node_modules/@tabnas/*` and writes a `go.work` one level up. Never commit
 that wiring. CI builds the siblings named in `.github/workflows/ci.yml`'s
 `deps` from source. `rs/` is the exception: `rs/Cargo.toml` takes the engine
-and the jsonic grammar as path dependencies (jsonic takes `json` by path in
-turn), and the shared fixture runner and the debug plugin as path
-dev-dependencies, so it needs `parser`, `jsonic`, `json`, `support` and
-`debug` checked out beside this repository even for a plain build. The
-crates are on crates.io, but the committed manifest stays path-only: only
-when it publishes `tabnas-zon` does the release workflow swap the engine's
-and jsonic's paths for crates.io versions and drop the two test-only ones.
+and the json, jsonic and yaml grammars as path dependencies, and the shared
+fixture runner and the debug plugin as path dev-dependencies, so it needs
+`parser`, `json`, `jsonic`, `yaml`, `support` and `debug` checked out
+beside this repository even for a plain build. The crates are on
+crates.io, but the committed manifest stays path-only: only when it
+publishes `tabnas-openapi` does the release workflow swap those paths for
+crates.io versions and drop the two test-only ones.
 
 ## Commit messages
 

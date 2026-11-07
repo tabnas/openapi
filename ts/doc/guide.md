@@ -1,185 +1,104 @@
 # How-to guide
 
-Short, task-focused recipes. Each is self-contained and assumes you
-have the plugin installed (see the [tutorial](tutorial.md) for the
-basics). For the full API, every option, and the complete syntax,
-follow the links into the [reference](reference.md).
+Short recipes for tasks you meet with `@tabnas/openapi`. Each assumes you
+have the package installed; the [tutorial](tutorial.md) covers that, and
+the [reference](reference.md) has the details each recipe skips.
 
-Every recipe starts from the same three imports:
+## Read a description from a file
+
+Read the file as text and parse it. The format does not matter: one
+parser reads YAML and JSON.
 
 ```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+const Fs = require('node:fs')
+const { make } = require('@tabnas/openapi')
+
+const parser = make()
+const doc = parser.parse(Fs.readFileSync('openapi.yaml', 'utf8'))
 ```
 
-## Use it as a plugin
+Keep `parser` for the next file. Building it costs more than a parse.
 
-`Zon` is a plugin, not a standalone parser. Layer it onto a Tabnas
-engine that already has the jsonic grammar, then call `.parse()`:
+## Accept strict JSON only
+
+Pass `strict` when a description must be JSON by RFC 8259, with no
+comments, no trailing commas and no YAML:
 
 ```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+const { make } = require('@tabnas/openapi')
 
-const j = new Tabnas().use(jsonic).use(Zon)
-
-j.parse('.{ .a = 1, .b = 2 }') // => { a: 1, b: 2 }
+const strict = make({ strict: true })
+strict.parse('{"paths":{}}') // => { paths: {} }
 ```
 
-The instance is reusable: build it once and call `.parse()` as many
-times as you like. (Building the grammar is the expensive part; do not
-reconstruct the instance per parse.)
-
-## Parse a realistic `build.zig.zon`
-
-A ZON manifest mixes named struct fields with tuple-style `paths`
-lists and allows trailing commas and `//` line comments:
+The default parser accepts a trailing comma; the strict one refuses it:
 
 ```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+const { make } = require('@tabnas/openapi')
 
-const j = new Tabnas().use(jsonic).use(Zon)
+make().parse('{"paths":{},}') // => { paths: {} }
 
-const manifest = j.parse(`.{
-    .name = "example",
-    .version = "0.0.1",
-    .minimum_zig_version = "0.14.0",
-    .dependencies = .{
-        .foo = .{
-            .url = "https://example.com/foo.tar.gz",
-            .hash = "1220deadbeef",
-        },
-    },
-    .paths = .{
-        "build.zig",
-        "src",
-    },
-}`)
-
-manifest // => { name: 'example', version: '0.0.1', minimum_zig_version: '0.14.0', dependencies: { foo: { url: 'https://example.com/foo.tar.gz', hash: '1220deadbeef' } }, paths: ['build.zig', 'src'] }
-```
-
-## Parse numbers in every ZON base
-
-Numbers accept decimal, hex, octal, binary, floats, and `_` digit
-separators:
-
-```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
-
-const j = new Tabnas().use(jsonic).use(Zon)
-
-j.parse('0x2a')      // => 42
-j.parse('0o52')      // => 42
-j.parse('0b101010')  // => 42
-j.parse('1_000_000') // => 1000000
-j.parse('3.14')      // => 3.14
-```
-
-## Parse character literals as code points
-
-By default Zig char literals (`'A'`, `'\n'`, `'\u{1F600}'`) parse as
-one-character strings. Set `charAsNumber: true` to receive numeric
-code points instead:
-
-```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
-
-const j = new Tabnas().use(jsonic).use(Zon, { charAsNumber: true })
-
-j.parse("'A'")          // => 65
-j.parse("'\\n'")        // => 10
-j.parse("'\\u{1F600}'") // => 128512
-```
-
-## Tag enum literals to tell them apart from strings
-
-Without options, an enum-literal value like `.red` becomes the plain
-string `'red'`, indistinguishable from `"red"` in the parsed tree.
-Set `enumTag` to wrap each enum value in a one-key object so you can
-tell which was which:
-
-```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
-
-const j = new Tabnas().use(jsonic).use(Zon, { enumTag: '$enum' })
-
-j.parse('.{ .kind = .red, .label = "red" }') // => { kind: { $enum: 'red' }, label: 'red' }
-```
-
-The tag name is yours to choose; use whatever key your consumers
-expect.
-
-## Read multi-line Zig strings
-
-Consecutive lines prefixed with `\\` become a single string, joined
-with `\n` (the `\\` prefix is stripped from each line):
-
-```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
-
-const j = new Tabnas().use(jsonic).use(Zon)
-
-const doc = j.parse(`.{
-  .description =
-    \\\\first line
-    \\\\second line
-  ,
-}`)
-
-doc // => { description: 'first line\nsecond line' }
-```
-
-## Handle a parse error
-
-ZON deliberately rejects non-ZON input, a bare `{` opener for
-instance. A failed parse throws the engine's parse error; catch it and
-read its fields:
-
-```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
-
-const j = new Tabnas().use(jsonic).use(Zon)
-
-let threw = false
+let code
 try {
-  j.parse('{ a = 1 }') // not ZON: bare { is rejected
+  make({ strict: true }).parse('{"paths":{},}')
 } catch (err) {
-  threw = true
-  // err.code, err.row, err.col, err.message are available here.
+  code = err.code
 }
-threw // => true
+code // => 'unexpected'
 ```
 
-## Re-enable strict JSON while the plugin is loaded
+## Install the plugin on your own parser
 
-Every grammar alternate the plugin adds carries the group tag `zon`.
-To switch those alts off (restoring the plain jsonic grammar while
-the plugin stays registered) exclude that tag:
+`make` is a shortcut. To build the parser yourself, install the base
+grammar first and the plugin after it:
 
-```typescript
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+```js
+const { Tabnas } = require('@tabnas/parser')
+const { jsonic } = require('@tabnas/jsonic')
+const { Yaml } = require('@tabnas/yaml')
+const { OpenApi } = require('@tabnas/openapi')
 
-const j = new Tabnas().use(jsonic).use(Zon).options({
-  rule: { exclude: 'zon' },
-})
+const parser = new Tabnas().use(jsonic).use(Yaml).use(OpenApi)
+parser.parse('paths:\n  /pets: {}') // => { paths: { '/pets': {} } }
 ```
 
-This is rarely useful, since you would normally not load the plugin at
-all, but it is the supported way to peel the ZON layer back off.
+For strict JSON, install `json` from `@tabnas/json` in place of `jsonic`
+and `Yaml`.
+
+## Tell parse errors apart
+
+A failed parse throws an error with a `code`. Test the code, not the
+message: the message is written for people and can change wording.
+
+```js
+const { make } = require('@tabnas/openapi')
+
+function codeOf(src) {
+  try {
+    make({ strict: true }).parse(src)
+    return null
+  } catch (err) {
+    return err.code
+  }
+}
+
+codeOf('{"a":1} // note') // => 'unexpected'
+codeOf('{"a":1}') // => null
+```
+
+The [reference](reference.md#errors) lists the codes.
+
+## Keep a value YAML would change
+
+YAML gives some unquoted values a type: `3.1` is a number, `true` a
+Boolean, `null` nothing at all. Quote a value that must stay text:
+
+```js
+const { make } = require('@tabnas/openapi')
+
+const doc = make().parse("version: '3.1'\nenum: ['true', 'null']")
+doc // => { version: '3.1', enum: ['true', 'null'] }
+```
+
+The same goes for a `$ref`. Its value starts with `#`, and an unquoted
+`#` after a space starts a comment.

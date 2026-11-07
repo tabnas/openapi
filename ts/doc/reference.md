@@ -1,321 +1,103 @@
 # Reference
 
-The complete public surface of `@tabnas/zon` (TypeScript): exports,
-the parse entry, the two options, and the exact ZON syntax accepted.
-For a guided introduction see the [tutorial](tutorial.md); for task
-recipes see the [how-to guide](guide.md); for how it works see
-[concepts](concepts.md).
-
-## Package
-
-```bash
-npm install @tabnas/parser @tabnas/jsonic @tabnas/zon
-```
-
-| | |
-|---|---|
-| Package | `@tabnas/zon` |
-| Module type | CommonJS (`main: dist/zon.js`, types `dist/zon.d.ts`) |
-| Peer deps | `@tabnas/parser` >= 2, `@tabnas/jsonic` >= 2 |
-| Engine | `@tabnas/parser` (Tabnas) |
-| Underlying grammar | `@tabnas/jsonic` |
+The exports of `@tabnas/openapi`, the tree a parse returns, and the
+errors it raises. The [concepts](concepts.md) page explains the design
+behind them.
 
 ## Exports
 
-| Export | Kind | Description |
-|---|---|---|
-| `Zon` | `Plugin` | The plugin function. Register with `engine.use(Zon, options)`. |
-| `VERSION` | `string` | This package's version, always equal to `package.json` "version". |
-| `ZonOptions` | type | The options object shape (see [Options](#options)). |
+```ts
+import { make, OpenApi, VERSION } from '@tabnas/openapi'
+import type { MakeOptions, OpenApiOptions } from '@tabnas/openapi'
+```
 
-`Zon.defaults` (a `ZonOptions`) holds the merged default options:
+### `make(options?)`
 
-```typescript
-Zon.defaults = {
-  charAsNumber: false,
-  enumTag: null,
+```ts
+function make(options?: MakeOptions): Tabnas
+
+type MakeOptions = {
+  strict?: boolean // default false
 }
 ```
 
-## Parse entry
+Returns a new parser with the plugin installed:
 
-The plugin has **no convenience `parse()` function** of its own. You
-parse by building a Tabnas engine, layering the jsonic grammar, then
-the `Zon` plugin, and calling the engine's `.parse()`:
-
-```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
-
-const j = new Tabnas().use(jsonic).use(Zon)
-
-j.parse('.{ .a = 1 }') // => { a: 1 }
-```
-
-### `engine.use(Zon, options?)`
-
-Registers and immediately applies the plugin. Returns the engine, so
-registrations chain (`new Tabnas().use(jsonic).use(Zon, opts)`). The
-plugin merges `options` over `Zon.defaults`, installs the embedded ZON
-grammar, and re-applies its jsonic option overrides (struct/tuple
-tokens, `=` separator, identifier keys, Zig escapes, ZON comments, the
-strict Zig number lexer, and the six custom lex matchers).
-
-The instance is reusable and stateless across parses; build it once
-and reuse it. Building the grammar dominates a parse, so do not
-reconstruct the engine per call.
-
-### `engine.parse(src)`
-
-Parses a ZON source string and returns the resulting JavaScript value.
-Objects come back as maps built with `Object.create(null)` (no
-prototype); arrays are plain arrays; scalars are `number`, `string`,
-`boolean`, or `null`, plus `bigint` for an integer literal too large to
-be an exact double. A failed parse throws (see [Errors](#errors)).
-
-## Options
-
-`ZonOptions` has exactly two fields:
-
-```typescript
-type ZonOptions = {
-  charAsNumber: boolean
-  enumTag: null | string
-}
-```
-
-### `charAsNumber`
-
-- **Type:** `boolean`
-- **Default:** `false`
-- **Effect:** Controls how Zig character literals (`'x'`, `'\n'`,
-  `'\x41'`, `'\u{1F600}'`) are parsed.
-  - `false`. The literal becomes a one-character string. `'A'` → `'A'`.
-  - `true`. The literal becomes its numeric Unicode code point. `'A'`
-    → `65`, `'\n'` → `10`, `'\u{1F600}'` → `128512`.
-
-```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
-
-const j = new Tabnas().use(jsonic).use(Zon, { charAsNumber: true })
-j.parse("'A'") // => 65
-```
-
-### `enumTag`
-
-- **Type:** `null | string`
-- **Default:** `null`
-- **Effect:** Controls how enum-literal *values* (a bare `.foo` used in
-  value position) are represented.
-  - `null`. The enum literal becomes the bare identifier string.
-    `.red` → `'red'`.
-  - a string `T`. The enum literal is wrapped in a one-key object
-    `{ [T]: name }`, so it can be distinguished from an ordinary
-    string. With `enumTag: '$enum'`, `.red` → `{ $enum: 'red' }`.
-
-The tag affects enum literals only when they are *values*. A `.field`
-used as a key (before `=`) is always the plain field name regardless of
-`enumTag`.
-
-```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
-
-const j = new Tabnas().use(jsonic).use(Zon, { enumTag: '$enum' })
-j.parse('.{ .kind = .red, .label = "red" }') // => { kind: { $enum: 'red' }, label: 'red' }
-```
-
-## ZON syntax
-
-ZON is **not** a superset of JSON. It uses Zig anonymous-struct
-syntax. The plugin disables the bare `{`, `[`, `]` openers and rebinds
-the key/value separator to `=`.
-
-### Structs (maps)
-
-A struct literal opens with `.{`, contains `.field = value` pairs
-separated by commas, and closes with `}`. Field names are identifiers
-(`[A-Za-z_][A-Za-z0-9_]*`), written with a leading dot that is
-stripped from the key. A name that is not a legal identifier is written
-`.@"..."` (any string literal, with the same escapes) and a struct may
-not repeat a field name.
-
-```
-.{ .a = 1, .b = 2 }     => { a: 1, b: 2 }
-.{ .a = .{ .b = 1 } }   => { a: { b: 1 } }
-.{ .@"a b" = 1 }        => { 'a b': 1 }
-.{ .a = 1, .a = 2 }     => error: duplicate struct field name
-```
-
-### Tuples (lists)
-
-A tuple literal also opens with `.{`, but contains bare values (no
-`.field =`), separated by commas, and closes with `}`. It produces an
-array.
-
-```
-.{ 1, 2, 3 }            => [1, 2, 3]
-.{ "a", "b" }           => ['a', 'b']
-.{ .{ 1, 2 }, .{ 3, 4 } } => [[1, 2], [3, 4]]
-```
-
-The struct-vs-tuple decision is made at lex time by peeking past the
-`.{`: if the next significant token is a field name (`.identifier` or
-`.@"..."`) followed by `=`, it is a struct; otherwise it is a tuple.
-
-### Empty literal
-
-An empty `.{}` parses as an **empty array** (`[]`), since with no
-contents there is no `.field =` to mark it as a struct.
-
-```
-.{}                     => []
-```
-
-### Trailing commas
-
-A trailing comma before `}` is allowed in both structs and tuples.
-
-```
-.{ .a = 1, }            => { a: 1 }
-.{ 1, 2, 3, }           => [1, 2, 3]
-```
-
-### Scalars
-
-| Construct | Example | Result |
+| `strict` | Base grammar | Reads |
 |---|---|---|
-| Integer | `42` | `42` |
-| Float | `3.14` | `3.14` |
-| Hex | `0x2a` | `42` |
-| Octal | `0o52` | `42` |
-| Binary | `0b101010` | `42` |
-| Hex float | `0x1.8p1` | `3` |
-| Exponent | `1e5`, `12_3.0E+77` | `100000`, `1.23e+79` |
-| Empty fraction | `1.e3`, `0xF.p1` | `1000`, `30` |
-| Digit separator | `1_000_000` | `1000000` |
-| Infinity / NaN | `inf`, `-inf`, `nan` | `Infinity`, `-Infinity`, `NaN` |
-| Big integer | `36893488147419103231` | `36893488147419103231n` (a `bigint`) |
-| Boolean | `true`, `false` | `true`, `false` |
-| Null | `null` | `null` |
-| String | `"hello"` | `'hello'` |
-| Enum literal | `.red`, `.@"a b"` | `'red'`, `'a b'` (or `{ tag: ... }`) |
-| Char literal | `'A'` | `'A'` (or `65`) |
+| `false` | `jsonic`, then `Yaml` | YAML, and JSON text |
+| `true` | `json` | JSON text by RFC 8259 |
 
-### Numbers are Zig numbers, not relaxed-JSON numbers
+Every call builds a new parser. A parser can be reused for any number of
+parses.
 
-The plugin replaces jsonic's number lexer with one that implements Zig's
-literal grammar exactly, so ZON's strictness is preserved:
+### `OpenApi`
 
-```
-+1      .5      5.      0123      00      -0
-1__0    1_      _1      0x_2A     0X2A    0O52
-0b12    0o18    1abc    1e        0b1.1   0.1.2
+```ts
+const OpenApi: Plugin
+
+type OpenApiOptions = Record<string, never>
 ```
 
-are all **rejected**, as the Zig compiler rejects them. A leading `-` is a
-negation prefix and may be separated by space (`- 1`); `-nan` is not a
-literal. An integer whose exact value does not fit an IEEE-754 double is
-returned as a `bigint` rather than silently rounded; everything else is a
-`number`.
+The plugin. Install it after the base grammar, with `tn.use(OpenApi)`.
+It takes no options; `OpenApi.defaults` is `{}`. In this release it adds
+no grammar and changes no parse result.
 
-### Strings
+### `VERSION`
 
-Double-quoted strings only (single quotes are reserved for char
-literals). The escapes are Zig's and no other: `\n`, `\r`, `\t`, `\\`,
-`\"`, `\'`, a byte `\xNN`, and `\u{...}` naming a Unicode scalar value
-(so a surrogate such as `\u{D800}` is an error). A run of `\xNN` escapes
-is decoded as UTF-8 once it ends: `"\xe2\x82\xac"` is the euro sign.
-Unknown escapes, JSON's `\uXXXX` among them, and raw control characters
-are errors.
-
-```
-"hello"                 => 'hello'
-"a\nb"                  => 'a\nb'
-"a\\b"                  => 'a\b'
+```ts
+const VERSION: string
 ```
 
-### Multi-line strings
+The package version, equal to the `version` in `package.json`.
 
-Consecutive lines beginning with `\\` form one string. Each line
-contributes its text after the `\\`; lines are joined with `\n`. Zig's
-tokenizer lexes the whole run as one token and skips the whitespace
-between the lines, so **blank lines inside the run continue the literal**
-(contributing an empty line) rather than ending it.
+## The tree
 
-```
-\\hello
-\\world                 => 'hello\nworld'
-```
+A parse returns the document as written, with nothing followed or
+checked:
 
-### Character literals
+| In the document | In the tree |
+|---|---|
+| a YAML mapping or JSON object | a plain object, members in document order |
+| a YAML sequence or JSON array | an array |
+| a JSON number, or a YAML scalar that reads as a number | a `number` |
+| `true`, `false` | a `boolean` |
+| `null`, or an empty YAML value | `null` |
+| any other scalar | a `string` |
+| `$ref` and every other member | kept as written |
 
-Single-quoted Zig char literals: a single character, or an escape
-`'\n'` `'\r'` `'\t'` `'\\'` `'\''` `'\"'`, a hex escape `'\xNN'`, or a
-Unicode escape `'\u{...}'` (`'\0'` is not a Zig escape; NUL is `'\x00'`).
-By default the result is a
-one-character string; with `charAsNumber: true` it is the numeric code
-point.
+These hold for both base grammars, with one exception: only the default
+parser reads YAML.
 
-```
-'A'                     => 'A'   (or 65 with charAsNumber)
-'\n'                    => '\n'  (or 10)
-'\u{1F600}'             => '😀'  (or 128512)
-```
+YAML rules that decide a value's type:
 
-### Comments
+| Written | Read as |
+|---|---|
+| `openapi: 3.1` | the number `3.1` |
+| `openapi: 3.1.0` | the string `'3.1.0'` |
+| `swagger: 2.0` | the number `2` |
+| `swagger: '2.0'` | the string `'2.0'` |
+| `$ref: #/a` | `null`: the `#` after a space starts a comment |
+| `$ref: '#/a'` | the string `'#/a'` |
 
-`//` line comments only. They are discarded. `//!` and `///` are Zig
-**doc** comments, which ZON rejects; `////` (four or more slashes) is an
-ordinary comment again.
+## What this release does not do
 
-```
-.{
-  // a comment
-  .name = "x", // trailing comment
-}                       => { name: 'x' }
-```
-
-(Jsonic's `#` hash comments and `/* */` block comments are disabled by
-the plugin.)
-
-## Tokens
-
-The plugin's lexer produces these tokens (as surfaced in the railroad
-diagram legend):
-
-| Token | Source | Meaning |
-|---|---|---|
-| `#OB` | `.{` | start of a struct (map) |
-| `#OS` | `.{` | start of a tuple (list) |
-| `#CB` | `}` | close of struct or tuple |
-| `#CL` | `=` | key/value separator |
-| `#TX` | `.ident`, `.@"..."` | field name (key) or enum literal (value) |
-| `VAL` | (none) | a value: number, string, `true`/`false`/`null`, or `.enum` |
-
-`{`, `[`, and `]` are **not** tokens: they are removed, so a bare `{`
-is a syntax error.
-
-## Grammar group tag
-
-Every grammar alternate the plugin adds carries the group tag `zon`.
-Callers can switch the ZON alts off (restoring plain jsonic) via
-`rule.exclude: 'zon'`:
-
-```typescript
-const j = new Tabnas().use(jsonic).use(Zon).options({
-  rule: { exclude: 'zon' },
-})
-```
+- It does not check that the root is an OpenAPI or Swagger document, or
+  that the version field names a version it supports.
+- It does not resolve `$ref`. The tree holds each reference as written.
 
 ## Errors
 
-A failed parse throws the engine's standard parse error. It carries
-the usual fields: an error `code`, the source location (`row`, `col`,
-`pos`), the offending `src` fragment, and a formatted multi-line
-`message` with a source-context extract. Inputs that are valid jsonic
-but not valid ZON (such as a bare `{` opener) are errors.
+A failed parse throws an error whose `code` names the failure. The codes
+are the engine's:
+
+| Code | Raised when |
+|---|---|
+| `unexpected` | the text has a token the grammar does not allow there: under `strict`, YAML, a comment, or a trailing comma |
+| `unterminated_string` | under `strict`, a string has no closing quote |
+| `invalid_unicode` | under `strict`, a `\u` escape is malformed |
+| `unterminated_comment` | a block comment has no end |
+
+The default parser is lenient: it reads some text that the strict parser
+refuses, and raises fewer of these codes. The message is for people, and
+its wording can change between releases. Test the code.

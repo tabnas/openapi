@@ -6,20 +6,11 @@
 # (node_modules symlinks + a go.work one level up). rs/ takes its tabnas
 # crates by path from sibling checkouts.
 
-.PHONY: all build test clean build-ts build-go build-rs test-ts test-go test-rs corpus \
+.PHONY: all build test clean build-ts build-go build-rs test-ts test-go test-rs \
         clean-ts clean-go clean-rs publish-ts publish-go version-rs tags-go reset \
         prose prose-counts
 
 all: build test
-
-# --- Conformance corpora ---
-# Generated from the pinned ziglang/zig 0.16.0 release; .gitignore'd, never
-# committed. All three runtimes generate them THEMSELVES before grading — the
-# ts/ `pretest` hook, go/'s TestMain and rs/'s tests/zigzon_test.rs — so this
-# target is only for building them by hand. It is deliberately not a prerequisite of `make test`. When a corpus
-# is missing the conformance suites fail; they never skip.
-corpus:
-	bash scripts/fetch-zigzon.sh
 
 build: build-ts build-go build-rs
 
@@ -56,9 +47,9 @@ clean-go:
 # (when gh is available) creates a GitHub release.
 publish-go: test-go
 	@test -n "$(V)" || (echo "Usage: make publish-go V=x.y.z" && exit 1)
-	sed -i.bak 's/^const VERSION = ".*"/const VERSION = "$(V)"/' go/zon.go
-	rm -f go/zon.go.bak
-	git add go/zon.go
+	sed -i.bak 's/^const VERSION = ".*"/const VERSION = "$(V)"/' go/openapi.go
+	rm -f go/openapi.go.bak
+	git add go/openapi.go
 	git commit -m "go: v$(V)"
 	git tag go/v$(V)
 	git push origin main go/v$(V)
@@ -83,7 +74,7 @@ clean-rs:
 # these fails that test.
 #
 # Unlike publish-go it neither commits nor tags, and it publishes nothing:
-# release.yml's crates job publishes tabnas-zon to crates.io from the
+# release.yml's crates job publishes tabnas-openapi to crates.io from the
 # release tag, after crates-release.yml rewrites the manifest's path
 # dependencies as crates.io requirements. Here only the constants need to
 # stay in step.

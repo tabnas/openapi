@@ -1,327 +1,103 @@
-# Reference (Go)
+# Go reference
 
-The complete public surface of the Go `zon` module: exports, the parse
-entry points, the two options, and the exact ZON syntax accepted. For
-a guided introduction see the [tutorial](tutorial.md); for task recipes
-see the [how-to guide](guide.md); for how it works (and how it differs
-from TypeScript) see [concepts](concepts.md).
+The exports of `github.com/tabnas/openapi/go`, package `tabnasopenapi`,
+the tree a parse returns, and the errors it raises. The
+[concepts](concepts.md) page explains the design behind them. `tabnas`
+below is the engine, `github.com/tabnas/parser/go`.
 
-## Module
+## Exports
 
-```bash
-go get github.com/tabnas/zon/go@latest
-```
+### `Make`
 
 ```go
-import tabnaszon "github.com/tabnas/zon/go"
-```
+func Make(opts ...MakeOptions) *tabnas.Tabnas
 
-| | |
-|---|---|
-| Module | `github.com/tabnas/zon/go` |
-| Package | `tabnaszon` |
-| Engine | `github.com/tabnas/parser/go`, imported as `tabnas`, with the base grammar from `github.com/tabnas/jsonic/go` |
-| `VERSION` | exported `const` string of the module version |
-
-## Public API
-
-### `func Parse(src string, opts ...ZonOptions) (any, error)`
-
-Parses a ZON string and returns the resulting value. Convenience
-wrapper around `MakeJsonic(opts...).Parse(src)`.
-
-With **no** options it reuses a single lazily created instance, so
-repeated calls do not rebuild the engine + grammar. The shared instance
-is safe for concurrent use (each parse builds its own context and only
-reads instance state). With options, a dedicated instance is built per
-call, since the configuration differs per call.
-
-```go
-result, err := tabnaszon.Parse(`.{ .a = 1 }`)
-// result: map[string]any{"a": float64(1)}
-```
-
-### `func MakeJsonic(opts ...ZonOptions) *tabnas.Tabnas`
-
-Returns a reusable jsonic engine (`*tabnas.Tabnas`, the type jsonic's
-`Jsonic` aliases) configured for ZON
-parsing. Use this when parsing many strings with the same options:
-build once, call `.Parse()` per input.
-
-```go
-j := tabnaszon.MakeJsonic()
-result, err := j.Parse(`.{ 1, 2, 3 }`)
-// result: []any{float64(1), float64(2), float64(3)}
-```
-
-A plugin-registration failure (a programming error with static inputs)
-panics rather than misbehaving silently.
-
-### `func Zon(j *tabnas.Tabnas, options map[string]any) error`
-
-The raw plugin function. Usually invoked indirectly through
-`j.UseDefaults(tabnaszon.Zon, tabnaszon.Defaults, opts...)` or via `Parse` /
-`MakeJsonic`. It is idempotent: a re-invocation guard
-(`zon-init` decoration) makes re-application during `SetOptions` a
-no-op.
-
-```go
-j := tabnasjsonic.Make()
-j.UseDefaults(tabnaszon.Zon, tabnaszon.Defaults)
-result, err := j.Parse(`.{ .a = 1 }`)
-```
-
-### `var Defaults map[string]any`
-
-The default option map, paired with `Zon` for `UseDefaults`:
-
-```go
-var Defaults = map[string]any{
-    "charAsNumber": false,
-    "enumTag":      "",
+type MakeOptions struct {
+	Strict bool // default false
 }
 ```
 
-### `type ZonOptions struct`
+Returns a new parser with the plugin installed. Only the first
+`MakeOptions` is read.
 
-A typed wrapper over the option map. Fields use pointer / empty-value
-conventions so callers can express "omit" vs "set":
+| `Strict` | Base grammar | Reads |
+|---|---|---|
+| `false` | jsonic, then yaml | YAML, and JSON text |
+| `true` | json | JSON text by RFC 8259 |
 
-```go
-type ZonOptions struct {
-    // When non-nil and true, parses Zig char literals ('x') as numeric
-    // code points. When nil or false (default), they are one-char strings.
-    CharAsNumber *bool
+`Make` panics only if a grammar fails to install, which no input can
+cause. A parser can be reused for any number of parses, including
+concurrent ones.
 
-    // When non-empty, wraps enum literals (.foo used as value) in
-    // map[string]any{<EnumTag>: name} instead of producing bare strings.
-    EnumTag string
-}
-```
-
-## Options
-
-### `CharAsNumber`
-
-- **Type:** `*bool`
-- **Default:** `false` (nil)
-- **Effect:** Controls how Zig character literals (`'x'`, `'\n'`,
-  `'\x41'`, `'\u{1F600}'`) are parsed.
-  - nil or `false`. The literal becomes a one-character `string`. `'A'`
-    → `"A"`.
-  - `true`. The literal becomes its numeric Unicode code point as a
-    `float64`. `'A'` → `float64(65)`, `'\n'` → `float64(10)`,
-    `'\u{1F600}'` → `float64(0x1F600)`.
+### `OpenApi` and `Defaults`
 
 ```go
-charAsNum := true
-tabnaszon.Parse(`'A'`, tabnaszon.ZonOptions{CharAsNumber: &charAsNum}) // float64(65)
+func OpenApi(j *tabnas.Tabnas, opts map[string]any) error
+
+var Defaults = map[string]any{}
 ```
 
-### `EnumTag`
+The plugin, with its option defaults. Install it after the base grammar,
+with `j.UseDefaults(OpenApi, Defaults)`. It takes no options. In this
+release it adds no grammar and changes no parse result.
 
-- **Type:** `string`
-- **Default:** `""`
-- **Effect:** Controls how enum-literal *values* (a bare `.foo` used in
-  value position) are represented.
-  - `""`. The enum literal becomes the bare identifier `string`. `.red`
-    → `"red"`.
-  - a non-empty string `T`. The enum literal is wrapped in a one-key
-    map `map[string]any{T: name}`, so it can be told apart from a plain
-    string. With `EnumTag: "$enum"`, `.red` →
-    `map[string]any{"$enum": "red"}`.
-
-`EnumTag` affects enum literals only as values. A `.field` used as a
-key (before `=`) is always the plain field name.
+### `VERSION`
 
 ```go
-tabnaszon.Parse(`.{ .kind = .red }`, tabnaszon.ZonOptions{EnumTag: "$enum"})
-// map[string]any{"kind": map[string]any{"$enum": "red"}}
+const VERSION = "0.1.0"
 ```
 
-## Value types
+The module version, equal to the TypeScript package's.
 
-`Parse` returns `any`; the concrete Go types are predictable:
+## The tree
 
-| ZON value | Go type |
+`Parse` returns the document as written, with nothing followed or
+checked:
+
+| In the document | In the tree |
 |---|---|
-| Struct literal | `map[string]any` |
-| Tuple / empty literal | `[]any` |
-| String, enum literal, char-as-string | `string` |
-| Number (any base, float, char-as-number) | `float64` |
-| Integer too large for an exact `float64` | `*big.Int` |
-| Boolean | `bool` |
-| Null | `nil` |
-| Tagged enum (`EnumTag` set) | `map[string]any{tag: name}` |
+| a YAML mapping or JSON object | `*tabnas.OrderedMap`, members in document order |
+| a YAML sequence or JSON array | `[]any` |
+| a JSON number, or a YAML scalar that reads as a number | `float64` |
+| `true`, `false` | `bool` |
+| `null`, or an empty YAML value | `nil` |
+| any other scalar | `string` |
+| `$ref` and every other member | kept as written |
 
-## ZON syntax
+An `OrderedMap` holds its member names in `Keys`, in document order, and
+its values in `Vals`; `Get(name)` reads one. `json.Marshal` writes it
+back in document order.
 
-ZON is **not** a superset of JSON. It uses Zig anonymous-struct
-syntax. The plugin disables the bare `{`, `[`, `]` openers and rebinds
-the key/value separator to `=`.
+YAML rules that decide a value's type:
 
-### Structs (maps)
+| Written | Read as |
+|---|---|
+| `openapi: 3.1` | the number `3.1` |
+| `openapi: 3.1.0` | the string `"3.1.0"` |
+| `swagger: 2.0` | the number `2` |
+| `swagger: '2.0'` | the string `"2.0"` |
+| `$ref: #/a` | `nil`: the `#` after a space starts a comment |
+| `$ref: '#/a'` | the string `"#/a"` |
 
-Open with `.{`, contain `.field = value` pairs separated by commas,
-close with `}`. Field names are identifiers
-(`[A-Za-z_][A-Za-z0-9_]*`); the leading dot is stripped from the key. A
-name that is not a legal identifier is written `.@"..."` (any string
-literal, with the same escapes) and a struct may not repeat a name.
+## What this release does not do
 
-```
-.{ .a = 1, .b = 2 }       => map[string]any{"a": 1, "b": 2}
-.{ .a = .{ .b = 1 } }     => map[string]any{"a": map[string]any{"b": 1}}
-.{ .@"a b" = 1 }          => map[string]any{"a b": 1}
-.{ .a = 1, .a = 2 }       => error: duplicate struct field name
-```
-
-### Tuples (lists)
-
-Also open with `.{`, but contain bare values (no `.field =`), separated
-by commas, and close with `}`. Produces a `[]any`.
-
-```
-.{ 1, 2, 3 }              => []any{1, 2, 3}
-.{ .{ 1, 2 }, .{ 3, 4 } } => []any{[]any{1, 2}, []any{3, 4}}
-```
-
-The struct-vs-tuple decision is made at lex time by peeking past `.{`:
-if the next significant token is a field name (`.identifier` or
-`.@"..."`) followed by `=`, it is a struct; otherwise a tuple.
-
-### Empty literal
-
-An empty `.{}` parses as an **empty list** (`[]any{}`).
-
-```
-.{}                       => []any{}
-```
-
-### Trailing commas
-
-Allowed before `}` in both structs and tuples.
-
-```
-.{ .a = 1, }              => map[string]any{"a": 1}
-.{ 1, 2, 3, }             => []any{1, 2, 3}
-```
-
-### Scalars
-
-| Construct | Example | Result |
-|---|---|---|
-| Integer | `42` | `float64(42)` |
-| Float | `3.14` | `float64(3.14)` |
-| Hex | `0x2a` | `float64(42)` |
-| Octal | `0o52` | `float64(42)` |
-| Binary | `0b101010` | `float64(42)` |
-| Hex float | `0x1.8p1` | `float64(3)` |
-| Exponent | `1e5` | `float64(100000)` |
-| Empty fraction | `1.e3`, `0xF.p1` | `float64(1000)`, `float64(30)` |
-| Digit separator | `1_000_000` | `float64(1000000)` |
-| Infinity / NaN | `inf`, `-inf`, `nan` | `math.Inf(1)`, `math.Inf(-1)`, `math.NaN()` |
-| Big integer | `36893488147419103231` | a `*big.Int` |
-| Boolean | `true`, `false` | `true`, `false` |
-| Null | `null` | `nil` |
-| String | `"hello"` | `"hello"` |
-| Enum literal | `.red`, `.@"a b"` | `"red"`, `"a b"` (or tagged map) |
-| Char literal | `'A'` | `"A"` (or `float64(65)`) |
-
-### Numbers are Zig numbers, not relaxed-JSON numbers
-
-The plugin replaces jsonic's number lexer with one that implements Zig's
-literal grammar exactly, so ZON's strictness is preserved:
-
-```
-+1      .5      5.      0123      00      -0
-1__0    1_      _1      0x_2A     0X2A    0O52
-0b12    0o18    1abc    1e        0b1.1   0.1.2
-```
-
-are all **rejected**, as the Zig compiler rejects them. A leading `-` is a
-negation prefix and may be separated by space (`- 1`); `-nan` is not a
-literal. An integer whose exact value does not fit a `float64` is returned
-as a `*big.Int` rather than silently rounded.
-
-### Strings
-
-Double-quoted strings only (single quotes are char literals). The
-escapes are Zig's and no other: `\n`, `\r`, `\t`, `\\`, `\"`, `\'`, a byte
-`\xNN`, and `\u{...}` naming a Unicode scalar value (so a surrogate such
-as `\u{D800}` is an error). A run of `\xNN` escapes is decoded as UTF-8
-once it ends: `"\xe2\x82\xac"` is the euro sign. Unknown escapes, JSON's
-`\uXXXX` among them, and raw control characters are errors.
-
-```
-"a\nb"                    => "a\nb"
-"a\\b"                    => "a\b"
-```
-
-### Multi-line strings
-
-Consecutive lines beginning with `\\` form one string. Each line
-contributes its text after the `\\`; lines join with `\n`. Zig lexes the
-whole run as one token and skips the whitespace between the lines, so
-**blank lines inside the run continue the literal** (contributing an empty
-line) rather than ending it.
-
-```
-\\hello
-\\world                   => "hello\nworld"
-```
-
-### Character literals
-
-Single-quoted Zig char literals: a single character, an escape (`'\n'`,
-`'\r'`, `'\t'`, `'\\'`, `'\''`, `'\"'`), a hex escape `'\xNN'`, or a
-Unicode escape `'\u{...}'`; `'\0'` is not a Zig escape, and NUL is
-`'\x00'`. Default result is a one-character
-string; with `CharAsNumber` set, the numeric code point as `float64`.
-
-### Comments
-
-`//` line comments only; discarded. `//!` and `///` are Zig **doc**
-comments, which ZON rejects; `////` (four or more slashes) is an ordinary
-comment again. (Hash `#` and block `/* */` comments are disabled by the
-plugin.)
-
-```
-.{
-  // a comment
-  .name = "x", // trailing comment
-}                         => map[string]any{"name": "x"}
-```
-
-## Tokens
-
-| Token | Source | Meaning |
-|---|---|---|
-| `#OB` | `.{` | start of a struct (map) |
-| `#OS` | `.{` | start of a tuple (list) |
-| `#CB` | `}` | close of struct or tuple |
-| `#CL` | `=` | key/value separator |
-| `#TX` | `.ident`, `.@"..."` | field name (key) or enum literal (value) |
-| `VAL` | (none) | number, string, `true`/`false`/`null`, or `.enum` |
-
-`{`, `[`, `]` are not tokens, so a bare `{` is a syntax error.
-
-## Grammar group tag
-
-Every grammar alternate the plugin adds carries the group tag `zon`.
-Callers can switch the ZON alts off (restoring plain jsonic) via
-`Options{Rule: &RuleOptions{Exclude: "zon"}}`:
-
-```go
-j := tabnasjsonic.Make()
-j.UseDefaults(tabnaszon.Zon, tabnaszon.Defaults)
-j.SetOptions(tabnasjsonic.Options{Rule: &tabnasjsonic.RuleOptions{Exclude: "zon"}})
-```
+- It does not check that the root is an OpenAPI or Swagger document, or
+  that the version field names a version it supports.
+- It does not resolve `$ref`. The tree holds each reference as written.
 
 ## Errors
 
-`Parse` and `Jsonic.Parse` return an `error` rather than panicking. The
-error is jsonic's parse error, reporting an error code and the source
-location (row, column, position). Inputs that are valid jsonic but not
-valid ZON (such as a bare `{` opener) are errors. See the
-[differences section](concepts.md#differences-from-the-ts-version) for
-the few error-code divergences from TypeScript.
+A failed parse returns a `*tabnas.TabnasError`. `Code` names the
+failure, and `Row` and `Col` give its position, counting from 1. The
+codes are the engine's:
+
+| Code | Returned when |
+|---|---|
+| `unexpected` | the text has a token the grammar does not allow there: under `Strict`, YAML, a comment, or a trailing comma |
+| `unterminated_string` | under `Strict`, a string has no closing quote |
+| `invalid_unicode` | under `Strict`, a `\u` escape is malformed |
+| `unterminated_comment` | a block comment has no end |
+
+The default parser is lenient: it reads some text that the strict parser
+refuses, and returns fewer of these codes. The message is for people,
+and its wording can change between releases. Test the code.

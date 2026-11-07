@@ -1,0 +1,7 @@
+input	expected	opts
+# The error codes the reference pages name. The code is the contract;
+# the message is written for people and is not pinned.
+"abc	ERROR:unterminated_string	{"strict":true}
+{"a":"\u12"}	ERROR:invalid_unicode	{"strict":true}
+{"a":1} // note	ERROR:unexpected	{"strict":true}
+/* x	ERROR:unterminated_comment

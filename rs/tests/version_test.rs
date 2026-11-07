@@ -15,18 +15,18 @@ fn repo_root() -> &'static Path {
 
 #[test]
 fn version_looks_like_a_semver() {
-    let parts: Vec<&str> = tabnas_zon::VERSION.split('.').collect();
+    let parts: Vec<&str> = tabnas_openapi::VERSION.split('.').collect();
     assert_eq!(
         parts.len(),
         3,
         "VERSION is not x.y.z: {}",
-        tabnas_zon::VERSION
+        tabnas_openapi::VERSION
     );
     for part in parts {
         assert!(
             !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()),
             "VERSION segment is not numeric: {}",
-            tabnas_zon::VERSION
+            tabnas_openapi::VERSION
         );
     }
 }
@@ -42,7 +42,7 @@ fn version_matches_cargo_toml() {
         .expect("the manifest declares a version");
     assert_eq!(
         declared,
-        tabnas_zon::VERSION,
+        tabnas_openapi::VERSION,
         "Cargo.toml disagrees with VERSION"
     );
 }
@@ -57,7 +57,7 @@ fn version_matches_package_json() {
         declared["version"]
             .as_str()
             .expect("package.json has a version"),
-        tabnas_zon::VERSION,
+        tabnas_openapi::VERSION,
         "ts/package.json disagrees with VERSION"
     );
 }

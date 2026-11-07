@@ -1,115 +1,116 @@
-# Tutorial: your first ZON parse (Go)
+# Tutorial: read an OpenAPI description in Go
 
-This walks you from nothing to a working parse, then through one option
-and one error. Follow it in order; each step builds on the last. When
-you finish you will have installed the module, parsed a struct and a
-tuple, switched on an option, and handled a parse error.
+An OpenAPI description is a tree of maps and lists. It is written in
+YAML or in JSON. In this tutorial we read one in both forms with the Go
+package and look at what comes back. Every example here also runs as a
+Go example test, so the output shown is the output you get.
 
-For a recipe-style index of individual tasks, see the
-[how-to guide](guide.md). For exhaustive signatures and the full
-syntax, see the [reference](reference.md). For how it all works (and
-how the Go version differs from TypeScript) see
-[concepts](concepts.md).
+You need Go 1.24 or later.
 
-## 1. Install
-
-`zon` is a jsonic plugin. The convenience helpers pull in the jsonic
-engine for you, so a single `go get` is enough:
+## Add the module
 
 ```bash
-go get github.com/tabnas/zon/go@latest
+go get github.com/tabnas/openapi/go
 ```
 
-```go
-import tabnaszon "github.com/tabnas/zon/go"
-```
+The package name is `tabnasopenapi`. The examples import it as `openapi`.
 
-## 2. Parse a struct
+## Make a parser and read YAML
 
-`tabnaszon.Parse` is the one-call entry point. Give it ZON source and it
-returns the parsed value as `any` plus an `error`:
+`Make` builds a parser with everything installed:
 
 ```go
-result, err := tabnaszon.Parse(`.{ .name = "Alice", .age = 30 }`)
-// result: map[string]any{"name": "Alice", "age": float64(30)}
-// err:    nil
-```
+package main
 
-You wrote Zig anonymous-struct syntax (`.{ ... }` to open, `.field`
-for each key, `=` to assign) and got back a `map[string]any`. Note
-that numbers come back as `float64`; that is the only numeric type ZON
-produces.
+import (
+	"encoding/json"
+	"fmt"
 
-## 3. Parse a tuple
+	openapi "github.com/tabnas/openapi/go"
+)
 
-The same `.{ ... }` opener also makes tuples. When the brace is *not*
-immediately followed by `.field =`, the values inside become a slice:
+func main() {
+	parser := openapi.Make()
 
-```go
-result, err := tabnaszon.Parse(`.{ 1, 2, 3 }`)
-// result: []any{float64(1), float64(2), float64(3)}
+	doc, err := parser.Parse("openapi: 3.1.0\ninfo:\n  title: Pets\n  version: \"1\"\npaths: {}")
+	if err != nil {
+		panic(err)
+	}
 
-result, err = tabnaszon.Parse(`.{ "a", "b" }`)
-// result: []any{"a", "b"}
-```
-
-The plugin decides struct-vs-tuple by peeking past the opening brace,
-so you never mark which one you mean; just write it.
-
-## 4. Nest and mix
-
-Structs and tuples nest freely, and a struct can hold both:
-
-```go
-result, err := tabnaszon.Parse(`.{ .xs = .{ 1, 2, 3 }, .y = .{ .z = true } }`)
-// result: map[string]any{
-//   "xs": []any{float64(1), float64(2), float64(3)},
-//   "y":  map[string]any{"z": true},
-// }
-```
-
-This is the shape of a real `build.zig.zon` manifest: named fields,
-some holding nested structs, some holding tuple-style path lists.
-
-## 5. Turn on an option
-
-Options are passed as a `tabnaszon.ZonOptions` value after the source. For
-example, a Zig char literal like `'A'` is a one-character string by
-default; set `CharAsNumber` to get its code point (a `float64`)
-instead:
-
-```go
-charAsNum := true
-result, err := tabnaszon.Parse(`'A'`, tabnaszon.ZonOptions{CharAsNumber: &charAsNum})
-// result: float64(65)
-```
-
-`CharAsNumber` is a `*bool` so you can express "leave it at the
-default" (nil) versus "set it". There are only two options,
-`CharAsNumber` and `EnumTag`; the [reference](reference.md#options)
-lists both.
-
-## 6. Handle an error
-
-ZON is not a superset of JSON. A bare `{` is not a valid opener (the
-plugin removes it on purpose) so parsing one returns an error rather
-than panicking:
-
-```go
-result, err := tabnaszon.Parse(`{ a = 1 }`) // not ZON: bare { is rejected
-// result: nil
-// err:    non-nil parse error
-if err != nil {
-    // handle the syntax error
+	out, _ := json.Marshal(doc)
+	fmt.Println(string(out))
+	// {"openapi":"3.1.0","info":{"title":"Pets","version":"1"},"paths":{}}
 }
 ```
 
-Go never panics on a parse error; always check the returned `error`.
+Build the parser once and keep it. Building the grammar costs more than a
+parse.
 
-## Where to go next
+## Read JSON
 
-- [How-to guide](guide.md). Focused recipes for individual tasks.
-- [Reference](reference.md). The public API, every option, the full
-  ZON syntax accepted.
-- [Concepts](concepts.md). How the plugin reshapes the engine, and
-  how the Go version differs from TypeScript.
+We did not tell the parser which format to expect, and we do not need to.
+The same parser reads JSON:
+
+```go
+doc, err := parser.Parse(`{"openapi":"3.1.0","paths":{}}`)
+// {"openapi":"3.1.0","paths":{}}
+```
+
+JSON text is also YAML, and the yaml grammar reads it to the same tree
+the JSON grammar gives.
+
+## References stay as written
+
+A `$ref` comes back exactly as the document wrote it:
+
+```go
+doc, err := openapi.Make().Parse("parameters:\n  - $ref: '#/components/parameters/Limit'")
+// {"parameters":[{"$ref":"#/components/parameters/Limit"}]}
+```
+
+That is the raw tree: the document as written, nothing followed. The
+reference is quoted because YAML insists. Unquoted, the `#` after a space
+starts a comment, and the value would be empty.
+
+## Keep versions as text
+
+YAML reads `3.1` as a number:
+
+```go
+for _, src := range []string{"openapi: 3.1", "openapi: '3.1'", "openapi: 3.1.0"} {
+	doc, _ := parser.Parse(src)
+	out, _ := json.Marshal(doc)
+	fmt.Println(string(out))
+}
+// {"openapi":3.1}
+// {"openapi":"3.1"}
+// {"openapi":"3.1.0"}
+```
+
+Quote a version to keep it a string. `3.1.0` is not a number, so it stays
+a string either way.
+
+## Insist on JSON
+
+`Strict` reads JSON alone, by RFC 8259, and refuses anything else:
+
+```go
+strict := openapi.Make(openapi.MakeOptions{Strict: true})
+
+_, err := strict.Parse("openapi: 3.1.0")
+var te *tabnas.TabnasError
+if errors.As(err, &te) {
+	fmt.Println(te.Code, te.Row, te.Col)
+}
+// unexpected 1 1
+```
+
+`tabnas` here is the engine, `github.com/tabnas/parser/go`. Every parse
+error is a `*tabnas.TabnasError` with a `Code`, and the code is what to
+test for.
+
+## Where next
+
+The [how-to guide](guide.md) reads a description from a file and installs
+the plugin on a parser you already have. The [reference](reference.md)
+lists every export and the types in the tree.

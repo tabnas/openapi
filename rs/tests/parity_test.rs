@@ -7,13 +7,13 @@
 // SAME files, so the three implementations cannot drift without one of
 // them going red, and neither can the loaders.
 //
-// What is left here is only what is specific to zon: how to build the
-// parser for a row's options.
+// What is left here is only what is specific to openapi: how to build
+// the parser for a row's options.
 
 mod common;
 
+use tabnas_openapi::make_with;
 use tabnas_support::Runner;
-use tabnas_zon::make_with;
 
 use common::{row_options, spec_dir, to_failure, to_value};
 
@@ -22,8 +22,8 @@ use common::{row_options, spec_dir, to_failure, to_value};
 /// any runner, and an empty directory fails rather than passing.
 #[test]
 fn spec() {
-    // A fresh parser per row: the `opts` column is per-case, and plugin
-    // options must not leak from one row into the next.
+    // A fresh parser per row: the `opts` column is per-case, and options
+    // must not leak from one row into the next.
     let runner = Runner::new_with_row(|input, row| {
         let options = row_options(row.named("opts"))?;
         make_with(&options)

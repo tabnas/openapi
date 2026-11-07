@@ -1,6 +1,6 @@
-// Copyright (c) 2025 Richard Rodger and other contributors, MIT License
+// Copyright (c) 2025-2026 Richard Rodger and other contributors, MIT License
 
-package tabnaszon
+package tabnasopenapi
 
 // parity_test.go — cross-runtime conformance, driven by the shared
 // `test/spec/*.tsv` fixtures at the repo root (see ../test/AGENTS.md).
@@ -11,14 +11,13 @@ package tabnaszon
 // run the SAME files — so the implementations cannot drift without one of
 // them going red, and neither can the loaders.
 //
-// What is left here is only what is specific to zon: how to build the
+// What is left here is only what is specific to openapi: how to build the
 // parser for a row's options, and how to flatten a result for comparison.
 
 import (
 	"encoding/json"
 	"testing"
 
-	jsonic "github.com/tabnas/jsonic/go"
 	support "github.com/tabnas/support/go"
 )
 
@@ -33,20 +32,17 @@ func TestSpec(t *testing.T) {
 
 	support.Runner{
 		// A fresh parser per row: the `opts` column is per-case, and
-		// plugin options must not leak from one row into the next.
+		// options must not leak from one row into the next.
 		ParseRow: func(input string, row *support.Row) (any, error) {
-			opts := map[string]any{}
+			var opts struct {
+				Strict bool `json:"strict"`
+			}
 			if raw := row.Named("opts"); "" != raw {
 				if err := json.Unmarshal([]byte(raw), &opts); err != nil {
 					return nil, err
 				}
 			}
-
-			j := jsonic.Make()
-			if err := j.UseDefaults(Zon, Defaults, opts); err != nil {
-				return nil, err
-			}
-			return j.Parse(input)
+			return Make(MakeOptions{Strict: opts.Strict}).Parse(input)
 		},
 
 		// Flatten through JSON so the parser's own containers and numeric

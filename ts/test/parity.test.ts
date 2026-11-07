@@ -9,24 +9,19 @@
 // files — so the implementations cannot drift without one of them going
 // red, and neither can the loaders.
 //
-// What is left here is only what is specific to zon: how to build the
-// parser for a row's options.
+// What is left here is only what is specific to this plugin: how to build
+// the parser for a row's options.
 
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
 import { findSpecDir, makeRunner } from '@tabnas/support'
 
-import { Zon } from '../dist/zon'
+import { make } from '../dist/openapi'
 
 makeRunner({
-  // A fresh Tabnas per row: the `opts` column is per-case, and plugin
-  // options must not leak from one row into the next.
+  // A fresh parser per row: the `opts` column is per-case, and options
+  // must not leak from one row into the next.
   parse: (input, row) => {
     const opts = row.named('opts')
-    return new Tabnas()
-      .use(jsonic)
-      .use(Zon, '' === opts.trim() ? {} : JSON.parse(opts))
-      .parse(input)
+    return make('' === opts.trim() ? {} : JSON.parse(opts)).parse(input)
   },
 })
   // `findSpecDir` walks up from this file — `dist-test/` at runtime — to the
