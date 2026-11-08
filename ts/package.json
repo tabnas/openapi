@@ -1,37 +1,35 @@
 {
-  "name": "@tabnas/zon",
-  "version": "0.5.18",
-  "description": "This plugin allows the [Tabnas](https://github.com/tabnas/parser) JSON parser to support Zig Object Notation (ZON) syntax.",
-  "main": "dist/zon.js",
+  "name": "@tabnas/openapi",
+  "version": "0.1.0",
+  "description": "OpenAPI and Swagger documents, in JSON or YAML, for the Tabnas parser: the document as written, or with its references resolved.",
+  "main": "dist/openapi.js",
   "type": "commonjs",
-  "browser": "zon.min.js",
-  "types": "dist/zon.d.ts",
-  "homepage": "https://github.com/tabnas/zon",
+  "browser": "openapi.min.js",
+  "types": "dist/openapi.d.ts",
+  "homepage": "https://github.com/tabnas/openapi",
   "keywords": [
-    "zon",
-    "zig",
+    "openapi",
+    "swagger",
+    "yaml",
+    "json",
     "tabnas",
-    "parser",
-    "object",
-    "json"
+    "parser"
   ],
   "author": "Richard Rodger (http://richardrodger.com)",
   "repository": {
     "type": "git",
-    "url": "git://github.com/tabnas/zon.git",
+    "url": "git://github.com/tabnas/openapi.git",
     "directory": "ts"
   },
   "scripts": {
-    "corpus": "bash ../scripts/fetch-zigzon.sh",
-    "pretest": "npm run build && npm run corpus",
+    "pretest": "npm run build",
     "test": "node --enable-source-maps --test \"dist-test/*.test.js\" && node --test test/docs.test.js",
     "pretest-some": "npm run build",
     "test-some": "node --enable-source-maps --test-name-pattern=\"$npm_config_pattern\" --test \"dist-test/*.test.js\"",
     "pretest-watch": "npm run build",
-    "test-watch": "node --test --watch dist-test/zon.test.js",
-    "embed": "node embed-grammar.js && node embed-translate.js",
+    "test-watch": "node --test --watch dist-test/openapi.test.js",
     "watch": "tsc --build src test -w",
-    "build": "npm run embed && tsc --build src && tsc --build test",
+    "build": "tsc --build src && tsc --build test",
     "clean": "rm -rf node_modules dist dist-test yarn.lock package-lock.json",
     "reset": "npm run clean && npm i && npm run build && npm test",
     "repo-tag": "REPO_VERSION=`node -e \"console.log(require('./package').version)\"` && echo TAG: ts/v$REPO_VERSION && git commit -a -m v$REPO_VERSION && git push && git tag ts/v$REPO_VERSION && git push origin ts/v$REPO_VERSION;",
@@ -49,15 +47,19 @@
     "LICENSE"
   ],
   "peerDependencies": {
+    "@tabnas/json": ">=0",
     "@tabnas/jsonic": ">=0",
-    "@tabnas/parser": ">=0"
+    "@tabnas/parser": ">=0",
+    "@tabnas/yaml": ">=0"
   },
   "devDependencies": {
     "@tabnas/debug": "*",
+    "@tabnas/json": "*",
     "@tabnas/jsonic": "*",
     "@tabnas/parser": "*",
     "@tabnas/railroad": "*",
     "@tabnas/support": "*",
+    "@tabnas/yaml": "*",
     "@types/node": "26.6.2",
     "typescript": "7.0.2"
   },

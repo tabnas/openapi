@@ -25,7 +25,10 @@
 [Cc]onfig
 [Dd]eps
 [Ee]num
+[Gg]oroutine
+[Gg]oroutines
 [Jj]sonic
+(?:[Jj]son|JSON)
 [Ll]exes
 [Ll]ockfile
 [Ll]ookahead
@@ -40,5 +43,4 @@ npm
 [Tt]abnas
 [Tt]okenizer
 [Uu]ntyped
-Zig
-(?:[Zz]on|ZON)
+(?:[Yy]aml|YAML)

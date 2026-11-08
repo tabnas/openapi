@@ -1,0 +1,36 @@
+1. raw: yaml == json == JSON.parse (as JSON text): true true ; also via jsonic+Yaml on the JSON text: true
+   containers have a null prototype: true ; __proto__ is an own key of components.schemas: true
+2. ops: $ref maps in document: 15 (2 of them data: an x- extension and an example payload); op nodes built at parse time: yaml 12 (missed 1: the block-sequence entry), json 13
+   simplify(/pets 200) = ["$ref","#/components/responses/PetList",{"description":"Overrides the component description"}]
+   simplify(parameters) = [{"$ref":"#/components/parameters/Limit"}] <- yaml: still a map
+   simplify(parameters) = [["$ref","#/components/parameters/Limit",{}]] <- json: an op
+   simplify(ops) yaml == json after lift(): true
+3. resolved yaml == resolved json: true ; JSON.stringify is finite: true ; version: 3.1+
+   /pets 200 (Reference Object: description overrides) = {"description":"Overrides the component description","content":{"application/json":{"schema":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"friends":{"type":"array","items":{"$ref":"#/components/schemas/Pet"}},"owner":{"$ref":"https://example.com/schemas/person.json"},"tag":{"allOf":[{"type":"string"}],"description":"The pet's tag"}}}},"example":{"$ref":"#/components/schemas/Pet","note":"data"}}}}
+   /pets 404 (ref -> ref) = {"description":"Not found"}
+   /pets/{id} 200 (~1 pointer into paths) = {"description":"Overrides the component description","content":{"application/json":{"schema":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"friends":{"type":"array","items":{"$ref":"#/components/schemas/Pet"}},"owner":{"$ref":"https://example.com/schemas/person.json"},"tag":{"allOf":[{"type":"string"}],"description":"The pet's tag"}}}},"example":{"$ref":"#/components/schemas/Pet","note":"data"}}}}
+   parameters[0] = {"name":"limit","in":"query","schema":{"type":"integer"}}
+   Pet.friends.items (cycle: back edge kept) = {"$ref":"#/components/schemas/Pet"}
+   Pet.tag (Schema Object, 3.1: sibling is a conjunction) = {"allOf":[{"type":"string"}],"description":"The pet's tag"}
+   Pet.owner (external, verbatim) = {"$ref":"https://example.com/schemas/person.json"}
+   Derived (site allOf joins the target) = {"allOf":[{"type":"string"},{"maxLength":5}]}
+   Node.properties.child (recursion met top-down) = {"$ref":"#/components/schemas/Node"}
+   Encoded (%2F is a separator) = {"type":"string"}
+   x-vendor (extension: data, verbatim) = {"$ref":"#/components/schemas/Tag","keep":"literal"}
+   PetList example (payload: data, verbatim) = {"$ref":"#/components/schemas/Pet","note":"data"}
+   /pets/{id}/photos (Path Item: adjacent fields merge) = {"get":{"responses":{"200":{"description":"Photos"}}},"summary":"Photos of one pet"}
+   __proto__ survives as an own key: true
+   unresolved = [{"at":"/components/schemas/Pet/properties/owner","ref":"https://example.com/schemas/person.json","why":"external document"}]
+   cuts = [{"at":"/components/schemas/Pet/properties/friends/items","ref":"#/components/schemas/Pet"},{"at":"/components/schemas/Node/properties/child","ref":"#/components/schemas/Node","target":"/components/schemas/Node"}]
+   provenance entries: 13 (one per site, resolved, unresolved and cut alike); sites in document: 13
+   provenance[0..2] = [{"at":"/paths/~1pets/get/parameters/0","ref":"#/components/parameters/Limit","kind":"reference"},{"at":"/components/schemas/Pet/properties/friends/items","ref":"#/components/schemas/Pet","kind":"schema","line":43,"col":43,"cycle":"chain"},{"at":"/components/schemas/Pet/properties/owner","ref":"https://example.com/schemas/person.json","kind":"schema","line":44,"col":17,"unresolved":"external document"}]
+   one target, one object: /pets 200 content === PetList content: true
+   /pets/{id} 200 === /pets 200: true (a pointer ending at a reference site resolves to that site's one result)
+4. 3.0.3: Pet.tag (a Reference Object: siblings ignored) = {"type":"string"}
+   3.0.3: /pets 200 (siblings ignored too) = "A page of pets"
+   swagger 2 (unquoted 2.0 reads as the number 2): version = "2.0" ; Derived =
+    {"type":"string"}
+5. yaml "%YAML 1.2"            -> resolved {"a":1,"b":1} ; trigger fired 1 time(s)
+5. yaml "a: { $ref: \"#/b\" }" -> resolved {"a":1,"b":1} ; trigger fired 1 time(s)
+5. yaml "---"                  -> resolved {"a":1,"b":1} ; trigger fired 1 time(s)
+6. evaluation(root) leaves ops inside maps: true ; reduces a LIST of ops: ["X"]

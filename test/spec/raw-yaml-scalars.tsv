@@ -1,0 +1,27 @@
+input	expected	opts
+# What the published yaml grammar makes of plain scalars an OpenAPI
+# description meets. Several follow YAML 1.1 rather than 1.2 (yes, no,
+# on, off, the underscore in 1_000); they are pinned as they are until
+# the yaml grammar offers the 1.2 rules, so a change shows here.
+a: yes	{"a":true}
+a: no	{"a":false}
+a: on	{"a":true}
+a: off	{"a":false}
+a: Yes	{"a":true}
+a: y	{"a":"y"}
+a: true	{"a":true}
+a: True	{"a":true}
+a: TRUE	{"a":true}
+a: ~	{"a":null}
+a: null	{"a":null}
+a: Null	{"a":null}
+a:	{"a":null}
+a: 0x1F	{"a":31}
+a: 0o17	{"a":15}
+a: 017	{"a":17}
+a: 1_000	{"a":1000}
+a: +1	{"a":1}
+a: .5	{"a":0.5}
+a: 1.	{"a":1}
+a: 2024-01-01	{"a":"2024-01-01"}
+a: 12:30	{"a":"12:30"}

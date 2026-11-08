@@ -1,171 +1,120 @@
-# How-to guide (Go)
+# Go how-to guide
 
-Short, task-focused recipes. Each is self-contained and assumes you
-have the module installed (see the [tutorial](tutorial.md) for the
-basics). For the full API, every option, and the complete syntax,
-follow the links into the [reference](reference.md).
+Short recipes for tasks you meet with the Go package. Each assumes you
+have the module; the [tutorial](tutorial.md) covers that, and the
+[reference](reference.md) has the details each recipe skips. The
+examples import the package as `openapi` and the engine,
+`github.com/tabnas/parser/go`, as `tabnas`.
 
-```go
-import tabnaszon "github.com/tabnas/zon/go"
-```
+## Read a description from a file
 
-## Parse a single string
-
-`tabnaszon.Parse` is the simplest entry point: pass source, get a value and
-an error:
+Read the file and parse its text. The format does not matter: `Parse`
+reads YAML and JSON.
 
 ```go
-result, err := tabnaszon.Parse(`.{ .a = 1, .b = 2 }`)
-// result: map[string]any{"a": float64(1), "b": float64(2)}
-```
-
-The no-options path reuses a single cached parser instance internally,
-so repeated `tabnaszon.Parse(src)` calls do not rebuild the engine each time.
-It is safe for concurrent use.
-
-## Parse a realistic `build.zig.zon`
-
-A ZON manifest mixes named struct fields with tuple-style `paths`
-lists and allows trailing commas and `//` line comments:
-
-```go
-src := `.{
-    .name = "example",
-    .version = "0.0.1",
-    .minimum_zig_version = "0.14.0",
-    .dependencies = .{
-        .foo = .{
-            .url = "https://example.com/foo.tar.gz",
-            .hash = "1220deadbeef",
-        },
-    },
-    .paths = .{
-        "build.zig",
-        "src",
-    },
-}`
-
-result, err := tabnaszon.Parse(src)
-// result: map[string]any{
-//   "name":                "example",
-//   "version":             "0.0.1",
-//   "minimum_zig_version":  "0.14.0",
-//   "dependencies": map[string]any{
-//     "foo": map[string]any{
-//       "url": "https://example.com/foo.tar.gz", "hash": "1220deadbeef",
-//     },
-//   },
-//   "paths": []any{"build.zig", "src"},
-// }
-```
-
-## Parse numbers in every ZON base
-
-Numbers accept decimal, hex, octal, binary, floats, and `_` digit
-separators. Every number is a `float64`:
-
-```go
-tabnaszon.Parse("0x2a")      // float64(42)
-tabnaszon.Parse("0o52")      // float64(42)
-tabnaszon.Parse("0b101010")  // float64(42)
-tabnaszon.Parse("1_000_000") // float64(1000000)
-tabnaszon.Parse("3.14")      // float64(3.14)
-```
-
-## Parse character literals as code points
-
-By default Zig char literals (`'A'`, `'\n'`, `'\u{1F600}'`) parse as
-one-character strings. Set `CharAsNumber` to receive numeric code
-points (as `float64`) instead:
-
-```go
-charAsNum := true
-result, err := tabnaszon.Parse(`'A'`, tabnaszon.ZonOptions{CharAsNumber: &charAsNum})
-// result: float64(65)
-```
-
-## Tag enum literals to tell them apart from strings
-
-Without options, an enum-literal value like `.red` becomes the plain
-string `"red"`, indistinguishable from `"red"` in the parsed tree.
-Set `EnumTag` to wrap each enum value in a one-key map so you can tell
-which was which:
-
-```go
-result, err := tabnaszon.Parse(
-    `.{ .kind = .red, .label = "red" }`,
-    tabnaszon.ZonOptions{EnumTag: "$enum"},
-)
-// result: map[string]any{
-//   "kind":  map[string]any{"$enum": "red"},
-//   "label": "red",
-// }
-```
-
-## Read multi-line Zig strings
-
-Consecutive lines prefixed with `\\` become a single string, joined
-with `\n` (the `\\` prefix is stripped from each line):
-
-```go
-src := ".{\n" +
-    "    .description =\n" +
-    "        \\\\first line\n" +
-    "        \\\\second line\n" +
-    "    ,\n" +
-    "}"
-
-result, err := tabnaszon.Parse(src)
-// result: map[string]any{"description": "first line\nsecond line"}
-```
-
-## Reuse a parser for many inputs (with options)
-
-`tabnaszon.Parse(src, opts)` builds a dedicated instance per call when you
-pass options, since the configuration differs per call. For a hot loop
-with fixed options, build one instance with `MakeJsonic` and reuse it:
-
-```go
-j := tabnaszon.MakeJsonic(tabnaszon.ZonOptions{EnumTag: "$enum"})
-for _, src := range inputs {
-    result, err := j.Parse(src)
-    _ = result
-    _ = err
-}
-```
-
-(With *no* options, plain `tabnaszon.Parse(src)` already reuses a cached
-instance, so you do not need `MakeJsonic` for that case.)
-
-## Handle a parse error
-
-ZON deliberately rejects non-ZON input, a bare `{` opener for
-instance. The parse never panics; it returns an `error`:
-
-```go
-result, err := tabnaszon.Parse(`{ a = 1 }`) // not ZON: bare { is rejected
+src, err := os.ReadFile("openapi.yaml")
 if err != nil {
-    // handle the syntax error; result is nil
+	return err
+}
+doc, err := openapi.Parse(string(src))
+```
+
+`Parse` is safe to call from several goroutines at once.
+
+## Accept strict JSON only
+
+Pass `Strict` when a description must be JSON by RFC 8259, with no
+comments, no trailing commas, and no YAML. It also refuses an unknown
+version and a member name given twice in one map:
+
+```go
+doc, err := openapi.Parse(`{"openapi":"3.1.0","paths":{}}`, openapi.ParseOptions{Strict: true})
+```
+
+Without `Strict`, `{"paths":{},}` is read, any version is accepted, and
+a repeated name keeps its last value.
+
+## Find out which version a description claims
+
+`Version` reads the root's `openapi` or `swagger` member:
+
+```go
+switch openapi.Version(doc).Version {
+case "3.1", "3.2":
+	// JSON Schema 2020-12 schemas
+case "3.0", "2.0":
+	// the older schema dialects
+default:
+	// "unknown": no such member, or a version this package does not read
 }
 ```
 
-## Re-enable strict JSON while the plugin is loaded
+Branch on `Version`, not on the raw member: YAML may have read an
+unquoted `3.1` as a number.
 
-Every grammar alternate the plugin adds carries the group tag `zon`.
-To switch those alts off (restoring the plain jsonic grammar while
-the plugin stays registered) exclude that tag through the underlying
-jsonic instance:
+## Use a parser of your own
+
+`Parse` keeps its own parsers. To use one you built, pass it as
+`Instance`; it must have the plugin installed:
 
 ```go
-import (
-    tabnasjsonic "github.com/tabnas/jsonic/go"
-    tabnaszon "github.com/tabnas/zon/go"
-)
-
-j := tabnasjsonic.Make()
-j.UseDefaults(tabnaszon.Zon, tabnaszon.Defaults)
-j.SetOptions(tabnasjsonic.Options{Rule: &tabnasjsonic.RuleOptions{Exclude: "zon"}})
+parser := yaml.MakeJsonic() // github.com/tabnas/yaml/go
+if err := parser.UseDefaults(openapi.OpenApi, openapi.Defaults); err != nil {
+	return err
+}
+doc, err := openapi.Parse("paths:\n  /pets: {}", openapi.ParseOptions{Instance: parser})
+// {"paths":{"/pets":{}}}
 ```
 
-This is rarely useful, since you would normally not load the plugin at
-all, but it is the supported way to peel the ZON layer back off.
+`openapi.Make()` builds the same parser in one call. A parser runs one
+parse at a time: the yaml grammar keeps the state of a parse on the
+parser. Share one across goroutines only behind a lock, or keep one per
+goroutine.
+
+## Read JSON through the grammar only
+
+JSON text that opens with `{` is read with `encoding/json` first. Pass
+`FastOff` to have the grammar read it, which is slower and gives the same
+tree:
+
+```go
+doc, err := openapi.Parse(`{"openapi":"3.1.0"}`, openapi.ParseOptions{Fast: openapi.FastOff})
+```
+
+## Tell parse errors apart
+
+A failed parse returns a `*tabnas.TabnasError`. Test its `Code`, not the
+message: the message is written for people and can change wording.
+
+```go
+_, err := openapi.Parse(text)
+var te *tabnas.TabnasError
+if errors.As(err, &te) && "openapi_root" == te.Code {
+	// te.Row and te.Col say where, counting from 1.
+}
+```
+
+The [reference](reference.md#errors) lists the codes.
+
+## Read values out of the tree
+
+A mapping is a `*tabnas.OrderedMap`. Look members up with `Get`, and
+walk them in document order with `Keys`:
+
+```go
+root := doc.(*tabnas.OrderedMap)
+info, _ := root.Get("info")
+title, _ := info.(*tabnas.OrderedMap).Get("title")
+for _, name := range root.Keys {
+	fmt.Println(name)
+}
+```
+
+`json.Marshal` writes a tree back as JSON, in document order.
+
+## Keep a value YAML would change
+
+YAML gives some unquoted values a type: `3.1` is a number, `true` a
+Boolean, `null` nothing at all. Quote a value that must stay text:
+`version: '3.1'`. The same goes for a `$ref`. Its value starts with `#`,
+and an unquoted `#` after a space starts a comment.

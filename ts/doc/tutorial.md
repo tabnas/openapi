@@ -1,130 +1,143 @@
-# Tutorial: your first ZON parse
+# Tutorial: read an OpenAPI description
 
-This walks you from nothing to a working parse, then through one
-option and one error. Follow it in order; each step builds on the
-last. When you finish you will have installed the plugin, parsed a
-struct and a tuple, switched on an option, and handled a parse error.
+An OpenAPI description is a tree of maps and lists. It is written in
+YAML or in JSON. In this tutorial we read one in both forms and look
+at what comes back. It takes about ten minutes, most of it reading.
 
-For a recipe-style index of individual tasks, see the
-[how-to guide](guide.md). For exhaustive signatures and the full
-syntax, see the [reference](reference.md). For how it all works, see
-[concepts](concepts.md).
+You need Node.js 24 or later.
 
-## 1. Install
+## Install the package
 
-`@tabnas/zon` is a grammar plugin: it has no parser of its own. It runs
-on the Tabnas engine, with the relaxed-JSON grammar from
-`@tabnas/jsonic` underneath. Install all three:
+Install it with the parser and the three grammars it composes:
 
 ```bash
-npm install @tabnas/parser @tabnas/jsonic @tabnas/zon
+npm install @tabnas/openapi @tabnas/parser @tabnas/jsonic @tabnas/yaml @tabnas/json
 ```
 
-`@tabnas/parser` (>= 2) and `@tabnas/jsonic` (>= 2) are peer
-dependencies.
+The last four are peer dependencies, so your project decides their
+versions.
 
-## 2. Build a parser
+## Read YAML
 
-Create a Tabnas engine, layer the jsonic grammar onto it, then layer
-the ZON plugin on top. The result is a reusable parser instance:
+`parse` reads a description and returns its tree:
 
 ```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+const { parse } = require('@tabnas/openapi')
 
-const j = new Tabnas().use(jsonic).use(Zon)
+const doc = parse(`
+openapi: 3.1.0
+info:
+  title: Pets
+  version: "1"
+paths:
+  /pets:
+    get:
+      responses:
+        '200':
+          description: A list of pets
+`)
 
-j.parse('.{ .name = "Alice", .age = 30 }') // => { name: 'Alice', age: 30 }
+doc.info.title // => 'Pets'
+doc.paths['/pets'].get.responses['200'].description // => 'A list of pets'
 ```
 
-You wrote Zig anonymous-struct syntax (`.{ ... }` to open, `.field`
-for each key, `=` to assign) and got back a plain object. That is the
-point: the plugin teaches the engine to read ZON.
+Each YAML mapping becomes an object and each sequence an array. The
+version is quoted, and the section after next shows why.
 
-## 3. Parse a tuple
+## Read JSON
 
-The same `.{ ... }` opener also makes tuples. When the brace is *not*
-immediately followed by `.field =`, the values inside become an array:
+We did not tell `parse` which format to expect, and we do not need to:
 
 ```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+const { parse } = require('@tabnas/openapi')
 
-const j = new Tabnas().use(jsonic).use(Zon)
+const doc = parse(
+  '{"openapi":"3.1.0","info":{"title":"Pets","version":"1"},"paths":{}}')
 
-j.parse('.{ 1, 2, 3 }')      // => [1, 2, 3]
-j.parse('.{ "a", "b" }')     // => ['a', 'b']
+doc.info // => { title: 'Pets', version: '1' }
 ```
 
-The plugin decides struct-vs-tuple by peeking past the opening brace,
-so you never have to mark which one you mean; just write it.
+JSON text is also YAML, and the yaml grammar reads it to the same tree
+the JSON grammar gives. JSON text that opens with `{` takes a fast path
+through `JSON.parse`, and comes out the same.
 
-## 4. Nest and mix
+## References stay as written
 
-Structs and tuples nest freely, and a struct can hold both:
+A `$ref` comes back exactly as the document wrote it:
 
 ```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+const { parse } = require('@tabnas/openapi')
 
-const j = new Tabnas().use(jsonic).use(Zon)
+const doc = parse(`
+parameters:
+  - $ref: '#/components/parameters/Limit'
+`)
 
-j.parse('.{ .xs = .{ 1, 2, 3 }, .y = .{ .z = true } }') // => { xs: [1, 2, 3], y: { z: true } }
+doc.parameters // => [{ $ref: '#/components/parameters/Limit' }]
 ```
 
-This is the shape of a real `build.zig.zon` manifest: named fields,
-some holding nested structs, some holding tuple-style path lists.
+That is the raw tree: the document as written, nothing followed. The
+reference is quoted for a reason YAML imposes. Unquoted, the `#` after a
+space starts a comment, and the value would be empty.
 
-## 5. Turn on an option
+## Keep versions as text
 
-The plugin is configured through its second `use()` argument. For
-example, a Zig char literal like `'A'` is a one-character string by
-default; set `charAsNumber: true` to get its code point instead:
+YAML reads `3.1` as a number. Quote a version to keep it a string:
 
 ```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+const { parse, version } = require('@tabnas/openapi')
 
-const j = new Tabnas().use(jsonic).use(Zon, { charAsNumber: true })
-
-j.parse("'A'") // => 65
+parse('openapi: 3.1') // => { openapi: 3.1 }
+parse("openapi: '3.1'") // => { openapi: '3.1' }
+version(parse('openapi: 3.1.0')).version // => '3.1'
 ```
 
-There are only two options, `charAsNumber` and `enumTag`; the
-[reference](reference.md#options) lists both with their defaults.
+`version` reads the version a description names. It reads a string and
+a number alike, so both of the first two read as `'3.1'`.
 
-## 6. Catch an error
+## What parse refuses
 
-ZON is not a superset of JSON. A bare `{` is not a valid opener (the
-plugin removes it on purpose) so parsing one throws:
+A description is one document with a map at its root. `parse` refuses
+anything else, with an error whose `code` says why:
 
 ```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+const { parse } = require('@tabnas/openapi')
 
-const j = new Tabnas().use(jsonic).use(Zon)
-
-let threw = false
-try {
-  j.parse('{ a = 1 }') // not ZON: bare { is rejected
-} catch (e) {
-  threw = true
+function codeOf(text) {
+  try {
+    parse(text)
+  } catch (err) {
+    return err.code
+  }
 }
-threw // => true
+
+codeOf('- a list\n- of things') // => 'openapi_root'
+codeOf('openapi: 3.1.0\n---\nopenapi: 3.0.0') // => 'openapi_stream'
 ```
 
-The thrown error is the engine's standard parse error, with a code,
-a source location, and a formatted message you can show a user.
+The code is what to test for. The message is written for people.
 
-## Where to go next
+## Insist on JSON
 
-- [How-to guide](guide.md). Focused recipes for individual tasks.
-- [Reference](reference.md). The public API, every option, the full
-  ZON syntax accepted.
-- [Concepts](concepts.md). How the plugin reshapes the engine, and
-  why.
+`strict` reads JSON alone, by RFC 8259. It also requires a version this
+package reads, and each member name once per map:
+
+```js
+const { parse } = require('@tabnas/openapi')
+
+parse('{"openapi":"3.1.0"}', { strict: true }) // => { openapi: '3.1.0' }
+
+let code
+try {
+  parse('openapi: 3.1.0', { strict: true })
+} catch (err) {
+  code = err.code
+}
+code // => 'unexpected'
+```
+
+## Where next
+
+The [how-to guide](guide.md) reads a description from a file, checks its
+version and keeps a parser for reuse. The [reference](reference.md)
+lists every export.

@@ -1,0 +1,13 @@
+start rule: yaml = stream | json = val
+compact    yaml-grammar: same as JSON.parse | json-grammar: same as JSON.parse
+two-space  yaml-grammar: same as JSON.parse | json-grammar: same as JSON.parse
+tabs       yaml-grammar: same as JSON.parse | json-grammar: same as JSON.parse
+
+YAML-only or non-JSON text, which a strict JSON grammar must reject:
+"{openapi: 3.2.0, paths: {}}"      yaml-grammar: {"openapi":"3.2.0","paths":{}}       json-grammar: ERROR unexpected
+"{\"a\": 1,}"                      yaml-grammar: {"a":1}                              json-grammar: ERROR unexpected
+"{\"a\": \"b\", \"a\": \"c\"}"     yaml-grammar: {"a":"c"}                            json-grammar: {"a":"c"}
+"openapi: 3.2.0\n"                 yaml-grammar: {"openapi":"3.2.0"}                  json-grammar: ERROR unexpected
+"{\"a\":\t1}"                      yaml-grammar: {"a":1}                              json-grammar: {"a":1}
+"{\"a\": \"line1\\nline2\"}"       yaml-grammar: {"a":"line1\nline2"}                 json-grammar: {"a":"line1\nline2"}
+"[1, 2]\n---\n[3]\n"               yaml-grammar: [[1,2],[3]]                          json-grammar: ERROR unexpected

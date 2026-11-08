@@ -1,0 +1,29 @@
+fold: 6 ms; version 3.2; raw unchanged: true; serialises: true
+parameters[0] (block-sequence entry, by shape) = {"name":"limit","in":"query","schema":{"type":"integer"}}
+/pets 200 (3.2 Response: summary and description override) = {"summary":"Overrides the component summary","description":"Overrides the component description"}
+/pets 404 (ref -> ref) = {"description":"Not found"}
+/pets/{id} 200 is /pets 200's one result: true
+/pets/{id}/photos (Path Item merge) = {"get":{"responses":{"200":{"description":"Photos"}}},"summary":"Photos of one pet"}
+requestBody schema (target under a $id, reached first: its own base) = {"$id":"https://schemas.example.com/v1/owner.json","type":"string"}
+Pet.tag (3.1+ Schema Object conjunction) = {"allOf":[{"$id":"https://schemas.example.com/v1/tag.json","type":"string"}],"description":"The pet's tag"}
+Pet.sibling (../v1/owner.json, dot segments removed) = {"$id":"https://schemas.example.com/v1/owner.json","type":"string"}
+Pet.name (#name anchor) = {"$anchor":"name","type":"string"}
+Pet.example (a property named example is a schema) = {"$anchor":"name","type":"string"}
+Pet.friends.items (cycle through the Pet schema: cut) = {"$ref":"#"}
+Pet.any ($dynamicRef, left as written) = {"$dynamicRef":"#meta"}
+Pet.owner (another document, through load) = {"type":"object","properties":{"name":{"type":"string"}}}
+Encoded (%2F) = {"$id":"https://schemas.example.com/v1/tag.json","type":"string"}
+Ids.properties (a property named $ref is a name) = {"$ref":{"type":"string"},"next":{"$id":"https://schemas.example.com/v1/tag.json","type":"string"}}
+Odd (a $ref that is not a string: the map, folded) = {"$ref":42,"description":"a reference that is not a string"}
+x-vendor (data) = {"$ref":"#/components/schemas/Tag","keep":"literal"}
+example (data) = {"$ref":"#/components/schemas/Pet","note":"data"}
+__proto__ kept: true
+fold report = {"cycles":[{"doc":"https://api.example.com/v1/openapi.yaml","at":"/components/schemas/Pet/properties/friends/items","targetDoc":"https://api.example.com/v1/openapi.yaml","target":"/components/schemas/Pet"}],"unresolved":[{"doc":"https://api.example.com/v1/openapi.yaml","at":"/components/schemas/Gone","targetDoc":"https://example.com/missing.json","target":""}],"dynamic":[{"doc":"https://api.example.com/v1/openapi.yaml","at":"/components/schemas/Pet/properties/any","src":"$dynamicRef"}]}
+E6 unresolved = [{"at":"components/schemas/Odd","ref":42,"why":"not a string"},{"at":"components/schemas/Lost","ref":"#nope","why":"no such anchor"},{"at":"components/schemas/Bent","ref":"#foo/bar","why":"not a JSON Pointer"}]
+documents loaded = ["https://example.com/schemas/person.json","https://example.com/missing.json"]
+$ref maps left as data: 3 ; provenance entries: 18 ; with a position: 18
+first provenance entry = {"at":["paths","/pets","get","parameters",0],"ref":"#/components/parameters/Limit","kind":"object","line":8,"col":11}
+as 3.0.3: Pet.tag (tag.json against the document URI) = {"$ref":"tag.json","description":"The pet's tag"}
+as 3.0.3: unresolved = ["https://api.example.com/v1/tag.json#","https://api.example.com/v1/owner.json#","https://api.example.com/v1/openapi.yaml#/$defs/Name","https://api.example.com/v1/owner.json#","https://schemas.example.com/v1/pet.json#/$defs/Owner","https://example.com/missing.json#"]
+2.0 Path Item merge = {"post":{"responses":{"200":{"description":"ok"}}},"get":{"responses":{"200":{"description":"ok"}}}}
+spec3.json via expr.fold on JSON.parse output: 154 ms in this container; version 3.0; sites 3673; $ref maps left as data 389; cycles 125; unresolved 0; dynamic 0; documents loaded 0

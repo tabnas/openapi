@@ -1,67 +1,46 @@
-# @tabnas/zon
+# @tabnas/openapi
 
-A [Tabnas](https://github.com/tabnas/parser) grammar plugin that parses
-[Zig Object Notation (ZON)](https://ziglang.org/documentation/master/#ZON)
-text into objects, arrays, and scalar values. ZON is the anonymous-struct
-data format used for Zig `build.zig.zon` manifests.
+A [Tabnas](https://github.com/tabnas/parser) plugin that reads
+[OpenAPI](https://spec.openapis.org/oas/latest.html) and Swagger
+descriptions, in YAML or in JSON, with one parser for both.
+
+This release returns the raw tree: the document as written, with every
+`$ref` kept as a reference, after checking that it is one description
+with a map at its root. It does not resolve references yet.
 
 ## Install
 
 ```bash
-npm install @tabnas/parser @tabnas/jsonic @tabnas/zon
+npm install @tabnas/openapi @tabnas/parser @tabnas/jsonic @tabnas/yaml @tabnas/json
 ```
 
-Requires `@tabnas/parser` >= 2 and `@tabnas/jsonic` >= 2 as peer
-dependencies.
+`@tabnas/parser`, `@tabnas/jsonic`, `@tabnas/yaml` and `@tabnas/json` are
+peer dependencies. Node.js 24 or later.
 
 ## One example
 
-The plugin layers onto a Tabnas engine that already has the jsonic
-grammar:
-
 ```js
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
-import { Zon } from '@tabnas/zon'
+const { parse, version } = require('@tabnas/openapi')
 
-const j = new Tabnas().use(jsonic).use(Zon)
-
-j.parse('.{ .name = "Alice", .age = 30 }') // => { name: 'Alice', age: 30 }
-j.parse('.{ 1, 2, 3 }')                     // => [1, 2, 3]
+parse('openapi: 3.1.0\npaths: {}') // => { openapi: '3.1.0', paths: {} }
+parse('{"openapi":"3.1.0","paths":{}}') // => { openapi: '3.1.0', paths: {} }
+parse("$ref: '#/components/schemas/Pet'") // => { $ref: '#/components/schemas/Pet' }
+version(parse('swagger: "2.0"')).version // => '2.0'
 ```
 
-Build the instance once and reuse it: constructing the grammar is the
-expensive part.
+YAML and JSON, one function, and the reference kept as written.
+`parse(text, { strict: true })` reads JSON alone, by RFC 8259, and
+requires a known version.
 
 ## Documentation
 
-Full documentation follows the [Diátaxis](https://diataxis.fr)
-framework:
-
-- [Tutorial](doc/tutorial.md). A guided first parse, start to finish.
-- [How-to guide](doc/guide.md). Short recipes for individual tasks.
-- [Reference](doc/reference.md). The public API, every option, and the
-  complete ZON syntax accepted.
-- [Concepts](doc/concepts.md). How the plugin reshapes the engine, and
-  why.
-
-For the Go port, see [`../go/README.md`](../go/README.md).
-
-## Grammar diagram
-
-The grammar is defined in the top-level
-[`zon-grammar.jsonic`](../zon-grammar.jsonic) and embedded into this
-implementation (and the Go port) by [`embed-grammar.js`](embed-grammar.js)
-during the build.
-
-The installed grammar as a railroad/syntax diagram, generated with
-[`@tabnas/railroad`](https://github.com/tabnas/railroad):
-
-![zon grammar railroad diagram](doc/grammar.svg)
-
-A vertical ASCII version is in [`doc/grammar.txt`](doc/grammar.txt).
+- [Tutorial](doc/tutorial.md): read a description in both formats.
+- [How-to guide](doc/guide.md): files, strict JSON, versions, your own
+  parser, error codes.
+- [Reference](doc/reference.md): every export, the tree, the errors.
+- [Concepts](doc/concepts.md): why one parser, and why the raw tree
+  comes first.
 
 ## License
 
-Copyright (c) 2025 Richard Rodger and other contributors,
-[MIT License](LICENSE).
+MIT.

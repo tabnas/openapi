@@ -1,0 +1,122 @@
+
+## (a) runtime expressions (OAS 4.20.3 ABNF)
+ok   "$method"
+      -> "$method"
+ok   "$url"
+      -> "$url"
+ok   "$statusCode"
+      -> "$statusCode"
+ok   "$request.path.id"
+      -> [".",[".","$request","path"],"id"]
+ok   "$request.header.accept"
+      -> [".",[".","$request","header"],"accept"]
+ok   "$response.header.X-Rate-Limit"
+      -> [".",[".","$response","header"],"X-Rate-Limit"]
+ok   "$request.body#/user/uuid"
+      -> ["#",[".","$request","body"],["/",["/","user"],"uuid"]]
+ok   "$request.body#/successUrls/1"
+      -> ["#",[".","$request","body"],["/",["/","successUrls"],"1"]]
+ok   "$request.body"
+      -> [".","$request","body"]
+ok   "$request.body#"
+      -> ["#",[".","$request","body"]]
+ok   "{$request.body#/callbackUrl}/data"
+      -> ["/",["{",["#",[".","$request","body"],["/","callbackUrl"]]],"data"]
+ok   "{$request.query.queryUrl}"
+      -> ["{",[".",[".","$request","query"],"queryUrl"]]
+ok   "http://notificationServer.com?transactionId={$request.body#/id}&email={$request.body#/email}"
+      -> ERROR unexpected
+ok   "$request.body#/a~1b"
+      -> ["#",[".","$request","body"],["/","a~1b"]]
+FAIL "$request.query.a.b"
+      -> [".",[".",[".","$request","query"],"a"],"b"]
+      want [".",[".","$request","query"],"a.b"]
+FAIL "$request.header.X.Y"
+      -> [".",[".",[".","$request","header"],"X"],"Y"]
+      want [".",[".","$request","header"],"X.Y"]
+FAIL "$request.header.X#Y"
+      -> ["#",[".",[".","$request","header"],"X"],"Y"]
+      want [".",[".","$request","header"],"X#Y"]
+FAIL "$request.body#/user.name"
+      -> ["#",[".","$request","body"],["/",[".","user","name"]]]
+      want ["#",[".","$request","body"],["/","user.name"]]
+ok   "$request.body#/a,b"
+      -> ["#",[".","$request","body"],["/","a,b"]]
+FAIL "$request.body#/a//b"
+      -> ["#",[".","$request","body"],["/",["/","a"],["/","b"]]]
+      want ["#",[".","$request","body"],["/",["/",["/","a"],""],"b"]]
+ok   "$request.query."
+      -> [".",[".","$request","query"]]
+ok   "$response.body#/status"
+      -> ["#",[".","$response","body"],["/","status"]]
+ok   "$response.header.Server"
+      -> [".",[".","$response","header"],"Server"]
+ok   "$request.path.eventType"
+      -> [".",[".","$request","path"],"eventType"]
+ok   "$request.header.content-type"
+      -> [".",[".","$request","header"],"content-type"]
+ok   "$request.body#/failedUrl"
+      -> ["#",[".","$request","body"],["/","failedUrl"]]
+ok   "$response.header.Location"
+      -> [".",[".","$response","header"],"Location"]
+ok   "$response.body#/uuid"
+      -> ["#",[".","$response","body"],["/","uuid"]]
+ok   "$response.body#/username"
+      -> ["#",[".","$response","body"],["/","username"]]
+ok   "$request.body#/url"
+      -> ["#",[".","$request","body"],["/","url"]]
+25/30 as expected
+
+## (b) $ref URIs (RFC 3986 + RFC 6901 fragment)
+ok   "#/components/schemas/Pet"
+      -> ["#",["/",["/",["/","components"],"schemas"],"Pet"]]
+ok   "Pet.yaml"
+      -> "Pet.yaml"
+ok   "definitions.yaml#/Pet"
+      -> ["#","definitions.yaml",["/","Pet"]]
+ok   "./common.yaml#/components/schemas/Error"
+      -> ["#",["/",".","common.yaml"],["/",["/",["/","components"],"schemas"],"Error"]]
+ok   "../schemas/pet.json"
+      -> ["/",["/","..","schemas"],"pet.json"]
+ok   "#/paths/~12.0~1repositories~1%7Busername%7D/get"
+      -> ["#",["/",["/",["/","paths"],"~12.0~1repositories~1%7Busername%7D"],"get"]]
+ok   "#/components/schemas/Foo%20Bar"
+      -> ["#",["/",["/",["/","components"],"schemas"],"Foo%20Bar"]]
+ok   "#/components/schemas/1"
+      -> ["#",["/",["/",["/","components"],"schemas"],"1"]]
+ok   "#/components/schemas/true"
+      -> ["#",["/",["/",["/","components"],"schemas"],"true"]]
+FAIL "#/components/schemas/a b"
+      -> [["#",["/",["/",["/","components"],"schemas"],"a"]],"b"]
+      want "ERROR"
+ok   "#/components/schemas/a,b"
+      -> ["#",["/",["/",["/","components"],"schemas"],"a,b"]]
+ok   "#"
+      -> ["#"]
+FAIL "https://example.com/schemas/pet.json"
+      -> ["/",["/",["/","https:",["/","example.com"]],"schemas"],"pet.json"]
+      want "ERROR"
+FAIL "#/paths/~1pets~1{id}/get"
+      -> ["#",["/",["/",["/","paths"],"~1pets~1{id}"],"get"]]
+      want "ERROR"
+11/14 as expected
+
+## (c) path templates (OAS 4.8.2 ABNF)
+ok   "/pets"
+      -> ["/","pets"]
+ok   "/pets/{petId}"
+      -> ["/",["/","pets"],["{","petId"]]
+ok   "/pets/{petId}/photos/{photoId}"
+      -> ["/",["/",["/",["/","pets"],["{","petId"]],"photos"],["{","photoId"]]
+FAIL "/users/{id}.json"
+      -> [["/",["/","users"],["{","id"]],".json"]
+      want ["/",["/","users"],[["{","id"],".json"]]
+FAIL "/files/{path}:download"
+      -> [["/",["/","files"],["{","path"]],":download"]
+      want ["/",["/","files"],[["{","path"],":download"]]
+ok   "/"
+      -> ["/"]
+FAIL "https://{username}.gigantic-server.com:{port}/{basePath}"
+      -> [["/","https:",["/",["{","username"]]],".gigantic-server.com:",["/",["{","port"],["{","basePath"]]]
+      want "ERROR"
+4/7 as expected

@@ -1,0 +1,28 @@
+input	expected	opts
+# JSON text the fast path and the grammar must read to one tree. The
+# runners run this file three times: with the row's options, and with
+# the fast path forced on and forced off.
+{"a":{"x":1},"a":{"y":2}}	{"a":{"y":2}}
+{"a":1,"b":2,"a":3}	{"a":3,"b":2}
+# The next input opens with a byte order mark, U+FEFF, which is invisible.
+﻿{"a":1}	{"a":1}
+{"a":"x\ty"}	{"a":"x\ty"}
+{"a":1,}	{"a":1}
+{"a":1}\n{"b":2}	ERROR:unexpected
+{"__proto__":{"x":1}}	{"__proto__":{"x":1}}
+{"a":-0}	{"a":-0}
+{"a":12345678901234567890}	{"a":1.2345678901234567e19}
+{"a":0.1,"b":1E2,"c":-1.5e-3}	{"a":0.1,"b":100,"c":-0.0015}
+{"a":01}	{"a":1}
+{"a":.5}	{"a":0.5}
+{}	{}
+{"a":[],"b":{},"c":[1,[2,[3]]]}	{"a":[],"b":{},"c":[1,[2,[3]]]}
+{"":1}	{"":1}
+{"200":{"description":"ok"},"default":{}}	{"200":{"description":"ok"},"default":{}}
+{"a":true,"b":false,"c":null}	{"a":true,"b":false,"c":null}
+{"a":"\u00e9\\n"}	{"a":"\u00e9\n"}
+{"a":"\"q\"","b":"\/"}	{"a":"\"q\"","b":"/"}
+{"a":"\b\f\\r\\t"}	{"a":"\b\f\r\t"}
+{"a":"\ud83d\ude00"}	{"a":"\ud83d\ude00"}
+ \n {"a":1} \n 	{"a":1}
+{"a":"x"\n,"b":1}	{"a":"x","b":1}

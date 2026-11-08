@@ -1,4 +1,4 @@
-/* Copyright (c) 2025 Richard Rodger and other contributors, MIT License */
+/* Copyright (c) 2025-2026 Richard Rodger and other contributors, MIT License */
 
 // Cross-runtime conformance, driven by the shared `test/spec/*.tsv` fixtures
 // at the repo root (see ../../test/AGENTS.md).
@@ -9,28 +9,37 @@
 // files — so the implementations cannot drift without one of them going
 // red, and neither can the loaders.
 //
-// What is left here is only what is specific to zon: how to build the
-// parser for a row's options.
+// What is left here is only what is specific to this plugin: every row
+// runs through the `parse` wrapper with the options in its `opts` column,
+// and `raw-fast.tsv` runs twice more, with the fast path forced on and
+// off, since its rows hold that both paths give one tree.
 
-import { Tabnas } from '@tabnas/parser'
-import { jsonic } from '@tabnas/jsonic'
+import { join } from 'node:path'
+
 import { findSpecDir, makeRunner } from '@tabnas/support'
 
-import { Zon } from '../dist/zon'
+import { parse } from '../dist/openapi'
 
+// `findSpecDir` walks up from this file — `dist-test/` at runtime — to the
+// repo root's `test/spec`, so moving the suite does not mean recounting
+// `..` hops.
+const SPEC = findSpecDir(__dirname)
+
+// The row's options, with `extra` over them.
+function options(row: any, extra: Record<string, unknown> = {}) {
+  const opts = row.named('opts')
+  return { ...('' === opts.trim() ? {} : JSON.parse(opts)), ...extra }
+}
+
+// `dir` auto-discovers every fixture, so adding a .tsv runs it in every
+// runtime without touching any runner.
 makeRunner({
-  // A fresh Tabnas per row: the `opts` column is per-case, and plugin
-  // options must not leak from one row into the next.
-  parse: (input, row) => {
-    const opts = row.named('opts')
-    return new Tabnas()
-      .use(jsonic)
-      .use(Zon, '' === opts.trim() ? {} : JSON.parse(opts))
-      .parse(input)
-  },
-})
-  // `findSpecDir` walks up from this file — `dist-test/` at runtime — to the
-  // repo root's `test/spec`, so moving the suite does not mean recounting
-  // `..` hops. `dir` then auto-discovers every fixture in it, so adding a
-  // .tsv runs it in every runtime without touching any runner.
-  .dir(findSpecDir(__dirname))
+  parse: (input, row) => parse(input, options(row)),
+}).dir(SPEC)
+
+for (const fast of [true, false]) {
+  makeRunner({
+    parse: (input, row) => parse(input, options(row, { fast })),
+    caseName: (row, input) => `fast ${fast}, row ${row.line}: ${JSON.stringify(input)}`,
+  }).file(join(SPEC, 'raw-fast.tsv'))
+}

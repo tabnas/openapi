@@ -1,0 +1,25 @@
+input	expected	opts
+# YAML, read by jsonic with the yaml grammar. Strict refuses it.
+openapi: 3.1.0\ninfo:\n  title: t\n  version: "1"\npaths: {}	{"openapi":"3.1.0","info":{"title":"t","version":"1"},"paths":{}}
+openapi: 3.1.0\ninfo:\n  title: t\n  version: "1"\npaths: {}	ERROR:unexpected	{"strict":true}
+parameters:\n  - $ref: '#/components/parameters/Limit'	{"parameters":[{"$ref":"#/components/parameters/Limit"}]}
+parameters:\n  - $ref: '#/a'\n    description: x	{"parameters":[{"$ref":"#/a","description":"x"}]}
+parameters: [{$ref: '#/a'}, {$ref: '#/b'}]	{"parameters":[{"$ref":"#/a"},{"$ref":"#/b"}]}
+parameters: [$ref: '#/a']	{"parameters":[{"$ref":"#/a"}]}
+{a: 1, b: [x, y]}	{"a":1,"b":["x","y"]}
+'200':\n  description: ok	{"200":{"description":"ok"}}
+/pets/{petId}:\n  get: {}	{"/pets/{petId}":{"get":{}}}
+a:\n  b:\n    c: 1	{"a":{"b":{"c":1}}}
+description: a, b	{"description":"a, b"}
+a: 1 # a comment	{"a":1}
+a: "x # y"	{"a":"x # y"}
+---\na: 1\n...	{"a":1}
+# A repeated name keeps its last value, whole, as JSON.parse does.
+a:\n  x: 1\na:\n  y: 2	{"a":{"y":2}}
+# YAML rules an OpenAPI author meets. An unquoted # after a space starts a
+# comment, so the reference below is empty. An unquoted version is a
+# number, so the version field needs quotes.
+$ref: #/x	{"$ref":null}
+openapi: 3.1	{"openapi":3.1}
+swagger: 2.0	{"swagger":2}
+swagger: '2.0'	{"swagger":"2.0"}

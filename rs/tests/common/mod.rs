@@ -6,8 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
+use tabnas_openapi::ParseOptions;
 use tabnas_support::{find_spec_dir, Failure, Value};
-use tabnas_zon::ZonOptions;
 
 /// The repository root: the parent of `rs/`.
 pub fn repo_root() -> PathBuf {
@@ -39,11 +39,12 @@ pub fn to_failure(error: tabnas::TabnasError) -> Failure {
         .with_message(error.to_string())
 }
 
-/// The plugin options a fixture row's `opts` cell names: an empty cell
-/// is the defaults, anything else is a JSON object of them.
-pub fn row_options(raw: &str) -> Result<ZonOptions, Failure> {
+/// The `parse` options a fixture row's `opts` cell names: an empty cell
+/// is the defaults, anything else is a JSON object of them, such as
+/// `{"strict":true}` or `{"fast":false}`.
+pub fn row_options(raw: &str) -> Result<ParseOptions<'static>, Failure> {
     if raw.trim().is_empty() {
-        return Ok(ZonOptions::default());
+        return Ok(ParseOptions::default());
     }
     serde_json::from_str(raw)
         .map_err(|error| Failure::message(format!("bad opts {raw:?}: {error}")))

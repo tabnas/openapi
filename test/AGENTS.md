@@ -5,56 +5,44 @@ runtimes auto-discover and run **every** file in this directory, so a
 change here affects TypeScript, Go and Rust together — edit with that in
 mind.
 
-`zigzon/` and `strictness/` hold the generated zig-reference corpora. What is
-tracked there is the instrument, never the corpus: `zigzon/tools/` (the
-oracle and its harness) and `strictness/inputs.txt` (our own probe inputs).
-Both `cases.json` files are `.gitignore`d and are rebuilt from the pinned
-ziglang/zig 0.16.0 release by `scripts/fetch-zigzon.sh`.
-
-## The instrument's own rules
-
-- **The corpora are built automatically, not opt-in.** `pretest` in
-  `ts/package.json`, `TestMain` in `go/zigzon_test.go` and the fetch guard
-  in `rs/tests/zigzon_test.rs` all run `scripts/fetch-zigzon.sh` before
-  grading, so the suites run in CI as well as locally. Do not remove any
-  of the hooks.
-- **A missing corpus is a FAILURE, not a skip.** The only skip permitted is
-  the platform one: a host with no pinned zig oracle toolchain
-  (anything but linux/macos on x86_64/aarch64) reports one explicit,
-  platform-named skip. Never widen that carve-out to cover a missing file.
-- **The census is pinned** — 184/44 in `zigzon`, 68/95 in `strictness`.
-  The three runners hold those numbers, and
-  `the_corpus_census_in_the_docs_is_the_one_the_runners_pin` in
-  `rs/tests/zigzon_test.rs` reads every census figure out of the markdown
-  pages and fails when one of them drifts from the runners, so the line
-  above cannot go stale on its own. If a census assertion fails, find out
-  what changed in the generator; do not edit the number to match.
-- **Every download is SHA-256 pinned.** A mismatch is a hard failure, never
-  something to work around.
-- Do not shrink a corpus, add a skip list, narrow the option set, or loosen
-  the value comparison to improve a number. A conformance figure that cannot
-  fail is worth nothing.
+`petstore/` holds one OpenAPI 3.1 description twice: `petstore.yaml` as
+written, and `petstore.json`, the same document as JSON. Every runtime's
+own suite reads both and holds each parse to the standard JSON reading of
+`petstore.json`, so the two files must stay the same document. Regenerate
+the JSON from the YAML with a YAML 1.2 reader if you change it, and keep
+plain scalars free of commas: the comparison is the point of the pair.
 
 ## Format
 
 Tab-separated, one case per line, with a header row naming the columns.
 Blank lines are skipped, and so are comment lines — a line starting with
 `#` that contains no tab. (A data row always has at least one tab, so a
-`#`-leading source such as a C preprocessor directive still works.)
+`#`-leading source still works.)
 
 | Column | Meaning |
 |---|---|
-| `input` | ZON source. Escapes `\n` `\r` `\t` `\\` are decoded. |
-| `expected` | A JSON value (the parse result), or `ERROR` / `ERROR:<code>` for inputs that must fail. The code is compared **exactly** — it is the error's code, not a substring of its message. |
-| `opts` | Optional JSON object of plugin options (empty means defaults). |
+| `input` | The description text. Escapes `\n` `\r` `\t` `\\` are decoded; any other backslash passes through, so `\u12` reaches the parser as written. |
+| `expected` | A JSON value (the parse result), or `ERROR` / `ERROR:<code>` for inputs that must fail. The code is compared **exactly**: it is the error's code, not a substring of its message. |
+| `opts` | Optional JSON object of `parse` options: `{"strict":true}` for the strict reader, `{"fast":false}` to keep JSON text off the fast path. Empty means the defaults. |
 
-`expected` and `opts` are **not** escape-decoded — they are raw JSON, so
-JSON's own escape rules apply (`"a\nb"` is a string containing a newline).
-To put a literal backslash in `input`, write `\\`.
+`expected` and `opts` are **not** escape-decoded: they are raw JSON, so
+JSON's own escape rules apply. Results are compared after a JSON round
+trip, so key order and the `OrderedMap` / null-prototype representations
+do not affect the comparison.
 
-Results are compared after a JSON round-trip, so key order and the
-`OrderedMap` / null-prototype-object representations do not affect the
-comparison.
+## The files
+
+| File | What it pins |
+|---|---|
+| `raw-json.tsv` | JSON text under both readers, and what only the strict reader refuses |
+| `raw-yaml.tsv` | YAML under the default reader, its refusal under strict, and the YAML typing rules an OpenAPI author meets |
+| `raw-errors.tsv` | the engine's codes the reference pages name, and the plugin's `openapi_root`, `openapi_stream` and `openapi_duplicate_key` |
+| `raw-versions.tsv` | version detection: lenient by default, `openapi_version` under strict |
+| `raw-fast.tsv` | JSON text the fast path and the grammar must read to one tree; every runner runs it three times, with the row's options and with `fast` forced on and off |
+| `raw-yaml-scalars.tsv` | what the published yaml grammar makes of plain scalars, YAML 1.1 forms included |
+
+Every row runs through each runtime's `parse` wrapper, never the
+engine's own parse, since only the wrapper raises the plugin's codes.
 
 ## Who runs what
 
@@ -62,35 +50,33 @@ comparison.
 - Go: `go/parity_test.go` — `support.Runner{...}.Dir(t, dir)`.
 - Rust: `rs/tests/parity_test.rs` — `tabnas_support::Runner::new_with_row(...).dir(...)`.
 
-All three are a dozen lines holding only what is specific to zon: how to
-build the parser for a row's options. Everything else — finding
-`test/spec`, reading the file, decoding escapes, the `ERROR:` contract,
-the comparison, the `<file>:<line>` in a failure message — comes from
+Each holds only what is specific to this package: how to build the parser
+for a row's `opts`. Everything else (finding `test/spec`, reading the
+file, decoding escapes, the `ERROR:` contract, the comparison, the
+`<file>:<line>` in a failure message) comes from
 [`@tabnas/support`](https://github.com/tabnas/support) and its Go and Rust
 halves, so the loaders cannot drift from each other either.
 
-All three discover files by directory listing: adding a `.tsv` here runs
-it in every runtime without touching any runner. An empty fixture, and a spec
-directory with no fixtures in it, both **fail** — a runner that reports
-green having run nothing is indistinguishable from coverage that was never
-there.
+An empty fixture, and a spec directory with no fixtures in it, both
+**fail**: a runner that reports green having run nothing is
+indistinguishable from coverage that was never there.
 
 ## Rules
 
-- Prefer adding a fixture here over a one-off in-language assertion when a
-  case is expressible as input → output. That is what keeps the
+- Prefer a fixture here over a one-off in-language assertion whenever a
+  case is expressible as input to output. That is what keeps the
   runtimes honest against each other.
-- What a fixture **cannot** express, because every runner compares after a
-  JSON round-trip: `bigint` / `*big.Int` / `$big` values, `Infinity`, `NaN`,
-  and the `-0` / `0` distinction. Those live in `ts/test/zon.test.ts`,
-  `go/zon_test.go` and `rs/tests/zon_test.rs`, mirrored case for case.
-- [`strict.tsv`](spec/strict.tsv) collects the inputs the Zig reference
-  implementation REJECTS. Every verdict there came from the oracle in
-  `scripts/fetch-zigzon.sh`, not from a judgement call — if you add a row,
-  get the verdict the same way.
-- TypeScript is canonical. If the runtimes disagree, the TS behaviour is the
-  expected value — unless another port has exposed a genuine TS defect, in which
-  case fix TS first and pin the corrected behaviour here.
-- A new fixture must pass in ALL THREE runtimes: run `go test ./...` (from
-  `go/`), `npm test` (from `ts/`) and `cargo test --all-targets` (from
-  `rs/`) before considering it done.
+- A row pins behaviour every runtime agrees on. Where that behaviour is a
+  base grammar's defect or a YAML 1.1 rule a description can meet, the
+  row says so in a comment above it and stays: its repair upstream then
+  turns the row red here, which is how this repository finds out. Report
+  the defect upstream as well.
+- A value JSON cannot carry (an infinity, `NaN`) or that the runtimes
+  give differently (a lone surrogate) cannot be a row. Pin it in each
+  runtime's own tests, and record a difference in `DIVERGENCE.md`.
+- TypeScript is canonical. If the runtimes disagree, the TypeScript value
+  is the expected one, unless another port has exposed a TypeScript
+  defect, in which case fix TypeScript first and pin the corrected value.
+- A new row must pass in ALL THREE runtimes: `npm test` (from `ts/`),
+  `go test ./...` (from `go/`) and `cargo test --all-targets` (from
+  `rs/`) before it is done.

@@ -1,0 +1,65 @@
+openapi: 3.2.0
+$self: https://api.example.com/v1/openapi.yaml
+info: { title: Pets, version: "1" }
+paths:
+  /pets:
+    get:
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          $ref: '#/components/responses/PetList'
+          summary: Overrides the component summary
+          description: Overrides the component description
+        '404':
+          $ref: 'openapi.yaml#/components/responses/Missing'
+      requestBody: { content: { application/json: { schema: { $ref: 'https://schemas.example.com/v1/pet.json#/$defs/Owner' } } } }
+  /pets/{id}:
+    get:
+      responses:
+        '200':
+          $ref: '#/paths/~1pets/get/responses/200'
+  /pets/{id}/photos:
+    $ref: '#/components/pathItems/Photos'
+    summary: Photos of one pet
+components:
+  pathItems:
+    Photos:
+      get: { responses: { '200': { description: Photos } } }
+  parameters:
+    Limit: { name: limit, in: query, schema: { type: integer } }
+  responses:
+    PetList:
+      summary: A page of pets
+      description: A page of pets
+      content:
+        application/json:
+          schema: { type: array, items: { $ref: '#/components/schemas/Pet' } }
+          example: { $ref: '#/components/schemas/Pet', note: data }
+    Missing: { $ref: '#/components/responses/NotFound' }
+    NotFound: { description: Not found }
+  schemas:
+    Pet:
+      $id: https://schemas.example.com/v1/pet.json
+      type: object
+      properties:
+        name: { $ref: '#name' }
+        friends: { type: array, items: { $ref: '#' } }
+        owner: { $ref: 'https://example.com/schemas/person.json' }
+        tag: { $ref: 'tag.json', description: The pet's tag }
+        sibling: { $ref: '../v1/owner.json' }
+        example: { $ref: '#/$defs/Name' }
+        any: { $dynamicRef: '#meta' }
+      $defs:
+        Name: { $anchor: name, type: string }
+        Owner: { $ref: 'owner.json' }
+    Owner: { $id: https://schemas.example.com/v1/owner.json, type: string }
+    Tag: { $id: https://schemas.example.com/v1/tag.json, type: string }
+    Encoded: { $ref: '#/components%2Fschemas/Tag' }
+    Ids: { properties: { $ref: { type: string }, next: { $ref: '#/components/schemas/Tag' } } }
+    Odd: { $ref: 42, description: a reference that is not a string }
+    Lost: { $ref: '#nope' }
+    Bent: { $ref: '#foo/bar' }
+    Gone: { $ref: 'https://example.com/missing.json' }
+    __proto__: { type: string }
+x-vendor: { $ref: '#/components/schemas/Tag', keep: literal }

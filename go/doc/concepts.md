@@ -1,197 +1,79 @@
-# Concepts (Go)
+# Go concepts
 
-Background on how the Go ZON plugin is put together, and why, plus a
-section on how it differs from the TypeScript version. This is
-understanding-oriented reading; for steps see the
-[tutorial](tutorial.md) and [how-to guide](guide.md), and for exact
-signatures and syntax see the [reference](reference.md).
+Why the Go package reads descriptions the way it does. The
+[reference](reference.md) states what it does; this page argues for it.
+The TypeScript package is the canonical one, and the Go port gives the
+same tree for the same text.
 
-## A grammar plugin on a shared engine
+## One parser for two serialisations
 
-The plugin has no parser of its own. It is a thin layer on a stack of
-two pieces:
+OpenAPI descriptions are written in YAML or in JSON, and the filename is
+only a hint. A tool that guesses the format from the extension
+eventually guesses wrong.
 
-- the **jsonic engine** (`github.com/tabnas/jsonic/go`), a rule-based
-  parser over a configurable, matcher-based lexer, carrying the
-  relaxed-JSON grammar and its helper actions (`@array$`, the
-  `val`/`map`/`list`/`pair`/`elem` rules), and
-- **this plugin** (`github.com/tabnas/zon/go`), the option overrides,
-  custom lex matchers, and small grammar overlay that retune that stack
-  to read Zig anonymous-struct syntax instead of JSON.
+So the default parser does not guess. It is the jsonic grammar with the
+yaml grammar installed over it, and JSON text is also YAML: a JSON
+document reads to the same tree under it as under a strict JSON grammar.
+One parser, both formats, no sniffing.
 
-Because the engine is configuration-driven, ZON support is mostly an
-options change plus a handful of alternates, not a new parser. The
-plugin embeds the canonical grammar text (from the repo-root
-`zon-grammar.jsonic`, kept in sync with the TypeScript source by the
-build), parses it with a throwaway jsonic instance into a
-`*tabnas.GrammarSpec`, attaches its `*tabnas.Options` overrides to that
-spec, and applies the whole thing atomically via `j.Grammar(gs,
-&tabnas.GrammarSetting{Rule: ...G: "zon"})`.
+The cost is leniency. A grammar that reads YAML reads plenty that JSON
+forbids, and the jsonic grammar beneath it reads more again: a trailing
+comma, an unquoted key, a comment. For a description you only consume,
+that is a convenience. For a description you publish, it hides mistakes
+another tool will refuse. `Strict` swaps the base grammar for the JSON
+grammar alone, which follows RFC 8259 and refuses everything else.
 
-## ZON is not a superset of JSON
+## The raw tree, in order
 
-JSON and ZON share scalars but differ in structure:
+A parse returns the document as written. Every `$ref` stays a reference,
+and nothing is fetched or followed. An editor reports problems where the
+author wrote them, a formatter writes the document back, and a bundling
+tool decides for itself which references to inline: each needs the tree
+before resolution.
 
-| | JSON / jsonic | ZON |
-|---|---|---|
-| Open a map | `{` | `.{` (followed by `.field =`) |
-| Open a list | `[` | `.{` (otherwise) |
-| Close | `}` / `]` | `}` |
-| Key/value separator | `:` | `=` |
-| Keys | strings | `.identifier` |
-| Strings | `"` `'` `` ` `` | `"` only |
-| Comments | `#` `//` `/* */` | `//` only |
+A mapping comes back as a `*tabnas.OrderedMap` rather than a Go map
+because a Go map forgets order. Member order is part of what an author
+wrote, and a reader expects the paths of an API in that order.
 
-The plugin makes those swaps by **disabling** what JSON allows and
-**adding** what ZON needs, rather than accepting both, so a
-`build.zig.zon` file that accidentally used JSON braces is a clear
-error, not a silent success.
+## Checks the grammar cannot make
 
-## The four mechanisms
+A grammar reads text. It does not know that the text is meant to be an
+OpenAPI description, so it reads a list, a lone string, or a stream of
+three YAML documents as happily as a map. `Parse` knows, and refuses
+each of them with a code of its own. The checks run inside the engine's
+parse, as each rule finishes, so an error carries the engine's row and
+column and a hint like any other. The `Parse` method of a parser from
+`Make` stays the plain grammar, for a tool that wants the document
+whatever its shape.
 
-The plugin reshapes the stack with four cooperating mechanisms, all
-applied together through one `GrammarSpec`:
+## Two paths, one tree
 
-1. **Custom lex matchers** own the `.`-prefixed and Zig-specific
-   tokens, registered under `Options.Lex.Match` with high `Order`
-   values so they run ahead of the fixed-token matcher:
-   - `.{` peeks ahead and emits `#OB` (struct) when followed by
-     `<ws>.ident<ws>=`, or `#OS` (tuple) otherwise.
-   - `.identifier`, and `.@"any name"`, emit `#TX` whose `Val` is the
-     name with the dot stripped, and whose `Use["zonEnum"]` flag marks
-     it for optional enum-tag wrapping.
-   - `\\`-prefixed lines emit one `#ST` string token with the joined
-     content. Zig lexes the whole run as one token, so blank lines
-     inside it continue the literal.
-   - char literals emit a `#NR` number token whose value is a one-char
-     string or the code point (as `float64`), per `CharAsNumber`.
-   - numeric literals emit `#NR` from a matcher that reproduces Zig's
-     literal grammar exactly: jsonic's own number lexer is switched
-     off, because relaxed-JSON numbers (`+1`, `.5`, `0123`, `1__0`) are
-     not ZON numbers. An integer too large for an exact `float64`
-     becomes a `*big.Int`.
-   - `//!` and `///` fail the lex: they are Zig doc comments, which ZON
-     rejects.
+`encoding/json` reads JSON several times faster than a grammar can, so
+`Parse` gives JSON text that opens with `{` to `encoding/json` first, and
+to the grammar only when that refuses it. The fast path decodes into the
+same `*tabnas.OrderedMap` the grammar builds, and a repeated member name
+keeps its last value on both paths, at the place where the name first
+appeared. Every refusal comes from the grammar, because the fast path
+gives up rather than raise anything.
 
-2. **Token remapping.** `#CL` is rebound from `:` to `=`; the default
-   char mappings for `#OB`, `#OS`, and `#CS` are dropped to `nil`, so a
-   stray `{`, `[`, or `]` is a syntax error. The default text matcher
-   is turned off.
+## Parsers and goroutines
 
-3. **Key-set restriction.** The `KEY` token set is narrowed to `#TX`
-   alone, so only an identifier can sit on the left of `=`.
+The yaml grammar keeps the state of a parse on the parser it is
+installed on, so a parser runs one parse at a time. `Parse` keeps a pool
+of parsers and takes one per call, which is why it is safe from many
+goroutines at once and a parser you pass it is not.
 
-4. **Grammar overlay.** A few alternates are prepended to `val`,
-   `list`, `elem`, and `pair`, plus a before-close guard on `pair` that
-   rejects a repeated field name (Zig does too). They swap the list terminator from the
-   default `#CS` to `#CB`, seed the list node with `@array$`, and
-   accept a trailing comma before `}`.
+## Resolution is a separate pass
 
-The `Rule.Exclude = "jsonic,imp"` override removes jsonic's implicit
-maps/lists, top-level commas, and path-dive extensions, and
-`Rule.Start = "val"` makes a single value the entry rule.
+Resolving a reference means replacing it with what it names. That cannot
+happen while the text is being read: a reference can point forward, into
+another file, or back at itself, and a grammar sees the text once, in
+order. So resolution belongs after the parse, as a pass over the
+finished tree. This release stops before that pass.
 
-## Struct vs tuple disambiguation
+## YAML decides types
 
-ZON uses one opener, `.{`, for both maps and lists. The parser allows
-only two tokens of lookahead, not enough to tell a struct from a tuple
-by grammar alone. So the decision is pushed into the lexer: when the
-`.{` matcher fires (`peekIsMapOpen`), it scans past the brace,
-whitespace, and `//` comments and checks for `.ident` followed by `=`.
-If found, it emits `#OB` (struct); otherwise `#OS` (tuple). The grammar
-only ever sees an already-classified open token. This is why `.{}`
-parses as an **empty list**: with nothing inside, there is no
-`.field =` to mark it as a struct.
-
-## Enum literals: one token, two roles
-
-A bare `.foo` token (`#TX`) is valid in two positions: before `=` it is
-a key (field name `foo`); in value position it is an enum literal
-(value `"foo"`). Because `#TX` belongs to both the `KEY` and `VAL`
-token sets, the parser picks the right reading purely by context.
-
-When `EnumTag` is set, an enum literal in value position is wrapped as
-`map[string]any{EnumTag: name}`. jsonic's grammar already owns the
-value-close phase via `@val-bc/replace`, and once a phase is "replaced"
-the engine suppresses any `/prepend` on it. So the wrapping runs in the
-*after-close* phase (`@val-ac`): a `StateAction` checks whether the
-closed value came from a token carrying the `zonEnum` flag, and if so
-rebuilds `r.Node` as the tagged map. Keys are unaffected.
-
-## Why reuse one instance
-
-Building the ZON grammar dominates the cost of a parse; the parse
-itself is cheap. The default no-options `Parse` path therefore caches a
-single instance behind a `sync.Once`, reusing it across calls (safe for
-concurrent use, since a parse builds its own context and only reads
-instance state). Option-taking calls build a dedicated instance, since
-their configuration differs per call; use `MakeJsonic` once and reuse
-it for a hot loop with fixed options. The repo's `perf_test.go` guards
-the reuse win.
-
-## Differences from the TS version
-
-The TypeScript implementation is the reference; the Go module is a
-faithful port built from the same `zon-grammar.jsonic`. The differences
-do **not** change a successful parse's *structure*: they concern the
-host language's API shape, value types, and a couple of error codes.
-
-### API shape
-
-| Area | TypeScript | Go |
-|---|---|---|
-| Convenience entry | none, install the plugin yourself | `tabnaszon.Parse(src, opts...)` and `tabnaszon.MakeJsonic(opts...)` |
-| Build a parser | `new Tabnas().use(jsonic).use(Zon, opts)` | `tabnaszon.MakeJsonic(opts)` or `j.UseDefaults(tabnaszon.Zon, tabnaszon.Defaults, m)` |
-| Options | one object `{ charAsNumber, enumTag }` | `ZonOptions{ CharAsNumber *bool, EnumTag string }`, or a `map[string]any` |
-| "Omit vs set" | option present or absent | `*bool` nil vs set; `EnumTag == ""` means unset |
-| Parse failure | **throws** | returns `error`; never panics on parse errors |
-
-The Go side adds the `Parse` / `MakeJsonic` convenience helpers because
-Go has no fluent `.use()` chain; the TypeScript side has no such
-helpers (you build the engine yourself with `.use(jsonic).use(Zon)`).
-
-### Value types
-
-TypeScript returns untyped `any` JavaScript values; Go returns `any`
-with predictable concrete types:
-
-| Value | TypeScript | Go |
-|---|---|---|
-| Struct | object (null-prototype) | `map[string]any` |
-| Tuple / empty | array | `[]any` |
-| Number (all bases, float, char-as-number) | `number` | `float64` |
-| String / enum / char-as-string | `string` | `string` |
-| Boolean | `boolean` | `bool` |
-| Null | `null` | `nil` |
-| Tagged enum | `{ [tag]: name }` | `map[string]any{tag: name}` |
-
-The most visible consequence: ZON integers like `42` come back as the
-JavaScript number `42` in TypeScript and as `float64(42)` in Go, because Go
-has no separate integer type in the result tree.
-
-### Error codes
-
-A failing input reports the same error **code** in every runtime,
-including a malformed double-quoted string: the plugin lexes `"..."`
-itself, in every runtime, and gives a fault the engine's code for it
-(`unterminated_string`, `unprintable`, `invalid_unicode`,
-`invalid_ascii`, `unexpected`). A raw control character inside a string
-is `unprintable` in TypeScript and in Go alike, at the same row and
-column; `test/spec/strings.tsv` pins each code across the runtimes.
-Where the two still differ is recorded, with measurements, in
-[`DIVERGENCE.md`](../../DIVERGENCE.md).
-
-## Accepted vs rejected: edge cases
-
-- `.{}` → `[]any{}`. An empty literal is a list, not a map.
-- `{ a = 1 }` → **error** (returned, not panicked). Bare `{` is not a
-  ZON opener.
-- `'A'` → `"A"` by default, `float64(65)` with `CharAsNumber` set.
-- `"a\\b"` → `"a\b"`. Double quotes only, with Zig escapes; unknown
-  escapes are an error.
-- `.red` as a value → `"red"`, or `map[string]any{tag: "red"}` with
-  `EnumTag`.
-- `.red` as a key (`.red = 1`) → key `red`; `EnumTag` never applies to
-  keys.
-- Trailing comma before `}` → accepted in both structs and tuples.
-- `//` comment → discarded; `#` and `/* */` are not comments in ZON.
+YAML gives an unquoted scalar a type by how it looks. A version written
+`3.1` is a number, and an unquoted `#` after a space starts a comment,
+which swallows a `$ref`. The parser follows YAML here rather than
+second-guessing it; quote a value that must stay text.
