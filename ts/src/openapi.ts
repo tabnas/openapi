@@ -18,6 +18,9 @@ import { jsonic } from '@tabnas/jsonic'
 import { Yaml } from '@tabnas/yaml'
 import { json } from '@tabnas/json'
 
+import { version } from './oas-version'
+import type { VersionInfo } from './oas-version'
+
 // Plugin options. There are none: raw mode needs none, and the resolver's
 // options belong to `resolve`, since `use()` deep-copies what it is given.
 type OpenApiOptions = Record<string, never>
@@ -202,56 +205,6 @@ function kindOf(value: unknown): string {
   return 'a ' + typeof value
 }
 
-// The OpenAPI or Swagger version a tree's root names.
-type VersionInfo = {
-  // The version, to its minor: '2.0' for Swagger, '3.0', '3.1' or '3.2'
-  // for OpenAPI, and 'unknown' for anything else.
-  version: '2.0' | '3.0' | '3.1' | '3.2' | 'unknown'
-  // The member the version came from, `openapi` taking precedence, or
-  // null when the root has neither.
-  field: 'openapi' | 'swagger' | null
-  // That member's value, as written.
-  value: unknown
-}
-
-const OPENAPI_VERSION = /^3\.([0-2])(?:\.\d+)?(?:[-+][0-9A-Za-z.-]*)?$/
-const SWAGGER_VERSION = /^2\.0(?:\.\d+)?$/
-
-// Read the version from a tree's root, leniently: a string or a number, as
-// YAML may have read an unquoted `3.1` or `2.0`.
-function version(tree: unknown): VersionInfo {
-  if (!isMap(tree)) {
-    return { version: 'unknown', field: null, value: undefined }
-  }
-  const own = (name: string) => Object.prototype.hasOwnProperty.call(tree, name)
-  if (own('openapi')) {
-    const value = tree.openapi
-    let minor: string | null = null
-    if ('string' === typeof value) {
-      const m = OPENAPI_VERSION.exec(value)
-      minor = null == m ? null : m[1]
-    } else if (3 === value) {
-      minor = '0'
-    } else if (3.1 === value) {
-      minor = '1'
-    } else if (3.2 === value) {
-      minor = '2'
-    }
-    return {
-      version: null == minor ? 'unknown' : (('3.' + minor) as VersionInfo['version']),
-      field: 'openapi',
-      value,
-    }
-  }
-  if (own('swagger')) {
-    const value = tree.swagger
-    const known =
-      ('string' === typeof value && SWAGGER_VERSION.test(value)) || 2 === value
-    return { version: known ? '2.0' : 'unknown', field: 'swagger', value }
-  }
-  return { version: 'unknown', field: null, value: undefined }
-}
-
 // Options for `make`.
 type MakeOptions = {
   // Read strict JSON (RFC 8259) with the json grammar alone, instead of
@@ -384,5 +337,15 @@ function nullPrototypes(root: any): any {
 const VERSION = '0.1.0'
 
 export { OpenApi, make, parse, version, VERSION }
+
+export { resolve, ResolveError } from './resolve'
+export type {
+  ResolveOptions,
+  ResolveResult,
+  Unresolved,
+  Provenance,
+  Cut,
+  Why,
+} from './resolve'
 
 export type { OpenApiOptions, MakeOptions, ParseOptions, VersionInfo }

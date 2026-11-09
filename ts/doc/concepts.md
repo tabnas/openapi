@@ -87,8 +87,35 @@ another file, or back at itself, and a grammar sees the text once, in
 order.
 
 So resolution belongs after the parse, as a pass over the finished tree
-that visits every reference and works out its target. This release
-stops before that pass. The tree it returns is the input the pass needs.
+that visits every reference and works out its target. That pass is
+`resolve`, and it leaves the raw tree alone: the tools that want the
+document as written still have it.
+
+## What is a reference
+
+Not every map that owns `$ref` is a reference. An example payload can
+hold one, an extension value can, and a schema can have a property
+named `$ref`. A resolver that followed all of them would rewrite data.
+
+So `resolve` asks what each position holds, by the description's
+version: a Reference Object, a Schema Object, a Path Item, or data. The
+answer comes from a table generated from the OpenAPI Initiative's own
+validation schemas for 2.0, 3.0, 3.1 and 3.2, not from a list of names
+someone remembered.
+
+## A graph, not a tree
+
+Ten operations can name one response. `resolve` builds that response
+once and puts the same object in all ten places, so the result is a
+graph that shares its nodes, and building it costs one pass over the
+document however often a target is named.
+
+A cycle needs a decision. A schema for a linked list names itself, and
+replacing that reference with its target would never end. `resolve`
+cuts each cycle once, at the reference whose target was still being
+built when the walk reached it, leaves that reference as written, and
+lists it in `cuts`. The walk runs from the root in document order, so a
+description gives the same cuts every time.
 
 ## YAML decides types
 

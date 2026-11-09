@@ -1,0 +1,8 @@
+input	expected	unresolved	cuts	opts
+# A reference resolves to what it names, and every site naming one
+# target shares one result.
+{"openapi":"3.1.0","paths":{"/p":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}}},"components":{"responses":{"Ok":{"description":"ok"}}}}	{"openapi":"3.1.0","paths":{"/p":{"get":{"responses":{"200":{"description":"ok"}}}}},"components":{"responses":{"Ok":{"description":"ok"}}}}	[]	[]
+{"openapi":"3.1.0","paths":{"/p":{"parameters":[{"$ref":"#/components/parameters/Id"}]}},"components":{"parameters":{"Id":{"name":"id","in":"path","required":true}}}}	{"openapi":"3.1.0","paths":{"/p":{"parameters":[{"name":"id","in":"path","required":true}]}},"components":{"parameters":{"Id":{"name":"id","in":"path","required":true}}}}	[]	[]
+{"openapi":"3.1.0","components":{"responses":{"A":{"$ref":"#/components/responses/B"},"B":{"description":"b"}}}}	{"openapi":"3.1.0","components":{"responses":{"A":{"description":"b"},"B":{"description":"b"}}}}	[]	[]
+{"openapi":"3.1.0","paths":{"/p":{"$ref":"#/components/pathItems/P","summary":"s"}},"components":{"pathItems":{"P":{"get":{"responses":{"200":{"description":"ok"}}}}}}}	{"openapi":"3.1.0","paths":{"/p":{"get":{"responses":{"200":{"description":"ok"}}},"summary":"s"}},"components":{"pathItems":{"P":{"get":{"responses":{"200":{"description":"ok"}}}}}}}	[]	[]
+openapi: 3.1.0\npaths:\n  /p:\n    get:\n      parameters:\n        - $ref: '#/components/parameters/Id'\ncomponents:\n  parameters:\n    Id: {name: id, in: query}	{"openapi":"3.1.0","paths":{"/p":{"get":{"parameters":[{"name":"id","in":"query"}]}}},"components":{"parameters":{"Id":{"name":"id","in":"query"}}}}	[]	[]

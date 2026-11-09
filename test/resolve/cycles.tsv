@@ -1,0 +1,7 @@
+input	expected	unresolved	cuts	opts
+# A cycle through a container is cut once, at the site whose target was
+# still being built, and left as written; a loop of references alone
+# has nothing to resolve to, and every site in it is cut.
+{"openapi":"3.1.0","components":{"schemas":{"Node":{"type":"object","properties":{"next":{"$ref":"#/components/schemas/Node"}}}}}}	{"openapi":"3.1.0","components":{"schemas":{"Node":{"type":"object","properties":{"next":{"$ref":"#/components/schemas/Node"}}}}}}	[]	["/components/schemas/Node/properties/next"]
+{"openapi":"3.1.0","components":{"schemas":{"A":{"properties":{"b":{"$ref":"#/components/schemas/B"}}},"B":{"properties":{"a":{"$ref":"#/components/schemas/A"}}}}}}	{"openapi":"3.1.0","components":{"schemas":{"A":{"properties":{"b":{"properties":{"a":{"$ref":"#/components/schemas/A"}}}}},"B":{"properties":{"a":{"$ref":"#/components/schemas/A"}}}}}}	[]	["/components/schemas/B/properties/a"]
+{"openapi":"3.1.0","components":{"responses":{"A":{"$ref":"#/components/responses/B"},"B":{"$ref":"#/components/responses/A"}}}}	{"openapi":"3.1.0","components":{"responses":{"A":{"$ref":"#/components/responses/B"},"B":{"$ref":"#/components/responses/A"}}}}	[]	["/components/responses/B","/components/responses/A"]

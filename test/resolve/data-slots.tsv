@@ -1,0 +1,7 @@
+input	expected	unresolved	cuts	opts
+# A $ref map the object model types as data stays as written: an
+# extension value, an example, a property named $ref. A member named
+# __proto__ is a member.
+{"openapi":"3.1.0","x-v":{"$ref":"#/components/schemas/S"},"components":{"schemas":{"S":{"type":"string","example":{"$ref":"#/components/schemas/S"}}}}}	{"openapi":"3.1.0","x-v":{"$ref":"#/components/schemas/S"},"components":{"schemas":{"S":{"type":"string","example":{"$ref":"#/components/schemas/S"}}}}}	[]	[]
+{"openapi":"3.1.0","components":{"schemas":{"S":{"properties":{"$ref":{"type":"string"}}}}}}	{"openapi":"3.1.0","components":{"schemas":{"S":{"properties":{"$ref":{"type":"string"}}}}}}	[]	[]
+{"openapi":"3.1.0","components":{"schemas":{"__proto__":{"type":"string"},"S":{"$ref":"#/components/schemas/__proto__"}}}}	{"openapi":"3.1.0","components":{"schemas":{"__proto__":{"type":"string"},"S":{"type":"string"}}}}	[]	[]

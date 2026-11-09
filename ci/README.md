@@ -19,7 +19,7 @@ scope, so its three workflow edits are staged rather than live:
 
 | Staged | Promote by |
 |---|---|
-| [`workflows/ci.yml`](workflows/ci.yml) | copying it over `.github/workflows/ci.yml`: `yaml` joins the siblings in `deps` |
+| [`workflows/ci.yml`](workflows/ci.yml) | copying it over `.github/workflows/ci.yml`: `yaml` and `expr` join the siblings in `deps`, `expr` so that `ci / ts` builds the resolver against expr's `main` until the tree layer is released |
 | [`workflows/rust.yml`](workflows/rust.yml) | copying it over `.github/workflows/rust.yml`: the yaml clone, the `openapi/` checkout, and path filters for this repository's files |
 | the removal of `.github/workflows/clib.yml` | deleting it: it builds `go/clib/`, which went with the ZON grammar |
 

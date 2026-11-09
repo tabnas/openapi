@@ -136,8 +136,33 @@ try {
 code // => 'unexpected'
 ```
 
+## Resolve the references
+
+The raw tree keeps every `$ref`. `resolve` builds a new tree with each
+one replaced by what it names:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+paths:
+  /pets:
+    parameters:
+      - $ref: '#/components/parameters/Limit'
+components:
+  parameters:
+    Limit: { name: limit, in: query }
+`)
+
+resolve(raw).tree.paths['/pets'].parameters // => [{ name: 'limit', in: 'query' }]
+raw.paths['/pets'].parameters // => [{ $ref: '#/components/parameters/Limit' }]
+```
+
+We still have the raw tree, unchanged, beside the resolved one.
+
 ## Where next
 
-The [how-to guide](guide.md) reads a description from a file, checks its
-version and keeps a parser for reuse. The [reference](reference.md)
-lists every export.
+The [how-to guide](guide.md) reads a description from a file, resolves
+it, checks its version, and keeps a parser for reuse. The
+[reference](reference.md) lists every export.

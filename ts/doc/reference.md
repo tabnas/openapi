@@ -7,8 +7,8 @@ behind them.
 ## Exports
 
 ```ts
-import { parse, version, make, OpenApi, VERSION } from '@tabnas/openapi'
-import type { ParseOptions, VersionInfo, MakeOptions, OpenApiOptions } from '@tabnas/openapi'
+import { parse, resolve, version, make, OpenApi, ResolveError, VERSION } from '@tabnas/openapi'
+import type { ParseOptions, ResolveOptions, ResolveResult, VersionInfo } from '@tabnas/openapi'
 ```
 
 ### `parse(text, options?)`
@@ -51,6 +51,74 @@ tree.
 `instance` must be a parser from `make`, or one with the plugin
 installed; `parse` throws an `Error` otherwise. It throws a `TypeError`
 when `text` is not a string.
+
+### `resolve(raw, options?)`
+
+```ts
+function resolve(raw: any, options?: ResolveOptions): ResolveResult
+
+type ResolveOptions = {
+  version?: 'auto' | '2.0' | '3.0' | '3.1' | '3.2' // default 'auto'
+  retrievalUri?: string                            // default: a fixed urn:uuid:
+  strict?: boolean                                 // default false
+  positions?: (node: object) => Token | undefined  // from recordPositions
+  maxDepth?: number                                // default 1000
+}
+
+type ResolveResult = {
+  tree: any                // the resolved tree
+  version: '2.0' | '3.0' | '3.1' | '3.2' | 'unknown'
+  unresolved: { at: string, ref: unknown, why: Why }[]
+  provenance: Provenance[] // one entry per reference site reached
+  cuts: { at: string, ref: string, target: string }[]
+  dynamic: { doc: string, at: string, src: string }[]
+  dataSlots: number        // $ref maps left as data
+}
+```
+
+Returns a new tree with every reference in the document replaced by
+what it names. The raw tree is never changed.
+
+A map that owns `$ref` is a reference only where the description's
+version puts a Reference Object, a Schema Object, or a Path Item. In an
+example, an extension, or as a property named `$ref`, it is data and
+stays as written; `dataSlots` counts those.
+
+A reference resolves against the nearest `$id` (3.1 and 3.2, its own
+map's included), else the document's `$self` (3.2), else
+`retrievalUri`. Its fragment is a JSON Pointer, percent-decoded first,
+or from 3.1 an anchor that a `$anchor` or `$dynamicAnchor` declares.
+
+What happens to the members beside a `$ref`:
+
+| Site | 2.0, 3.0 | 3.1, 3.2 |
+|---|---|---|
+| Reference Object | ignored | `summary` and `description` override the target's, where its type has them |
+| Schema Object | ignored | kept, with the target joined in an `allOf` |
+| Path Item | merged with the target's fields | merged with the target's fields |
+
+Every site naming one target shares one result. A reference whose target
+is still being built when the walk reaches it closes a cycle: it is left
+as written and listed in `cuts`. A `$dynamicRef` is listed in `dynamic`
+and left as written.
+
+A reference left as written for another reason is listed in
+`unresolved`, with `why`:
+
+| `why` | The reference |
+|---|---|
+| `not-found` | names nothing in the document |
+| `no-anchor` | names an anchor nothing declares |
+| `bad-fragment` | has a fragment that is not a well-formed JSON Pointer or, before 3.1, any anchor |
+| `not-a-string` | is not a string; its map is resolved as a plain map |
+| `external` | names another document, which this release does not load |
+| `unsupported-dialect` | is in a schema of a dialect other than JSON Schema 2020-12 or OpenAPI's |
+
+Under `strict`, `resolve` throws a `ResolveError` instead, coded
+`openapi_unresolved` (`not-found`, `no-anchor`, `external`),
+`openapi_pointer` (`bad-fragment`) or `openapi_ref_type`
+(`not-a-string`), with `at` and `ref`. Every `at`, `target` and `cut`
+path is an RFC 6901 pointer.
 
 ### `version(tree)`
 
@@ -158,7 +226,8 @@ YAML rules that decide a value's type:
 
 ## What this release does not do
 
-It does not resolve `$ref`. The tree holds each reference as written.
+It does not load other documents. A reference into another document is
+reported as `external` and left as written.
 
 ## Errors
 

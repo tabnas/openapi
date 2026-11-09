@@ -1,0 +1,12 @@
+input	expected	unresolved	cuts	opts
+# The members beside a $ref, by version and kind. A 3.1 Reference Object
+# overrides only the summary and description the target type has; 3.2
+# adds summary to the Response; 3.0 and 2.0 ignore siblings; a 3.1
+# Schema Object joins them in an allOf; a Path Item merges them in every
+# version.
+{"openapi":"3.1.0","components":{"responses":{"A":{"$ref":"#/components/responses/B","summary":"s","description":"d","x-y":1},"B":{"description":"b"}}}}	{"openapi":"3.1.0","components":{"responses":{"A":{"description":"d"},"B":{"description":"b"}}}}	[]	[]
+{"openapi":"3.2.0","components":{"responses":{"A":{"$ref":"#/components/responses/B","summary":"s","description":"d"},"B":{"description":"b"}}}}	{"openapi":"3.2.0","components":{"responses":{"A":{"description":"d","summary":"s"},"B":{"description":"b"}}}}	[]	[]
+{"openapi":"3.0.3","components":{"responses":{"A":{"$ref":"#/components/responses/B","description":"d"},"B":{"description":"b"}}}}	{"openapi":"3.0.3","components":{"responses":{"A":{"description":"b"},"B":{"description":"b"}}}}	[]	[]
+{"openapi":"3.1.0","components":{"schemas":{"A":{"$ref":"#/components/schemas/B","description":"d","allOf":[{"maxLength":5}]},"B":{"type":"string"}}}}	{"openapi":"3.1.0","components":{"schemas":{"A":{"allOf":[{"type":"string"},{"maxLength":5}],"description":"d"},"B":{"type":"string"}}}}	[]	[]
+{"openapi":"3.0.3","components":{"schemas":{"A":{"$ref":"#/components/schemas/B","description":"d"},"B":{"type":"string"}}}}	{"openapi":"3.0.3","components":{"schemas":{"A":{"type":"string"},"B":{"type":"string"}}}}	[]	[]
+{"swagger":"2.0","paths":{"/p":{"$ref":"#/x-items/P","get":{"responses":{"200":{"description":"ok"}}}}},"x-items":{"P":{"post":{"responses":{"200":{"description":"ok"}}}}}}	{"swagger":"2.0","paths":{"/p":{"post":{"responses":{"200":{"description":"ok"}}},"get":{"responses":{"200":{"description":"ok"}}}}},"x-items":{"P":{"post":{"responses":{"200":{"description":"ok"}}}}}}	[]	[]

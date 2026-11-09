@@ -93,7 +93,7 @@ experiments, each with its recorded result.
 | E | expr tree layer (key operators, `fold`), TypeScript | in review in tabnas/expr |
 | 0 | this repository bootstrapped from the ZON template, all three runtimes | done |
 | 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | done in all three runtimes |
-| 2 | the resolver over `fold`, against the expr checkout | under way: the object model is in |
+| 2 | the resolver over `fold`, against expr's `main` | TypeScript: the object model and `resolve` within one document |
 | 3 to 7 | ports of the resolver, documents, bundling, release | see the plan |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -118,6 +118,22 @@ empty source. JSON text opening with `{` goes to the runtime's JSON
 decoder first (`JSON.parse`, `encoding/json` into `*tabnas.OrderedMap`,
 `serde_json`), rebuilt into the grammar's own tree family, and to the
 grammar on any refusal, so every error comes from the grammar.
+
+### The resolver
+
+`resolve(raw, options)` in `ts/src/resolve.ts` is `fold` from
+`@tabnas/expr` with the OpenAPI vocabulary in its callbacks, as
+prototype E6 sketched: `inherit` passes each map's object-model state,
+base URI and schema dialect down the tree; `recognise` makes a `$ref` map
+a site only where the model puts a Reference Object, a Schema Object or
+a Path Item; `evaluate` resolves the URI (RFC 3986), decodes the
+fragment (RFC 6901, percent-decoding first) or looks up an anchor, reads
+the target through `site.at`, and applies the sibling rule by version and
+kind. Sharing (one result per location) and cycle cuts are the fold's.
+A reference into another document is reported `external`: loading is
+Phase 3. `test/resolve/*.tsv` pins it, with `ts/test/resolve-spec.test.ts`
+as the runner, and the acceptance runs are recorded under "The object
+model" below.
 
 ### The object model
 
@@ -161,6 +177,16 @@ Stripe's data figure is the plan's acceptance census: its data maps are
 `x-expansionResources` extension values. GitHub's are inside example
 values.
 
+`resolve` on the same descriptions, measured on 2026-11-09:
+
+| Description | Sites resolved | Cuts | Unresolved | `resolve` time |
+|---|---|---|---|---|
+| Stripe | 3673 | 125 | 0 | about 150 ms |
+| GitHub REST | 10580 | 0 | 0 | about 330 ms |
+
+These are the plan's acceptance for Phase 2: nothing unresolved, and the
+cut count stable.
+
 ## Repository map
 
 | Path | What it is |
@@ -198,10 +224,22 @@ path, a `replace` or a `go.work`.
   paths when it publishes. `rs/Cargo.lock` is committed and
   `ci/rust/run.sh` holds it to the manifest, exempting only the
   siblings' recorded versions.
-- **`@tabnas/expr` is not a dependency yet.** It enters every manifest
-  with the expr release that carries the tree layer, and only on the
-  maintainer's instruction. Until then Phase 2 runs against a local expr
-  checkout, wired locally and never committed.
+- **`@tabnas/expr` is a TypeScript dependency, and not yet a Go or Rust
+  one.** The maintainer instructed it on 2026-11-09 (the plan's
+  Decision 7): a peer (`>=0`) mirrored as a `"*"` devDependency, for the
+  resolver, which is built on expr's tree layer. That layer is on expr's
+  `main` and in no published release yet, so the registry's
+  `@tabnas/expr` has no `fold` and the TypeScript build needs expr's
+  `main`:
+  - **locally**, build `../expr/ts` and link it over the registry copy,
+    `ln -sfn "$PWD/../expr/ts" ts/node_modules/@tabnas/expr`, which
+    edits no tracked file;
+  - **in CI**, the staged `ci/workflows/ci.yml` adds `expr` to the
+    shared workflow's `deps`, which clones and links expr's `main`; until
+    a maintainer promotes it, `ci / ts` fails to compile the resolver.
+
+  `tools/port-deps.json` records the difference between the ports, with
+  its repair: Go and Rust take expr when they port the resolver.
 
 All three ports must depend on the same tabnas repositories at runtime:
 `ts/test/port-deps.test.ts` runs `tools/port-deps.cjs`, which compares

@@ -98,6 +98,55 @@ const { parse } = require('@tabnas/openapi')
 parse('{"openapi":"3.1.0"}', { fast: false }) // => { openapi: '3.1.0' }
 ```
 
+## Resolve the references in a description
+
+`resolve` takes the raw tree `parse` returns and gives back a new tree
+with every reference replaced by what it names:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+paths:
+  /pets:
+    get:
+      responses:
+        '200':
+          $ref: '#/components/responses/Pets'
+components:
+  responses:
+    Pets:
+      description: A list of pets
+`)
+
+const out = resolve(raw)
+out.tree.paths['/pets'].get.responses['200'] // => { description: 'A list of pets' }
+out.unresolved // => []
+```
+
+The raw tree still holds the `$ref`, so you can keep both.
+
+## Fail on a broken reference
+
+By default a reference that names nothing is listed in `unresolved` and
+left as written. Pass `strict` to have `resolve` throw instead:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse('openapi: 3.1.0\ncomponents: {schemas: {S: {$ref: "#/nope"}}}')
+resolve(raw).unresolved // => [{ at: '/components/schemas/S', ref: '#/nope', why: 'not-found' }]
+
+let code
+try {
+  resolve(raw, { strict: true })
+} catch (err) {
+  code = err.code
+}
+code // => 'openapi_unresolved'
+```
+
 ## Tell parse errors apart
 
 A failed parse throws an error with a `code`, and `toJSON()` gives its

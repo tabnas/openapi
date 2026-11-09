@@ -5,6 +5,11 @@ runtimes auto-discover and run **every** file in this directory, so a
 change here affects TypeScript, Go and Rust together — edit with that in
 mind.
 
+`resolve/` holds the resolver's fixtures: an input description, the
+resolved tree, the references left as written (`at why`), the cut edges,
+and `resolve` options, or `ERROR:<code>` under `strict`. They run in
+`ts/test/resolve-spec.test.ts`.
+
 `model/` holds the object model's fixtures, `classify.tsv`: a version, an
 RFC 6901 pointer and the state the classifier must reach. They run in
 `ts/test/model.test.ts`, outside `spec/` because they test the model, not
