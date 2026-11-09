@@ -5,6 +5,11 @@ runtimes auto-discover and run **every** file in this directory, so a
 change here affects TypeScript, Go and Rust together — edit with that in
 mind.
 
+`model/` holds the object model's fixtures, `classify.tsv`: a version, an
+RFC 6901 pointer and the state the classifier must reach. They run in
+`ts/test/model.test.ts`, outside `spec/` because they test the model, not
+a parse.
+
 `petstore/` holds one OpenAPI 3.1 description twice: `petstore.yaml` as
 written, and `petstore.json`, the same document as JSON. Every runtime's
 own suite reads both and holds each parse to the standard JSON reading of
