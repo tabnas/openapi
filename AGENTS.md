@@ -160,8 +160,12 @@ It writes `model/object-model.json`, which the ports will embed, and
 `ts/src/object-model.ts`. `ts/test/model.test.ts` fails when either is
 stale, and checks that the generator refuses an overlay entry with no
 reason, one naming a position the schemas lack, one that matches no
-version, and a vendored schema whose hash has changed. `test/model/`
-holds the classifier's fixtures.
+version, a vendored schema whose hash has changed, and a `$ref` it
+cannot follow: a pointer that names nothing, or one into a document it
+does not read. It follows every local pointer, nested definitions
+included (3.1's OAuth flows live in `#/$defs/oauth-flows/$defs/`), and
+reads every `^x-` extension as data in every version, whatever its schema
+allows. `test/model/` holds the classifier's fixtures.
 
 `node tools/model-census.cjs <file>...` (after `npm run build` in `ts/`)
 classifies every `$ref` map of real descriptions. Measured on

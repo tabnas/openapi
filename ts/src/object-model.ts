@@ -25,7 +25,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -53,7 +53,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -67,7 +67,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -102,7 +102,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -120,7 +120,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -149,7 +149,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -168,7 +168,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -204,7 +204,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -254,7 +254,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -275,7 +275,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ],
             [
               "^/",
@@ -297,7 +297,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -327,7 +327,7 @@ const OBJECT_MODEL = {
             ],
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "type": "responses"
@@ -337,7 +337,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -425,7 +425,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -454,7 +454,7 @@ const OBJECT_MODEL = {
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -464,17 +464,12 @@ const OBJECT_MODEL = {
           },
           "type": "tag"
         },
-        "vendorExtension": {
-          "kind": "object",
-          "rest": "data",
-          "type": "vendorExtension"
-        },
         "xml": {
           "kind": "object",
           "patterns": [
             [
               "^x-",
-              "vendorExtension"
+              "data"
             ]
           ],
           "props": {
@@ -1577,6 +1572,38 @@ const OBJECT_MODEL = {
           "kind": "object",
           "rest": "example?"
         },
+        "oauthFlow": {
+          "kind": "object",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "authorizationUrl": "data",
+            "refreshUrl": "data",
+            "scopes": "mapOfStrings",
+            "tokenUrl": "data"
+          },
+          "type": "oauthFlow"
+        },
+        "oauthFlows": {
+          "kind": "object",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "authorizationCode": "oauthFlow",
+            "clientCredentials": "oauthFlow",
+            "implicit": "oauthFlow",
+            "password": "oauthFlow"
+          },
+          "type": "oauthFlows"
+        },
         "operation": {
           "kind": "object",
           "patterns": [
@@ -1631,6 +1658,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "allowEmptyValue": "data",
+            "allowReserved": "data",
             "content": "content",
             "deprecated": "data",
             "description": "data",
@@ -1882,7 +1910,13 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
+            "bearerFormat": "data",
             "description": "data",
+            "flows": "oauthFlows",
+            "in": "data",
+            "name": "data",
+            "openIdConnectUrl": "data",
+            "scheme": "data",
             "type": "data"
           },
           "type": "securityScheme"
@@ -2316,6 +2350,40 @@ const OBJECT_MODEL = {
           "target": "mediaType",
           "type": "mediaType"
         },
+        "oauthFlow": {
+          "kind": "object",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "authorizationUrl": "data",
+            "deviceAuthorizationUrl": "data",
+            "refreshUrl": "data",
+            "scopes": "mapOfStrings",
+            "tokenUrl": "data"
+          },
+          "type": "oauthFlow"
+        },
+        "oauthFlows": {
+          "kind": "object",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "authorizationCode": "oauthFlow",
+            "clientCredentials": "oauthFlow",
+            "deviceAuthorization": "oauthFlow",
+            "implicit": "oauthFlow",
+            "password": "oauthFlow"
+          },
+          "type": "oauthFlows"
+        },
         "operation": {
           "kind": "object",
           "patterns": [
@@ -2366,6 +2434,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "allowEmptyValue": "data",
+            "allowReserved": "data",
             "content": "content",
             "deprecated": "data",
             "description": "data",
@@ -2626,8 +2695,15 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
+            "bearerFormat": "data",
             "deprecated": "data",
             "description": "data",
+            "flows": "oauthFlows",
+            "in": "data",
+            "name": "data",
+            "oauth2MetadataUrl": "data",
+            "openIdConnectUrl": "data",
+            "scheme": "data",
             "type": "data"
           },
           "type": "securityScheme"

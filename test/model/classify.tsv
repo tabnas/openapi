@@ -38,6 +38,12 @@ version	path	state
 3.1	/security/0	"securityRequirement"
 3.1	/components/schemas/S/discriminator	"discriminator"
 3.2	/paths/~1p/additionalOperations/COPY	"operation"
+# A security scheme's flows, which 3.1 and 3.2 define nested inside
+# another definition.
+3.0	/components/securitySchemes/oauth/flows/implicit	"oauthFlow"
+3.1	/components/securitySchemes/oauth/flows	"oauthFlows"
+3.1	/components/securitySchemes/oauth/flows/implicit	"oauthFlow"
+3.2	/components/securitySchemes/oauth/flows/deviceAuthorization	"oauthFlow"
 # Locators, connections and mappings, from the overlay.
 3.1	/components/links/L/operationRef	"locator:operation"
 3.1	/components/links/L/operationId	"connection:operationId"
@@ -54,6 +60,8 @@ version	path	state
 3.1	/components/schemas/Pet/default/a	"data"
 3.1	/components/schemas/Pet/x-vendor	"data"
 3.1	/x-vendor/a	"data"
+2.0	/x-vendor	"data"
+2.0	/paths/~1p/get/x-vendor	"data"
 3.0	/paths/~1p/get/responses/200/content/application~1json/examples/e1/value	"data"
 3.1	/components/links/L/parameters/id	"data"
 3.1	/paths/~1p/get/unknownField	"data"

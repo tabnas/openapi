@@ -117,6 +117,24 @@ describe('object model generator gates', () => {
     assert.throws(() => Gen.loadSources(read), /does not match its pinned SHA-256/)
   })
 
+  // The 3.1 schema, with the reference to the implicit flow changed.
+  function refTo(ref: string) {
+    const sources = structuredClone(Gen.loadSources())
+    sources['3.1'].schema.doc.$defs['oauth-flows'].properties.implicit.$ref = ref
+    return sources
+  }
+
+  test('a nested pointer is followed, and one that names nothing is refused', () => {
+    assert.equal(classify('3.1', ['components', 'securitySchemes', 's', 'flows', 'password']).state, 'oauthFlow')
+    const sources = refTo('#/$defs/oauth-flows/$defs/nope')
+    assert.throws(() => Gen.generate({ sources }), /names no definition/)
+  })
+
+  test('a reference into a document the generator does not read is refused', () => {
+    const sources = refTo('https://example.com/schema#/$defs/flow')
+    assert.throws(() => Gen.generate({ sources }), /in a document the generator does not read/)
+  })
+
   test('a dialect with no applicator list is refused', () => {
     const applicators = JSON.parse(readFileSync(join(REPO, 'model', 'applicators.json'), 'utf8'))
     delete applicators.dialects['wright-00']

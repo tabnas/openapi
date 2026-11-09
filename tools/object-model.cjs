@@ -46,11 +46,15 @@ const OUT_TS = Path.join(ROOT, 'ts', 'src', 'object-model.ts')
 // What each version's schema calls things. `defs` is where its
 // definitions live; `reference` the definitions that are the Reference
 // Object; `schema` those that are the Schema Object; `types` the canonical
-// type name of a definition whose name is not already it.
+// type name of a definition whose name is not already it, a nested
+// definition named by its path below `defs`; `external` the documents
+// outside the vendored ones that the schema refers to, whose definitions
+// are scalar keywords.
 const VERSIONS = {
   '2.0': {
     dialect: 'draft-04',
     defs: 'definitions',
+    external: ['http://json-schema.org/draft-04/schema'],
     reference: ['jsonReference'],
     schema: ['schema', 'fileSchema'],
     types: {
@@ -103,6 +107,11 @@ const VERSIONS = {
       'external-docs': 'externalDocs',
       callbacks: 'callback',
       'oauth-flows': 'oauthFlows',
+      // Each flow is an OAuth Flow Object, as 3.0's four flow definitions are.
+      'oauth-flows/$defs/implicit': 'oauthFlow',
+      'oauth-flows/$defs/password': 'oauthFlow',
+      'oauth-flows/$defs/client-credentials': 'oauthFlow',
+      'oauth-flows/$defs/authorization-code': 'oauthFlow',
     },
   },
   '3.2': {
@@ -115,6 +124,11 @@ const VERSIONS = {
       'external-docs': 'externalDocs',
       callbacks: 'callback',
       'oauth-flows': 'oauthFlows',
+      'oauth-flows/$defs/implicit': 'oauthFlow',
+      'oauth-flows/$defs/password': 'oauthFlow',
+      'oauth-flows/$defs/client-credentials': 'oauthFlow',
+      'oauth-flows/$defs/authorization-code': 'oauthFlow',
+      'oauth-flows/$defs/device-authorization': 'oauthFlow',
     },
   },
 }
@@ -147,10 +161,12 @@ function loadSources(read = (file) => Fs.readFileSync(Path.join(MODEL, 'schemas'
 }
 
 // A canonical type name: camelCase, as the specification names the
-// objects in prose, with the version's own exceptions.
+// objects in prose, with the version's own exceptions. A nested
+// definition goes by its own key, the last segment of its path.
 function typeName(cfg, def) {
   if (Object.prototype.hasOwnProperty.call(cfg.types, def)) return cfg.types[def]
-  const camel = def.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+  const own = def.slice(def.lastIndexOf('/') + 1)
+  const camel = own.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
   return camel.charAt(0).toLowerCase() + camel.slice(1)
 }
 
@@ -158,6 +174,10 @@ const STRUCTURE = [
   'properties', 'patternProperties', 'additionalProperties', 'items',
   'allOf', 'anyOf', 'oneOf', 'then', 'else', 'dependentSchemas',
 ]
+
+// The pattern every version gives its extensions. An extension's value
+// belongs to its author, whatever the schema allows it: data.
+const EXTENSION = '^x-'
 
 // A `$ref` with nothing beside it but annotations names another schema;
 // a `$ref` beside structure is merged into it, as an allOf member is.
@@ -178,15 +198,33 @@ function build(version, sources, applicators) {
   const states = {}
   const memo = new Map()
 
-  // A `$ref` inside the version's own documents: '#/$defs/x' or
-  // '#/definitions/x' in the document the node came from. Anything else
-  // (draft-04's own metaschema, in 2.0) is a scalar keyword: data.
+  // A `$ref` of the version's schemas, followed. A JSON Pointer into the
+  // document the node came from names a definition ('#/$defs/x',
+  // '#/definitions/x') or one nested inside another (3.1's
+  // '#/$defs/oauth-flows/$defs/implicit'), which goes by its path below
+  // the definitions ('oauth-flows/$defs/implicit'). A reference into a
+  // document the version declares `external` (draft-04's metaschema, in
+  // 2.0) names a scalar keyword: data, so null. Any other reference is an
+  // input the generator does not understand, and fails rather than read
+  // as data.
   function deref(ref, src) {
-    const m = /^#\/(\$defs|definitions)\/([^/]+)$/.exec(ref)
-    if (null == m) return null
-    const node = src.doc[m[1]]?.[m[2]]
-    if (undefined === node) fail(`${version}: ${ref} names no definition`)
-    return { name: m[2], node, src }
+    const hash = ref.indexOf('#')
+    if (0 !== hash) {
+      if ((cfg.external ?? []).includes(-1 === hash ? ref : ref.slice(0, hash))) return null
+      fail(`${version}: ${ref} is in a document the generator does not read`)
+    }
+    // RFC 6901: percent-decode the fragment, split it, then unescape.
+    const tokens = decodeURIComponent(ref.slice(1)).split('/')
+    if ('' !== tokens[0] || cfg.defs !== tokens[1] || tokens.length < 3) {
+      fail(`${version}: ${ref} names no definition`)
+    }
+    let node = src.doc
+    for (const token of tokens.slice(1)) {
+      const t = token.replace(/~1/g, '/').replace(/~0/g, '~')
+      node = null != node && 'object' === typeof node && Object.hasOwn(node, t) ? node[t] : undefined
+      if (undefined === node) fail(`${version}: ${ref} names no definition`)
+    }
+    return { name: tokens.slice(2).join('/'), node, src }
   }
 
   // The definition two reference-or-object branches stand for, or null.
@@ -271,7 +309,7 @@ function build(version, sources, applicators) {
       memo.set(key, 'data')
       return 'data'
     }
-    finish(acc, name)
+    finish(acc)
     return name
   }
 
@@ -281,7 +319,7 @@ function build(version, sources, applicators) {
     if (null == acc.props && null == acc.patterns && null == acc.rest && null == acc.items) {
       return 'data'
     }
-    finish(acc, hint)
+    finish(acc)
     // Inline states are named by where they are first met.
     let name = hint
     for (let n = 2; states[name] && !same(states[name], acc); n++) name = hint + '~' + n
@@ -314,7 +352,9 @@ function build(version, sources, applicators) {
     }
     for (const [re, v] of Object.entries(node.patternProperties ?? {})) {
       acc.patterns ??= []
-      const to = stateFor(v, src, hint + '.' + re)
+      // 2.0's vendorExtension allows an object, which is still the
+      // extension author's data.
+      const to = EXTENSION === re ? 'data' : stateFor(v, src, hint + '.' + re)
       const at = acc.patterns.findIndex((p) => p[0] === re)
       if (-1 === at) acc.patterns.push([re, to])
       else acc.patterns[at][1] = join(acc.patterns[at][1], to)
@@ -376,7 +416,7 @@ function build(version, sources, applicators) {
       type: 'schema',
       dialect: cfg.dialect,
       props,
-      patterns: [['^x-', 'data']],
+      patterns: [[EXTENSION, 'data']],
       rest: 'data',
     }
     if (0 < dialect.schemaOrList.length) states.schema.items = 'schema'
