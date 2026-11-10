@@ -513,22 +513,34 @@ func Make(opts ...MakeOptions) *tabnas.Tabnas {
 		mo = opts[0]
 	}
 
-	var j *tabnas.Tabnas
 	if mo.Strict {
-		j = tabnas.Make()
+		return makeOn(tabnas.Make(), mo)
+	}
+	// The construction yaml.MakeJsonic makes, spelled out so that this
+	// package depends on jsonic directly, as the TypeScript and Rust ports
+	// do. TestMakeMatchesYamlMakeJsonic holds the two together.
+	return makeOn(jsonic.Make(tabnas.Options{
+		String: &tabnas.StringOptions{Chars: "`"},
+		Lex:    &tabnas.LexOptions{EmptyResult: nil},
+	}), mo)
+}
+
+// makeOn installs the format's grammar (json, or the yaml grammar on
+// jsonic's base) and this plugin on base, and declares this parser's own
+// window setting: lex.window false, so that ParseReader reads a reader
+// whole (admin ADR-30). The plugin's matchers and actions are not yet
+// verified at the window's edge, and a base that declares the window must
+// not carry it to them; the setting comes last, after everything the base
+// and the plugins set.
+func makeOn(j *tabnas.Tabnas, mo MakeOptions) *tabnas.Tabnas {
+	if mo.Strict {
 		must(j.Use(tabnasjson.Json))
 	} else {
-		// The construction yaml.MakeJsonic makes, spelled out so that this
-		// package depends on jsonic directly, as the TypeScript and Rust
-		// ports do. TestMakeMatchesYamlMakeJsonic holds the two together.
-		j = jsonic.Make(tabnas.Options{
-			String: &tabnas.StringOptions{Chars: "`"},
-			Lex:    &tabnas.LexOptions{EmptyResult: nil},
-		})
 		must(j.Use(yaml.Yaml, map[string]any{"meta": false}))
 	}
-
 	must(j.UseDefaults(OpenApi, Defaults))
+	no := false
+	j.SetOptions(tabnas.Options{Lex: &tabnas.LexOptions{Window: &no}})
 	return j
 }
 
