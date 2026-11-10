@@ -340,12 +340,17 @@ export { OpenApi, make, parse, version, VERSION }
 
 export { resolve, ResolveError } from './resolve'
 export type {
+  Cut,
+  Cycles,
+  Kind,
+  Provenance,
   ResolveOptions,
   ResolveResult,
+  Sharing,
+  Status,
   Unresolved,
-  Provenance,
-  Cut,
   Why,
 } from './resolve'
+export type { Connection, ConnectionKind } from './connections'
 
 export type { OpenApiOptions, MakeOptions, ParseOptions, VersionInfo }

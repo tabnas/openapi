@@ -146,6 +146,30 @@ function classify(version: ModelVersion, path: readonly (string | number)[]): Sl
   return slot(version, state)
 }
 
-export { VERSIONS as MODEL_VERSIONS, classify, rootState, slot, step }
+// Every position of a document the model does not type as data, in
+// document order, a container before its members: `visit` gets the node,
+// its path, its state, and what its parent passed down, and returns what
+// its own members get (a base URI, say). A position whose state is data
+// is not visited, and neither is anything below it.
+function walkModel<T>(
+  version: ModelVersion,
+  root: unknown,
+  start: T,
+  visit: (node: any, path: (string | number)[], state: string, passed: T) => T,
+): void {
+  const stack: [any, (string | number)[], string, T][] = [[root, [], rootState(), start]]
+  while (0 < stack.length) {
+    const [node, path, state, passed] = stack.pop()!
+    const mine = visit(node, path, state, passed)
+    if (null == node || 'object' !== typeof node) continue
+    const names: (string | number)[] = Array.isArray(node) ? node.map((_, i) => i) : Object.keys(node)
+    for (let i = names.length - 1; 0 <= i; i--) {
+      const next = step(version, state, names[i])
+      if ('data' !== next) stack.push([(node as any)[names[i]], [...path, names[i]], next, mine])
+    }
+  }
+}
+
+export { VERSIONS as MODEL_VERSIONS, classify, rootState, slot, step, walkModel }
 
 export type { ModelVersion, Slot, SlotKind }

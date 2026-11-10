@@ -90,10 +90,10 @@ experiments, each with its recorded result.
 
 | Phase | What | State |
 |---|---|---|
-| E | expr tree layer (key operators, `fold`), TypeScript | in review in tabnas/expr |
+| E | expr tree layer (key operators, `fold`) | TypeScript on expr's `main`, not yet released; the Go and Rust ports are next |
 | 0 | this repository bootstrapped from the ZON template, all three runtimes | done |
 | 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | done in all three runtimes |
-| 2 | the resolver over `fold`, against expr's `main` | TypeScript: the object model and `resolve` within one document |
+| 2 | the resolver over `fold`, against expr's `main` | TypeScript done within one document: the object model, `resolve` with every option and output shape, the connections report, and the apidef preset; Go and Rust wait on the expr ports |
 | 3 to 7 | ports of the resolver, documents, bundling, release | see the plan |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -123,17 +123,54 @@ grammar on any refusal, so every error comes from the grammar.
 
 `resolve(raw, options)` in `ts/src/resolve.ts` is `fold` from
 `@tabnas/expr` with the OpenAPI vocabulary in its callbacks, as
-prototype E6 sketched: `inherit` passes each map's object-model state,
-base URI and schema dialect down the tree; `recognise` makes a `$ref` map
-a site only where the model puts a Reference Object, a Schema Object or
-a Path Item; `evaluate` resolves the URI (RFC 3986), decodes the
-fragment (RFC 6901, percent-decoding first) or looks up an anchor, reads
-the target through `site.at`, and applies the sibling rule by version and
-kind. Sharing (one result per location) and cycle cuts are the fold's.
+prototype E6 sketched:
+
+- `inherit` passes each map's object-model state, base URI, schema
+  dialect, and whether it is inside an extension named in `extensions`,
+  down the tree.
+- `recognise` makes a `$ref` map a site where the model puts a Reference
+  Object, a Schema Object or a Path Item (and, under `slots: 'all'` or
+  inside a named extension, any map whose `$ref` is a string). It is
+  called once per location, in walk order, so it also makes each site's
+  record: its sequence number, kind, and target or the reason it has
+  none. Report arrays sort by that number, which is the plan's pre-order
+  with a target entered at its first reference; `evaluate` runs in
+  post-order, so do not let its order leak into a report.
+- `evaluate` reads the target through `site.at`, applies the chain rule
+  (a site naming a site left as written is left as written, reported as
+  that one is), the sibling rule by version and kind, and the output
+  shape.
+
+Sharing (one result per location) and cycle detection are the fold's.
+The shapes beyond `share` are small post-passes: `cycles: 'keep'` has
+each edge that closed a cycle hold a placeholder until the fold is done,
+then settles them in place (a placeholder met again while it is being
+settled is a loop of references, which stays cut); `inline-once` and
+`copy` deep-copy the finished graph, `copy` counting the compact JSON's
+UTF-8 bytes against `budget`. `xref` (apidef's `x-ref`) implies a copy per
+site and is written last, after stripping the `x-ref` a chain's earlier
+link carried, which is what keeps apidef's key order.
+
+`ts/src/connections.ts` builds the `connections` report: one model walk
+over the raw tree for the names (operationId, operationRef, security
+requirement keys, tags, 3.2 tag parents, discriminator mappings,
+`$dynamicRef`), each checked against the resolved tree; Path Item merge
+conflicts come from `evaluate`; `operationIdReuse` walks routes through
+paths, webhooks and callbacks in the resolved graph. `ts/src/uri.ts`
+holds the RFC 3986 and RFC 6901 helpers both use.
+
 A reference into another document is reported `external`: loading is
-Phase 3. `test/resolve/*.tsv` pins it, with `ts/test/resolve-spec.test.ts`
-as the runner, and the acceptance runs are recorded under "The object
-model" below.
+Phase 3. `test/resolve/*.tsv` pins the resolver, with
+`ts/test/resolve-spec.test.ts` as the runner (optional `select` and
+`connections` columns); identity, cyclic graphs and the byte budget,
+which JSON cannot carry, are in `ts/test/resolve.test.ts`.
+
+`compat: 'apidef'` was checked against apidef's own resolver on apidef's
+whole test corpus, 43 descriptions and 588 sites, by running apidef's
+`addXRefsAndResolve` and ours side by side and decycling both with its
+`decycle`: byte-identical, key order included. `test/resolve/apidef.tsv`
+carries rows 2 to 25 of apidef's `parse-resolve.tsv`. Re-run that
+comparison after any change to the sibling, sharing or cycle code.
 
 ### The object model
 
@@ -181,15 +218,19 @@ Stripe's data figure is the plan's acceptance census: its data maps are
 `x-expansionResources` extension values. GitHub's are inside example
 values.
 
-`resolve` on the same descriptions, measured on 2026-11-09:
+`resolve` on the same descriptions, with the default options, measured
+on 2026-11-10 (the median of six warm runs, the connections report
+included):
 
-| Description | Sites resolved | Cuts | Unresolved | `resolve` time |
-|---|---|---|---|---|
-| Stripe | 3673 | 125 | 0 | about 150 ms |
-| GitHub REST | 10580 | 0 | 0 | about 330 ms |
+| Description | Sites | Cuts | Unresolved | Connections | `resolve` time |
+|---|---|---|---|---|---|
+| Stripe | 3673 | 125 | 0 | 2, all found | about 210 ms |
+| GitHub REST | 10580 | 0 | 0 | 1284, all found | about 350 ms |
 
 These are the plan's acceptance for Phase 2: nothing unresolved, and the
-cut count stable.
+cut count stable. Under `compat: 'apidef'` every one of the `$ref` maps
+in the census resolves (4062 and 10899), with no cuts, since apidef
+keeps cycles.
 
 ## Repository map
 

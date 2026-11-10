@@ -12,3 +12,10 @@ input	expected	unresolved	cuts	opts
 {"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#/a~2b"}}}}	{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#/a~2b"}}}}	["/components/schemas/S bad-fragment"]	[]
 {"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":42}}}}	{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":42}}}}	["/components/schemas/S not-a-string"]	[]
 {"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"https://example.com/s.json"}}}}	{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"https://example.com/s.json"}}}}	["/components/schemas/S external"]	[]
+# %7B decodes before the split; an empty fragment, or none, names the
+# whole document, which encloses the site; a trailing slash names the
+# member named by the empty string; a report path encodes / and ~.
+{"openapi":"3.1.0","paths":{"/a/{id}":{"get":{"responses":{"200":{"description":"ok"}}}}},"components":{"responses":{"R":{"$ref":"#/paths/~1a~1%7Bid%7D/get/responses/200"}}}}	{"openapi":"3.1.0","paths":{"/a/{id}":{"get":{"responses":{"200":{"description":"ok"}}}}},"components":{"responses":{"R":{"description":"ok"}}}}	[]	[]	
+{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#"},"E":{"$ref":""}}}}	{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#"},"E":{"$ref":""}}}}	[]	["/components/schemas/S","/components/schemas/E"]	
+{"openapi":"3.1.0","components":{"schemas":{"":{"type":"string"},"S":{"$ref":"#/components/schemas/"}}}}	{"openapi":"3.1.0","components":{"schemas":{"":{"type":"string"},"S":{"type":"string"}}}}	[]	[]	
+{"openapi":"3.1.0","paths":{"/a~b":{"get":{"responses":{"200":{"$ref":"#/nope"}}}}},"components":{"schemas":{"x/y":{"properties":{"n":{"$ref":"#/components/schemas/x~1y"}}}}}}	{"openapi":"3.1.0","paths":{"/a~b":{"get":{"responses":{"200":{"$ref":"#/nope"}}}}},"components":{"schemas":{"x/y":{"properties":{"n":{"$ref":"#/components/schemas/x~1y"}}}}}}	["/paths/~1a~0b/get/responses/200 not-found"]	["/components/schemas/x~1y/properties/n"]	

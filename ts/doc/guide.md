@@ -147,6 +147,126 @@ try {
 code // => 'openapi_unresolved'
 ```
 
+## Write a resolved description to a file
+
+The default result shares one value among the sites that name it, and
+JSON writes a shared value out at every one of them. Ask for a tree
+instead. `inline-once` fills the first site naming each target and
+leaves the rest as references:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+paths:
+  /a:
+    get:
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+  /b:
+    get:
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+components:
+  responses:
+    Ok: { description: ok }
+`)
+
+const out = resolve(raw, { sharing: 'inline-once' })
+out.tree.paths['/a'].get.responses['200'] // => { description: 'ok' }
+out.tree.paths['/b'].get.responses['200'] // => { $ref: '#/components/responses/Ok' }
+```
+
+To fill every site, pass `sharing: 'copy'` with a `budget`, the most
+bytes of JSON you accept. Past it, `resolve` stops with
+`openapi_budget`:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse('{"openapi":"3.1.0","components":{"schemas":{"A":{"$ref":"#/components/schemas/B"},"B":{"type":"string"}}}}')
+resolve(raw, { sharing: 'copy', budget: 4096 }).tree.components.schemas.A // => { type: 'string' }
+
+let code
+try {
+  resolve(raw, { sharing: 'copy', budget: 10 })
+} catch (err) {
+  code = err.code
+}
+code // => 'openapi_budget'
+```
+
+## Check what the names in a description reach
+
+Tags, `operationId` values, security requirements, and discriminator
+mappings name things without `$ref`. `connections` says what each one reaches.
+List the names that reach nothing:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+tags:
+  - name: pets
+paths:
+  /pets:
+    get:
+      tags: [pets, toys]
+      responses: {}
+`)
+
+resolve(raw).connections.filter((c) => !c.found).map((c) => c.name) // => ['toys']
+```
+
+## Resolve the references inside an extension
+
+The values of `x-` members are data, so a `$ref` inside one stays as
+written. Name the extensions whose references you want resolved:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.0.0
+components:
+  schemas:
+    Charge:
+      type: object
+      x-expansionResources:
+        oneOf:
+          - $ref: "#/components/schemas/Customer"
+    Customer: { type: object }
+`)
+
+const out = resolve(raw, { extensions: ['x-expansionResources'] })
+out.tree.components.schemas.Charge['x-expansionResources'].oneOf[0] // => { type: 'object' }
+```
+
+## Resolve as @voxgig/apidef does
+
+`compat: 'apidef'` gives the tree that `@voxgig/apidef` builds: every
+string `$ref` resolved, the site's own members laid over the target's,
+and `x-ref` beside them:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.0.0
+components:
+  schemas:
+    A: { $ref: "#/components/schemas/B", description: mine }
+    B: { type: string, description: theirs }
+`)
+
+resolve(raw, { compat: 'apidef' }).tree.components.schemas.A // => { type: 'string', description: 'mine', 'x-ref': '#/components/schemas/B' }
+```
+
+It keeps cycles, so the tree can loop. Write it out with `cycles: 'cut'`
+beside the preset, or walk it as a graph.
+
 ## Tell parse errors apart
 
 A failed parse throws an error with a `code`, and `toJSON()` gives its

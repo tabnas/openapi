@@ -7,8 +7,16 @@ mind.
 
 `resolve/` holds the resolver's fixtures: an input description, the
 resolved tree, the references left as written (`at why`), the cut edges,
-and `resolve` options, or `ERROR:<code>` under `strict`. They run in
-`ts/test/resolve-spec.test.ts`.
+and `resolve` options, or `ERROR:<code>` for an error `resolve` raises.
+Two columns are optional: `select`, a path whose value in the resolved
+tree is held to `expected` in place of the whole tree, and
+`connections`, the connections report as one `kind at -> target` line
+per row (`!why` for a target not found, then any flags). Report arrays
+are in walk order, so a row's order is part of what it pins.
+`apidef.tsv` is rows 2 to 25 of @voxgig/apidef's `parse-resolve.tsv`,
+under `compat: 'apidef'`, with apidef's own select paths and values;
+keep it in step with apidef's file rather than editing its expected
+values. They run in `ts/test/resolve-spec.test.ts`.
 
 `model/` holds the object model's fixtures, `classify.tsv`: a version, an
 RFC 6901 pointer and the state the classifier must reach. They run in

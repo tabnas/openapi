@@ -1,0 +1,13 @@
+input	expected	unresolved	cuts	opts
+# The options that change what resolves and how a site's value is built:
+# xref writes the reference as written beside every string $ref, resolved
+# or not; siblings merge lays a site's members over its target, the site's
+# winning, in any version; slots all resolves a $ref in data too, so an
+# example that names its own schema closes a cycle; extensions resolves
+# inside the named extensions only; targets object leaves a reference to a
+# string or a list as written.
+{"openapi":"3.0.3","components":{"schemas":{"A":{"$ref":"#/components/schemas/B"},"B":{"type":"string"},"C":{"$ref":"#/nope"}}}}	{"openapi":"3.0.3","components":{"schemas":{"A":{"type":"string","x-ref":"#/components/schemas/B"},"B":{"type":"string"},"C":{"$ref":"#/nope","x-ref":"#/nope"}}}}	["/components/schemas/C not-found"]	[]	{"xref":true}
+{"openapi":"3.0.3","components":{"responses":{"A":{"$ref":"#/components/responses/B","description":"d"},"B":{"description":"b","content":{}}}}}	{"openapi":"3.0.3","components":{"responses":{"A":{"description":"d","content":{}},"B":{"description":"b","content":{}}}}}	[]	[]	{"siblings":"merge"}
+{"openapi":"3.1.0","x-v":{"$ref":"#/components/schemas/S"},"components":{"schemas":{"S":{"type":"string","example":{"$ref":"#/components/schemas/S"}}}}}	{"openapi":"3.1.0","x-v":{"type":"string","example":{"$ref":"#/components/schemas/S"}},"components":{"schemas":{"S":{"type":"string","example":{"$ref":"#/components/schemas/S"}}}}}	[]	["/components/schemas/S/example"]	{"slots":"all"}
+{"openapi":"3.1.0","x-v":{"a":{"$ref":"#/components/schemas/S"}},"x-w":{"$ref":"#/components/schemas/S"},"components":{"schemas":{"S":{"type":"string"}}}}	{"openapi":"3.1.0","x-v":{"a":{"type":"string"}},"x-w":{"$ref":"#/components/schemas/S"},"components":{"schemas":{"S":{"type":"string"}}}}	[]	[]	{"extensions":["x-v"]}
+{"openapi":"3.1.0","info":{"title":"t"},"components":{"schemas":{"S":{"$ref":"#/info/title"},"L":{"$ref":"#/tags"}}},"tags":[]}	{"openapi":"3.1.0","info":{"title":"t"},"components":{"schemas":{"S":{"$ref":"#/info/title"},"L":{"$ref":"#/tags"}}},"tags":[]}	["/components/schemas/S non-object-target","/components/schemas/L non-object-target"]	[]	{"targets":"object"}

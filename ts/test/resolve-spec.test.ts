@@ -3,9 +3,13 @@
 // The resolver against test/resolve/*.tsv. Each row parses its input,
 // resolves it with the row's options, and holds the resolved tree, the
 // references left as written (`at why`) and the cut edges to the row; an
-// `ERROR:<code>` row holds the code `resolve` raises. These fixtures live
-// outside test/spec/ because the parity runners there read a parse, and
-// because the Go and Rust ports do not carry the resolver yet.
+// `ERROR:<code>` row holds the code `resolve` raises. Two columns are
+// optional: `select`, a path into the resolved tree whose value is held
+// to `expected` in place of the whole tree, and `connections`, the
+// connections report, one `kind at -> target` line each (`!why` for a
+// target not found, then any flags). These fixtures live outside
+// test/spec/ because the parity runners there read a parse, and because
+// the Go and Rust ports do not carry the resolver yet.
 
 import { describe, test } from 'node:test'
 import assert from 'node:assert'
@@ -19,6 +23,18 @@ import { parse, resolve } from '../dist/openapi'
 const DIR = join(__dirname, '..', '..', 'test', 'resolve')
 
 const C = (x: any) => JSON.parse(JSON.stringify(x))
+
+// One connection as a fixture writes it.
+function line(c: any): string {
+  let out = `${c.kind} ${c.at} -> ${c.found ? c.target : '!' + (c.why ?? 'missing')}`
+  for (const flag of ['via', 'type', 'ambiguous', 'cycle', 'anchor']) {
+    if (undefined !== c[flag]) out += ` ${flag}=${c[flag]}`
+  }
+  for (const list of ['targets', 'fields', 'routes']) {
+    if (undefined !== c[list]) out += ` ${list}=${c[list].join(',')}`
+  }
+  return out
+}
 
 const files = readdirSync(DIR).filter((f) => f.endsWith('.tsv')).sort()
 
@@ -48,7 +64,10 @@ for (const file of files) {
           return
         }
         const out = resolve(parse(input), opts)
-        assert.deepStrictEqual(C(out.tree), JSON.parse(expected), `${file}:${row.line} tree`)
+        const select = row.named('select').trim()
+        let value = out.tree
+        if ('' !== select) for (const seg of JSON.parse(select)) value = value[seg]
+        assert.deepStrictEqual(C(value), JSON.parse(expected), `${file}:${row.line} tree`)
         assert.deepStrictEqual(
           out.unresolved.map((u) => u.at + ' ' + u.why),
           JSON.parse(row.named('unresolved') || '[]'),
@@ -59,6 +78,10 @@ for (const file of files) {
           JSON.parse(row.named('cuts') || '[]'),
           `${file}:${row.line} cuts`,
         )
+        const conns = row.named('connections').trim()
+        if ('' !== conns) {
+          assert.deepStrictEqual(out.connections.map(line), JSON.parse(conns), `${file}:${row.line} connections`)
+        }
       })
     }
   })

@@ -60,14 +60,14 @@ describe('resolve', () => {
     assert.equal(out.provenance.length, 1)
     const p = out.provenance[0]
     assert.deepEqual(
-      { at: p.at, ref: p.ref, kind: p.kind, type: p.type, target: p.target, resolved: p.resolved },
+      { at: p.at, ref: p.ref, kind: p.kind, type: p.type, target: p.target, status: p.status },
       {
         at: '/paths/~1p/get/responses/200',
         ref: '#/components/responses/Ok',
         kind: 'reference',
         type: 'response',
         target: '/components/responses/Ok',
-        resolved: true,
+        status: 'resolved',
       },
     )
     assert.equal(p.row, 7)
@@ -82,8 +82,8 @@ describe('resolve', () => {
     )
     assert.equal(out.dataSlots, 2)
     assert.deepEqual(
-      out.dynamic.map((d) => d.at),
-      ['/components/schemas/S/properties/t'],
+      out.connections.filter((c) => 'dynamicRef' === c.kind).map((c) => [c.at, c.found]),
+      [['/components/schemas/S/properties/t', false]],
     )
   })
 
@@ -107,6 +107,96 @@ describe('resolve', () => {
     )
     assert.deepEqual(C(out.tree.components.schemas.S), { allOf: [{ polluted: true }], description: 'd' })
     assert.equal(({} as any).polluted, undefined)
+  })
+
+  const TWO =
+    '{"openapi":"3.1.0","paths":{"/a":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}},' +
+    '"/b":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}}},' +
+    '"components":{"responses":{"Ok":{"description":"ok","headers":{"X":{"schema":{"type":"string"}}}}}}}'
+  const sites = (tree: any) => [tree.paths['/a'].get.responses['200'], tree.paths['/b'].get.responses['200']]
+
+  test('site sharing gives each site its own shallow copy, its members shared', () => {
+    const tree = resolve(parse(TWO), { sharing: 'site' }).tree
+    const [a, b] = sites(tree)
+    const ok = tree.components.responses.Ok
+    assert.notEqual(a, b)
+    assert.notEqual(a, ok)
+    assert.equal(a.headers, ok.headers)
+    assert.equal(b.headers, ok.headers)
+  })
+
+  test('copy shares nothing, and inline-once makes a tree', () => {
+    for (const sharing of ['copy', 'inline-once'] as const) {
+      const tree = resolve(parse(TWO), { sharing, budget: 1e6 }).tree
+      const seen = new Set<object>()
+      const walk = (v: any) => {
+        if (null == v || 'object' !== typeof v) return
+        assert.ok(!seen.has(v), sharing + ' shares a value')
+        seen.add(v)
+        for (const k of Object.keys(v)) walk(v[k])
+      }
+      walk(tree)
+    }
+  })
+
+  test('a copy budget is the compact JSON length in UTF-8 bytes', () => {
+    const src = '{"openapi":"3.1.0","info":{"title":"é ✓ 😀"},"components":{"schemas":{"A":{"$ref":"#/info"}}}}'
+    const exact = Buffer.byteLength(JSON.stringify(resolve(parse(src)).tree))
+    assert.doesNotThrow(() => resolve(parse(src), { sharing: 'copy', budget: exact }))
+    assert.throws(() => resolve(parse(src), { sharing: 'copy', budget: exact - 1 }), (e: any) => 'openapi_budget' === e.code)
+  })
+
+  test('cycles keep makes a cyclic graph, and a loop of references is still cut', () => {
+    const src =
+      '{"openapi":"3.1.0","components":{"schemas":{"Node":{"type":"object","properties":{"next":{"$ref":"#/components/schemas/Node"}}},' +
+      '"A":{"$ref":"#/components/schemas/B"},"B":{"$ref":"#/components/schemas/A"}}}}'
+    const out = resolve(parse(src), { cycles: 'keep' })
+    const node = out.tree.components.schemas.Node
+    assert.equal(node.properties.next, node)
+    assert.deepEqual(
+      out.cuts.map((c) => c.at),
+      ['/components/schemas/A', '/components/schemas/B'],
+    )
+    assert.deepEqual(C(out.tree.components.schemas.A), { $ref: '#/components/schemas/B' })
+    const site = resolve(parse(src), { cycles: 'keep', sharing: 'site' }).tree.components.schemas.Node
+    assert.notEqual(site.properties.next, site)
+    assert.equal(site.properties.next.properties, site.properties)
+  })
+
+  test('compat apidef keeps cycles as apidef builds them, with x-ref on each site copy', () => {
+    const src =
+      '{"openapi":"3.0.0","components":{"schemas":{"Node":{"type":"object","properties":{"next":{"$ref":"#/components/schemas/Node"}}}}}}'
+    const node = resolve(parse(src), { compat: 'apidef' }).tree.components.schemas.Node
+    const next = node.properties.next
+    assert.equal(next['x-ref'], '#/components/schemas/Node')
+    assert.equal(next.properties, node.properties)
+    assert.equal(node['x-ref'], undefined)
+  })
+
+  test('options outside their choices are refused', () => {
+    assert.throws(() => resolve({}, { sharing: 'all' as any }), TypeError)
+    assert.throws(() => resolve({}, { compat: 'nope' as any }), TypeError)
+    assert.throws(() => resolve({}, { extensions: 'x-a' as any }), TypeError)
+    assert.throws(() => resolve({}, { sharing: 'copy', budget: 10, cycles: 'keep' }), TypeError)
+    assert.throws(() => resolve({}, { sharing: 'copy' }), (e: any) => 'openapi_budget' === e.code)
+  })
+
+  test('provenance lists every site in walk order, whatever became of it', () => {
+    const out = resolve(
+      parse(
+        '{"openapi":"3.1.0","components":{"schemas":{"A":{"$ref":"#/components/schemas/B"},"B":{"$ref":"#/nope"},' +
+          '"C":{"$ref":42},"D":{"$ref":"#/components/schemas/D/x"}}}}',
+      ),
+    )
+    assert.deepEqual(
+      out.provenance.map((p) => [p.at, p.status, p.target]),
+      [
+        ['/components/schemas/A', 'unresolved', '/components/schemas/B'],
+        ['/components/schemas/B', 'unresolved', '/nope'],
+        ['/components/schemas/C', 'unresolved', null],
+        ['/components/schemas/D', 'cut', '/components/schemas/D/x'],
+      ],
+    )
   })
 
   test('strict raises a ResolveError with the code, the site and the reference', () => {

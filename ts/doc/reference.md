@@ -8,7 +8,7 @@ behind them.
 
 ```ts
 import { parse, resolve, version, make, OpenApi, ResolveError, VERSION } from '@tabnas/openapi'
-import type { ParseOptions, ResolveOptions, ResolveResult, VersionInfo } from '@tabnas/openapi'
+import type { Connection, ParseOptions, ResolveOptions, ResolveResult, VersionInfo } from '@tabnas/openapi'
 ```
 
 ### `parse(text, options?)`
@@ -58,52 +58,127 @@ when `text` is not a string.
 function resolve(raw: any, options?: ResolveOptions): ResolveResult
 
 type ResolveOptions = {
-  version?: 'auto' | '2.0' | '3.0' | '3.1' | '3.2' // default 'auto'
-  retrievalUri?: string                            // default: a fixed urn:uuid:
-  strict?: boolean                                 // default false
-  positions?: (node: object) => Token | undefined  // from recordPositions
-  maxDepth?: number                                // default 1000
+  version?: 'auto' | '2.0' | '3.0' | '3.1' | '3.2'    // default 'auto'
+  retrievalUri?: string                               // default: a fixed urn:uuid:
+  strict?: boolean                                    // default false
+  positions?: (node: object) => Token | undefined     // from recordPositions
+  maxDepth?: number                                   // default 1000
+  sharing?: 'share' | 'site' | 'inline-once' | 'copy' // default 'share'
+  budget?: number                                     // bytes; copy needs it
+  cycles?: 'cut' | 'keep'                             // default 'cut'
+  siblings?: 'spec' | 'merge'                         // default 'spec'
+  slots?: 'spec' | 'all'                              // default 'spec'
+  targets?: 'any' | 'object'                          // default 'any'
+  xref?: boolean                                      // default false
+  extensions?: string[]                               // default []
+  compat?: 'apidef'
 }
 
 type ResolveResult = {
-  tree: any                // the resolved tree
+  tree: any                     // the resolved tree
   version: '2.0' | '3.0' | '3.1' | '3.2' | 'unknown'
   unresolved: { at: string, ref: unknown, why: Why }[]
-  provenance: Provenance[] // one entry per reference site reached
+  provenance: Provenance[]      // one entry per site
   cuts: { at: string, ref: string, target: string }[]
-  dynamic: { doc: string, at: string, src: string }[]
-  dataSlots: number        // $ref maps left as data
+  connections: Connection[]
+  dataSlots: number             // $ref maps read as data
+}
+
+type Provenance = {
+  at: string
+  ref: unknown
+  kind: 'reference' | 'schema' | 'pathItem' | 'data'
+  type: string | null           // what a Reference Object stands for
+  target: string | null         // the location it names, when it names one here
+  status: 'resolved' | 'unresolved' | 'cut' | 'kept'
+  row?: number                  // with positions
+  col?: number
 }
 ```
 
 Returns a new tree with every reference in the document replaced by
 what it names. The raw tree is never changed.
 
-A map that owns `$ref` is a reference only where the description's
-version puts a Reference Object, a Schema Object, or a Path Item. In an
-example, an extension, or as a property named `$ref`, it is data and
-stays as written; `dataSlots` counts those.
+#### Sites
+
+A map that owns `$ref` is a site where the description's version puts a
+Reference Object, a Schema Object, or a Path Item. In an example, an
+extension, or as a property named `$ref`, it is data and stays as
+written; `dataSlots` counts those. `slots: 'all'` also makes a site of
+every such map whose `$ref` is a string, of kind `data`. `extensions`
+does the same inside the extension members it names.
+
+#### Targets
 
 A reference resolves against the nearest `$id` (3.1 and 3.2, its own
 map's included), else the document's `$self` (3.2), else
 `retrievalUri`. Its fragment is a JSON Pointer, percent-decoded first,
-or from 3.1 an anchor that a `$anchor` or `$dynamicAnchor` declares.
+or from 3.1 an anchor that a `$anchor` or `$dynamicAnchor` declares. A
+pointer that passes through another site reads that site's value. An
+array index is `0`, or digits with no leading zero, in range. Only a
+map's own members are members.
 
-What happens to the members beside a `$ref`:
+A reference to a site left as written is left as written too, and
+reported as that site is.
+
+#### Siblings
+
+What happens to the members beside a `$ref` under `siblings: 'spec'`:
 
 | Site | 2.0, 3.0 | 3.1, 3.2 |
 |---|---|---|
 | Reference Object | ignored | `summary` and `description` override the target's, where its type has them |
 | Schema Object | ignored | kept, with the target joined in an `allOf` |
 | Path Item | merged with the target's fields | merged with the target's fields |
+| data | ignored | ignored |
 
-Every site naming one target shares one result. A reference whose target
-is still being built when the walk reaches it closes a cycle: it is left
-as written and listed in `cuts`. A `$dynamicRef` is listed in `dynamic`
-and left as written.
+`siblings: 'merge'` lays the members over the target, the site's
+winning, at every site in every version. Every merge is shallow.
 
-A reference left as written for another reason is listed in
-`unresolved`, with `why`:
+#### Output shapes
+
+`sharing` decides what a site holds:
+
+| `sharing` | Each site holds | `cycles` |
+|---|---|---|
+| `share` | its target's value, one value for every site naming that target | `cut` or `keep` |
+| `site` | a shallow copy of the value, its members shared | `cut` or `keep` |
+| `inline-once` | the value at the first site naming the target, in walk order; the reference as written at the rest, with status `kept` | `cut` |
+| `copy` | a copy of the value all the way down, so nothing in the tree is shared | `cut` |
+
+`copy` needs `budget`: the most bytes, in UTF-8, of the compact JSON
+the copy may make. Without one, or past it, `resolve` throws a
+`ResolveError` coded `openapi_budget`.
+
+A reference whose target is still being built when the walk reaches it
+closes a cycle. Under `cycles: 'cut'` it is left as written and listed
+in `cuts`, and so is a reference to it. Under `cycles: 'keep'` it holds
+its target's value once the walk is done, which makes the tree a cyclic
+graph that `JSON.stringify` refuses. A loop made of references alone has
+no value to hold, and is cut either way.
+
+`xref: true` writes `x-ref`, the reference as written, as the last
+member of every site's value, resolved or not, except where the `$ref`
+is not a string. Each site then holds a copy, as under `site`.
+
+`targets: 'object'` leaves a reference to anything but a map as
+written, with `why` set to `non-object-target`.
+
+The walk runs from the root in document order, a target entered at its
+first reference. That order decides which edge of a cycle is cut and
+which site `inline-once` fills, and it is the order of `unresolved`,
+`cuts` and `provenance`.
+
+#### `compat: 'apidef'`
+
+The resolution `@voxgig/apidef` makes: `{ siblings: 'merge', xref:
+true, sharing: 'site', cycles: 'keep', slots: 'all', targets: 'object'
+}`. An option given beside it wins.
+
+#### What is left as written
+
+A reference left as written for a reason other than a cycle is listed
+in `unresolved`, with `why`:
 
 | `why` | The reference |
 |---|---|
@@ -112,13 +187,61 @@ A reference left as written for another reason is listed in
 | `bad-fragment` | has a fragment that is not a well-formed JSON Pointer or, before 3.1, any anchor |
 | `not-a-string` | is not a string; its map is resolved as a plain map |
 | `external` | names another document, which this release does not load |
+| `non-object-target` | names a value that is not a map, under `targets: 'object'` |
 | `unsupported-dialect` | is in a schema of a dialect other than JSON Schema 2020-12 or OpenAPI's |
 
+A site left as written keeps its other members, each resolved, so a
+reference inside a sibling still resolves.
+
 Under `strict`, `resolve` throws a `ResolveError` instead, coded
-`openapi_unresolved` (`not-found`, `no-anchor`, `external`),
-`openapi_pointer` (`bad-fragment`) or `openapi_ref_type`
-(`not-a-string`), with `at` and `ref`. Every `at`, `target` and `cut`
-path is an RFC 6901 pointer.
+`openapi_unresolved` (`not-found`, `no-anchor`, `external`,
+`non-object-target`), `openapi_pointer` (`bad-fragment`) or
+`openapi_ref_type` (`not-a-string`), with `at` and `ref`. An option
+outside its choices throws a `TypeError`, and so does `inline-once` or
+`copy` with `cycles: 'keep'`. Every `at`, `target` and cut path is an
+RFC 6901 pointer.
+
+#### Connections
+
+```ts
+type Connection = {
+  kind: ConnectionKind
+  at: string              // the position that names something
+  name: string            // the name or URI as written
+  found: boolean
+  target: string | null   // what it names, when found
+  why?: string            // why a URI found nothing, as in unresolved
+  type?: string | null    // the object type at a located target
+  via?: 'name' | 'uri'
+  ambiguous?: boolean
+  targets?: string[]
+  cycle?: boolean
+  anchor?: boolean
+  fields?: string[]
+  routes?: string[]
+}
+```
+
+`connections` lists the places a description names something other than
+through `$ref`. Nothing in it is put into the tree.
+
+| `kind` | `at` | What it names | Other members |
+|---|---|---|---|
+| `operationId` | a Link's `operationId` | the operation that declares it | `targets`, when more than one does |
+| `operationRef` | a Link's `operationRef` | the location its URI names | `type`, which should be `operation` |
+| `securityScheme` | a Security Requirement's member name | a security scheme by name; in 3.2, failing that, by URI | `via`; `type` when read as a URI; `ambiguous` for a 3.2 name that is also a URI to a security scheme, where the name wins |
+| `tag` | an entry of an operation's `tags` | the root `tags` entry of that name | |
+| `tagParent` | a 3.2 tag's `parent` | the root `tags` entry of that name | `cycle`, when the chain of parents loops |
+| `mapping` | a Discriminator `mapping` value | a schema by component name, failing that by URI | `via` |
+| `defaultMapping` | a 3.2 Discriminator's `defaultMapping` | as `mapping` | `via` |
+| `dynamicRef` | a schema with `$dynamicRef` | its initial target, by URI | `anchor`, when that target has a `$dynamicAnchor` of the fragment's name |
+| `pathItemMerge` | a Path Item with `$ref` | the Path Item it names | `fields`: the fields both have, where the specification leaves the merge undefined |
+| `operationIdReuse` | the first route | one `operationId` that more than one route through `paths`, `webhooks` and callbacks reaches | `routes` |
+
+The rows come in document order, then the `pathItemMerge` rows in walk
+order, then the `operationIdReuse` rows. A name inside example data is
+data, and has no row. A target is looked for in the resolved tree, so a
+target reached through a `$ref` is found.
 
 ### `version(tree)`
 
