@@ -41,7 +41,7 @@ requires a known version.
   error codes.
 - [Reference](doc/reference.md): every export, the tree, the errors.
 - [Concepts](doc/concepts.md): why one parser, why the raw tree comes
-  first, and what resolution makes of references, cycles and names.
+  first, and what resolution makes of references, cycles, and names.
 
 ## License
 
