@@ -455,8 +455,9 @@ when the sibling checkout is missing. There is no Go equivalent.
 
 - `.github/workflows/ci.yml` is a caller of the org-shared
   `tabnas/.github/.github/workflows/polyglot-ci.yml@main`, with
-  `deps: "parser support debug json jsonic yaml"`, the siblings that
-  workflow clones and links. Its operating systems, Node and Go versions
+  `deps: "parser support debug json jsonic yaml expr"`, the siblings
+  that workflow clones and links; `expr` is there for the resolver, which
+  builds on its tree layer. Its operating systems, Node and Go versions
   and steps live in that shared workflow and are not restated here.
 - `.github/workflows/rust.yml` clones `parser`, `json`, `jsonic`, `yaml`,
   `support` and `debug` beside the checkout and runs `ci/rust/run.sh` on
@@ -464,12 +465,11 @@ when the sibling checkout is missing. There is no Go equivalent.
 - `.github/workflows/docs.yml` runs Vale and the counts check on any
   change to a gated page or the prose configuration.
 
-**Three workflow edits are staged, not live.** The session that
-bootstrapped this repository could not push `.github/workflows/` (its
-token lacked the `workflow` scope), so the `ci.yml` and `rust.yml` above
-are the versions in [`ci/workflows/`](ci/workflows/), and `clib.yml` is
-still live. [`ci/README.md`](ci/README.md) says how to promote them and
-which failures to expect until then.
+**Nothing is staged.** `ci.yml` and `rust.yml` above were staged in
+`ci/workflows/` by a session whose token lacked the `workflow` scope, and
+have been promoted; `clib.yml` was retired with `go/clib/`.
+[`ci/README.md`](ci/README.md) says how a session stages a workflow edit
+it cannot push.
 
 ## Agent tooling
 
