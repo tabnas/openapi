@@ -90,10 +90,10 @@ experiments, each with its recorded result.
 
 | Phase | What | State |
 |---|---|---|
-| E | expr tree layer (key operators, `fold`), TypeScript | in review in tabnas/expr |
+| E | expr tree layer (key operators, `fold`) | TypeScript on expr's `main`, not yet released; the Go and Rust ports are next |
 | 0 | this repository bootstrapped from the ZON template, all three runtimes | done |
 | 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | done in all three runtimes |
-| 2 | the resolver over `fold`, against the expr checkout | after E ships |
+| 2 | the resolver over `fold`, against expr's `main` | TypeScript done within one document: the object model, `resolve` with every option and output shape, the connections report, and the apidef preset; Go and Rust wait on the expr ports |
 | 3 to 7 | ports of the resolver, documents, bundling, release | see the plan |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -119,6 +119,119 @@ decoder first (`JSON.parse`, `encoding/json` into `*tabnas.OrderedMap`,
 `serde_json`), rebuilt into the grammar's own tree family, and to the
 grammar on any refusal, so every error comes from the grammar.
 
+### The resolver
+
+`resolve(raw, options)` in `ts/src/resolve.ts` is `fold` from
+`@tabnas/expr` with the OpenAPI vocabulary in its callbacks, as
+prototype E6 sketched:
+
+- `inherit` passes each map's object-model state, base URI, schema
+  dialect, and whether it is inside an extension named in `extensions`,
+  down the tree.
+- `recognise` makes a `$ref` map a site where the model puts a Reference
+  Object, a Schema Object or a Path Item (and, under `slots: 'all'` or
+  inside a named extension, any map whose `$ref` is a string). It is
+  called once per location, in walk order, so it also makes each site's
+  record: its sequence number, kind, and target or the reason it has
+  none. Report arrays sort by that number, which is the plan's pre-order
+  with a target entered at its first reference; `evaluate` runs in
+  post-order, so do not let its order leak into a report.
+- `evaluate` reads the target through `site.at`, applies the chain rule
+  (a site naming a site left as written is left as written, reported as
+  that one is), the sibling rule by version and kind, and the output
+  shape.
+
+Sharing (one result per location) and cycle detection are the fold's.
+The shapes beyond `share` are small post-passes: `cycles: 'keep'` has
+each edge that closed a cycle hold a placeholder until the fold is done,
+then settles them in place (a placeholder met again while it is being
+settled is a loop of references, which stays cut); `inline-once` and
+`copy` deep-copy the finished graph, `copy` counting the compact JSON's
+UTF-8 bytes against `budget`. `xref` (apidef's `x-ref`) implies a copy per
+site and is written last, after stripping the `x-ref` a chain's earlier
+link carried, which is what keeps apidef's key order.
+
+`ts/src/connections.ts` builds the `connections` report: one model walk
+over the raw tree for the names (operationId, operationRef, security
+requirement keys, tags, 3.2 tag parents, discriminator mappings,
+`$dynamicRef`), each checked against the resolved tree; Path Item merge
+conflicts come from `evaluate`; `operationIdReuse` walks routes through
+paths, webhooks and callbacks in the resolved graph. `ts/src/uri.ts`
+holds the RFC 3986 and RFC 6901 helpers both use.
+
+A reference into another document is reported `external`: loading is
+Phase 3. `test/resolve/*.tsv` pins the resolver, with
+`ts/test/resolve-spec.test.ts` as the runner (optional `select` and
+`connections` columns); identity, cyclic graphs and the byte budget,
+which JSON cannot carry, are in `ts/test/resolve.test.ts`.
+
+`compat: 'apidef'` was checked against apidef's own resolver on apidef's
+whole test corpus, 43 descriptions and 588 sites, by running apidef's
+`addXRefsAndResolve` and ours side by side and decycling both with its
+`decycle`: byte-identical, key order included. `test/resolve/apidef.tsv`
+carries rows 2 to 25 of apidef's `parse-resolve.tsv`. Re-run that
+comparison after any change to the sibling, sharing or cycle code.
+
+### The object model
+
+The resolver has to know what a `$ref` map is before it can resolve it:
+a Reference Object standing for a response, a Schema Object, a Path
+Item, or data that happens to own a member named `$ref` (an example, an
+extension). `ts/src/model.ts` answers that for every position of a
+description of OpenAPI 2.0, 3.0, 3.1 or 3.2, by walking a table of
+states: `classify(version, path)`, or `step(version, state, member)` one
+member at a time.
+
+The table is **generated, never hand-edited**, by
+`node tools/object-model.cjs` from three inputs under [`model/`](model/):
+
+- `model/schemas/`: the OAI's dated validation schemas, vendored
+  unchanged and pinned by URL, date and SHA-256 in `sources.json`;
+- `model/applicators.json`: which members of a Schema Object hold
+  schemas, per dialect (2020-12, Wright-00, draft-04), which the
+  validation schemas cannot say;
+- `model/overlay.json`: the locators, connections and mappings the
+  schemas type as plain strings, each with its reason.
+
+It writes `model/object-model.json`, which the ports will embed, and
+`ts/src/object-model.ts`. `ts/test/model.test.ts` fails when either is
+stale, and checks that the generator refuses an overlay entry with no
+reason, one naming a position the schemas lack, one that matches no
+version, a vendored schema whose hash has changed, and a `$ref` it
+cannot follow: a pointer that names nothing, or one into a document it
+does not read. It follows every local pointer, nested definitions
+included (3.1's OAuth flows live in `#/$defs/oauth-flows/$defs/`), and
+reads every `^x-` extension as data in every version, whatever its schema
+allows. `test/model/` holds the classifier's fixtures.
+
+`node tools/model-census.cjs <file>...` (after `npm run build` in `ts/`)
+classifies every `$ref` map of real descriptions. Measured on
+2026-11-09:
+
+| Description | `$ref` maps | Schema sites | Reference Object slots | Data |
+|---|---|---|---|---|
+| Stripe (3.0.0) | 4062 | 3673 | 0 | 389 |
+| GitHub REST (3.0.3) | 10899 | 4033 | 6547 | 319 |
+| the OAI learn examples (2.0, 3.0, 3.1) | every one typed | | | |
+
+Stripe's data figure is the plan's acceptance census: its data maps are
+`x-expansionResources` extension values. GitHub's are inside example
+values.
+
+`resolve` on the same descriptions, with the default options, measured
+on 2026-11-10 (the median of six warm runs, the connections report
+included):
+
+| Description | Sites | Cuts | Unresolved | Connections | `resolve` time |
+|---|---|---|---|---|---|
+| Stripe | 3673 | 125 | 0 | 2, all found | about 210 ms |
+| GitHub REST | 10580 | 0 | 0 | 1284, all found | about 350 ms |
+
+These are the plan's acceptance for Phase 2: nothing unresolved, and the
+cut count stable. Under `compat: 'apidef'` every one of the `$ref` maps
+in the census resolves (4062 and 10899), with no cuts, since apidef
+keeps cycles.
+
 ## Repository map
 
 | Path | What it is |
@@ -130,7 +243,8 @@ grammar on any refusal, so every error comes from the grammar.
 | [`test/petstore/`](test/petstore/) | One OpenAPI 3.1 description in YAML and the same in JSON. Every runtime's suite reads both and holds them to `JSON.parse` of the JSON form. |
 | [`docs/design/`](docs/design/) | The design notes, the plan and the prototypes. Working documents, outside the prose gate. |
 | [`ts/doc/`](ts/doc/), [`go/doc/`](go/doc/) | Per-runtime Diátaxis docs: `tutorial.md`, `guide.md`, `reference.md`, `concepts.md`. Gated, with the READMEs, by [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). |
-| [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs. |
+| [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions. |
+| [`model/`](model/) | The object model's inputs (the vendored OAI schemas, the applicator lists, the overlay) and the generated `object-model.json`. |
 | [`ci/`](ci/) | `ci/rust/run.sh`, the Rust gate; see [`ci/README.md`](ci/README.md). |
 | [`tabnas.plugin.json`](tabnas.plugin.json) | The plugin descriptor. **Generated by admin `make ax-descriptor`; never hand-edit it.** It still describes the ZON template until admin regenerates it. |
 
@@ -155,10 +269,22 @@ path, a `replace` or a `go.work`.
   paths when it publishes. `rs/Cargo.lock` is committed and
   `ci/rust/run.sh` holds it to the manifest, exempting only the
   siblings' recorded versions.
-- **`@tabnas/expr` is not a dependency yet.** It enters every manifest
-  with the expr release that carries the tree layer, and only on the
-  maintainer's instruction. Until then Phase 2 runs against a local expr
-  checkout, wired locally and never committed.
+- **`@tabnas/expr` is a TypeScript dependency, and not yet a Go or Rust
+  one.** The maintainer instructed it on 2026-11-09 (the plan's
+  Decision 7): a peer (`>=0`) mirrored as a `"*"` devDependency, for the
+  resolver, which is built on expr's tree layer. That layer is on expr's
+  `main` and in no published release yet, so the registry's
+  `@tabnas/expr` has no `fold` and the TypeScript build needs expr's
+  `main`:
+  - **locally**, build `../expr/ts` and link it over the registry copy,
+    `ln -sfn "$PWD/../expr/ts" ts/node_modules/@tabnas/expr`, which
+    edits no tracked file;
+  - **in CI**, the staged `ci/workflows/ci.yml` adds `expr` to the
+    shared workflow's `deps`, which clones and links expr's `main`; until
+    a maintainer promotes it, `ci / ts` fails to compile the resolver.
+
+  `tools/port-deps.json` records the difference between the ports, with
+  its repair: Go and Rust take expr when they port the resolver.
 
 All three ports must depend on the same tabnas repositories at runtime:
 `ts/test/port-deps.test.ts` runs `tools/port-deps.cjs`, which compares

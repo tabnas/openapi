@@ -13,10 +13,11 @@ Swagger descriptions, in YAML or in JSON, with one parser for both.
 Available for TypeScript, Go and Rust, with the same tree from the same
 text in all three.
 
-This is an early release. It reads a description and returns the raw
-tree: the document as written, with every `$ref` kept as a reference,
-after checking that the text is one description with a map at its root.
-It does not resolve references yet.
+This is an early release. `parse` reads a description and returns the
+raw tree: the document as written, with every `$ref` kept as a
+reference, after checking that the text is one description with a map
+at its root. `resolve` builds a new tree with the references within the
+document resolved; it does not load other documents yet.
 
 ## Install
 

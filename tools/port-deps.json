@@ -1,0 +1,12 @@
+{
+  "note": "Differences between the ports' runtime tabnas dependencies, each with its reason and repair direction (ADR-24). tools/port-deps.cjs fails on a difference this file does not record, and on an entry the manifests no longer support.",
+  "differ": {
+    "expr": {
+      "ports": [
+        "ts"
+      ],
+      "reason": "The resolver is an OpenAPI vocabulary over @tabnas/expr's tree layer (key operators and fold), which exists in TypeScript only. The maintainer instructed the TypeScript dependency on 2026-11-09 so that Phase 2 builds on expr's main ahead of the layer's release.",
+      "repair": "Go and Rust take expr when they port the resolver, after expr's Go and Rust ports of the tree layer (the plan's Phase E); then this entry is deleted."
+    }
+  }
+}

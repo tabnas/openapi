@@ -1,0 +1,10 @@
+input	expected	unresolved	cuts	opts
+# Under strict, a reference that names nothing, a malformed fragment and
+# a $ref whose value is not a string are errors, by code.
+{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#/components/schemas/Missing"}}}}	ERROR:openapi_unresolved			{"strict":true}
+{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#nope"}}}}	ERROR:openapi_unresolved			{"strict":true}
+{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"https://example.com/s.json"}}}}	ERROR:openapi_unresolved			{"strict":true}
+{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#/a~2b"}}}}	ERROR:openapi_pointer			{"strict":true}
+{"openapi":"3.0.3","components":{"schemas":{"S":{"$ref":"#name"}}}}	ERROR:openapi_pointer			{"strict":true}
+{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":42}}}}	ERROR:openapi_ref_type			{"strict":true}
+{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"$ref":"#/components/schemas/T"}}}}	{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"type":"string"}}}}	[]	[]	{"strict":true}

@@ -4,9 +4,10 @@ A [Tabnas](https://github.com/tabnas/parser) plugin that reads
 [OpenAPI](https://spec.openapis.org/oas/latest.html) and Swagger
 descriptions, in YAML or in JSON, with one parser for both.
 
-This release returns the raw tree: the document as written, with every
-`$ref` kept as a reference, after checking that it is one description
-with a map at its root. It does not resolve references yet.
+`parse` returns the raw tree: the document as written, with every `$ref`
+kept as a reference, after checking that it is one description with a
+map at its root. `resolve` builds a new tree with the references within
+the document resolved; it does not load other documents yet.
 
 ## Install
 
@@ -36,10 +37,11 @@ requires a known version.
 
 - [Tutorial](doc/tutorial.md): read a description in both formats.
 - [How-to guide](doc/guide.md): files, strict JSON, versions, your own
-  parser, error codes.
+  parser, resolving and writing out a description, the names it uses,
+  error codes.
 - [Reference](doc/reference.md): every export, the tree, the errors.
-- [Concepts](doc/concepts.md): why one parser, and why the raw tree
-  comes first.
+- [Concepts](doc/concepts.md): why one parser, why the raw tree comes
+  first, and what resolution makes of references, cycles, and names.
 
 ## License
 

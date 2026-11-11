@@ -87,8 +87,82 @@ another file, or back at itself, and a grammar sees the text once, in
 order.
 
 So resolution belongs after the parse, as a pass over the finished tree
-that visits every reference and works out its target. This release
-stops before that pass. The tree it returns is the input the pass needs.
+that visits every reference and works out its target. That pass is
+`resolve`, and it leaves the raw tree alone: the tools that want the
+document as written still have it.
+
+## What is a reference
+
+Not every map that owns `$ref` is a reference. An example payload can
+hold one, an extension value can, and a schema can have a property
+named `$ref`. A resolver that followed all of them would rewrite data.
+
+So `resolve` asks what each position holds, by the description's
+version: a Reference Object, a Schema Object, a Path Item, or data. The
+answer comes from a table generated from the OpenAPI Initiative's own
+validation schemas for 2.0, 3.0, 3.1 and 3.2, not from a list of names
+someone remembered.
+
+## A graph, not a tree
+
+Ten operations can name one response. `resolve` builds that response
+once and, by default, puts the same object in all ten places, so the
+result is a graph that shares its nodes, and building it costs one pass
+over the document however often a target is named.
+
+Sharing is cheap in memory and dear on paper. JSON writes a shared value
+out once for every place it appears, so a description whose schemas name
+schemas can grow past any size a file should have. The shape is
+therefore a choice, `sharing`:
+
+- `share` keeps one value per target, the cheapest, for a program that
+  walks objects.
+- `site` gives each site its own shallow copy, so a tool can write on a
+  site without writing on its target.
+- `inline-once` puts each target's value at the first site that names
+  it and leaves the rest as references. The result is a tree no larger
+  than a small multiple of the document, which is what to write to a
+  file or to diff.
+- `copy` writes every value out at every site. It is the shape most
+  tools expect and can be very large, so it asks for a budget and stops
+  there.
+
+A cycle needs a decision too. A schema for a linked list names itself,
+and replacing that reference with its target would never end. By
+default `resolve` cuts each cycle once, at the reference whose target
+was still being built when the walk reached it, leaves that reference as
+written, and lists it in `cuts`. The walk runs from the root in document
+order, so a description gives the same cuts every time. `cycles: 'keep'`
+follows that edge instead, so the list's `next` is the list itself: a
+graph with a loop in it, which a program can walk and JSON cannot write.
+
+## Names that are not references
+
+A `$ref` is not the only way a description points at another part of
+itself. A Link names an operation by its `operationId`, a Security
+Requirement names security schemes by its member names, an operation
+names its tags, and a Discriminator maps payload values to schemas. None
+of these is replaced by what it names: the specification reads each in
+its own way, and a tool that put the target in its place would change
+what the document says.
+
+So `resolve` reports them, in `connections`, and leaves the tree alone.
+Each row says what the name reaches, if anything, which makes the checks
+a careful reader makes by hand mechanical: that a tag is declared, that
+a 3.2 tag's parents do not loop, that one `operationId` names
+one operation however many paths reach it. A 3.2 Security Requirement may
+name a scheme by URI as well as by name, and a name that is also a URI
+to another scheme is flagged, since which reading a tool takes decides
+who may call the operation.
+
+## Matching another resolver
+
+`@voxgig/apidef` resolves references with one rule for every site: the
+target's members with the site's own laid over them, and `x-ref` beside
+them, in every position, data included. `compat: 'apidef'` is that rule
+as a set of options. A tool that moves from one resolver to the other can
+keep its output as it was, then turn the options back to the
+specification's reading one at a time, measuring each step.
 
 ## YAML decides types
 

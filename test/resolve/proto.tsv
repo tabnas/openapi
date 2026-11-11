@@ -1,0 +1,7 @@
+input	expected	unresolved	cuts	opts
+# Members are own members: a name the language gives every object is data
+# and names nothing, and a member named __proto__ is a member like any
+# other, as a target and inside a resolved copy.
+{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#/components/schemas/constructor"},"T":{"$ref":"#/components/schemas/toString"}}}}	{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#/components/schemas/constructor"},"T":{"$ref":"#/components/schemas/toString"}}}}	["/components/schemas/S not-found","/components/schemas/T not-found"]	[]	
+{"openapi":"3.1.0","components":{"schemas":{"__proto__":{"type":"string"},"S":{"$ref":"#/components/schemas/__proto__"}}}}	{"openapi":"3.1.0","components":{"schemas":{"__proto__":{"type":"string"},"S":{"type":"string","x-ref":"#/components/schemas/__proto__"}}}}	[]	[]	{"xref":true}
+{"openapi":"3.1.0","components":{"schemas":{"A":{"properties":{"__proto__":{"type":"string"}}},"S":{"$ref":"#/components/schemas/A/properties/__proto__"}}}}	{"openapi":"3.1.0","components":{"schemas":{"A":{"properties":{"__proto__":{"type":"string"}}},"S":{"type":"string"}}}}	[]	[]	

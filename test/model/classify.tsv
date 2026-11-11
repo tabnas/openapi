@@ -1,0 +1,71 @@
+version	path	state
+# What the object model makes of a position: the state the walk from
+# the root reaches. path is an RFC 6901 pointer; state is the expected
+# state name, as JSON. refable states end in ?, and an unknown position
+# is data.
+#
+# Reference Object slots, by version.
+3.1	/paths/~1pets/get/responses/200	"response?"
+3.1	/paths/~1pets/get/responses/default	"response?"
+3.1	/paths/~1pets/parameters/0	"parameter?"
+3.1	/paths/~1pets/get/requestBody	"requestBody?"
+3.1	/components/examples/e	"example?"
+3.1	/paths/~1p/get/callbacks/onEvent	"callback?"
+3.0	/paths/~1p/get/responses/default	"response?"
+3.0	/components/headers/X-Rate	"header?"
+2.0	/paths/~1p/get/parameters/0	"parameter?"
+2.0	/paths/~1p/get/responses/200	"response?"
+3.2	/components/mediaTypes/m	"mediaType?"
+# Schema Object slots, and the members of a schema that hold schemas.
+3.1	/paths/~1pets/get/responses/200/content/application~1json/schema	"schema"
+3.1	/components/schemas/Pet	"schema"
+3.1	/components/schemas/Pet/properties/name	"schema"
+3.1	/components/schemas/Pet/properties	"schema{}"
+3.1	/components/schemas/Pet/allOf/1	"schema"
+3.1	/components/schemas/Pet/$defs/Name	"schema"
+3.1	/components/schemas/Pet/prefixItems/0	"schema"
+3.0	/components/schemas/Pet/properties/a/allOf/1	"schema"
+3.0	/components/schemas/Pet/not	"schema"
+2.0	/definitions/Pet	"schema"
+2.0	/definitions/Pet/items/0	"schema"
+2.0	/paths/~1p/get/responses/200/schema	"schema"
+2.0	/paths/~1p/get/responses/200/schema/items	"schema"
+# Objects, by type.
+3.1	/paths/~1p	"pathItem"
+3.1	/webhooks/newPet	"pathItem"
+3.1	/components/pathItems/P	"pathItem"
+3.1	/paths/~1p/get/callbacks/onEvent/{$request.body#~1url}	"pathItem"
+3.1	/security/0	"securityRequirement"
+3.1	/components/schemas/S/discriminator	"discriminator"
+3.2	/paths/~1p/additionalOperations/COPY	"operation"
+# A security scheme's flows, which 3.1 and 3.2 define nested inside
+# another definition.
+3.0	/components/securitySchemes/oauth/flows/implicit	"oauthFlow"
+3.1	/components/securitySchemes/oauth/flows	"oauthFlows"
+3.1	/components/securitySchemes/oauth/flows/implicit	"oauthFlow"
+3.2	/components/securitySchemes/oauth/flows/deviceAuthorization	"oauthFlow"
+# Locators, connections and mappings, from the overlay.
+3.1	/components/links/L/operationRef	"locator:operation"
+3.1	/components/links/L/operationId	"connection:operationId"
+3.1	/paths/~1p/get/tags/0	"connection:tag"
+2.0	/paths/~1p/get/tags/0	"connection:tag"
+3.2	/tags/0/parent	"connection:tag"
+3.1	/components/schemas/S/discriminator/mapping/dog	"mapping"
+3.2	/components/schemas/S/discriminator/defaultMapping	"mapping"
+# Data: examples, extensions, schema keywords that hold JSON, a link
+# parameter, and positions the model does not know.
+3.1	/components/schemas/Pet/example	"data"
+3.1	/components/schemas/Pet/examples/0	"data"
+3.1	/components/schemas/Pet/const	"data"
+3.1	/components/schemas/Pet/default/a	"data"
+3.1	/components/schemas/Pet/x-vendor	"data"
+3.1	/x-vendor/a	"data"
+2.0	/x-vendor	"data"
+2.0	/paths/~1p/get/x-vendor	"data"
+3.0	/paths/~1p/get/responses/200/content/application~1json/examples/e1/value	"data"
+3.1	/components/links/L/parameters/id	"data"
+3.1	/paths/~1p/get/unknownField	"data"
+3.1	/info/title	"data"
+# A member named $ref in a map of schema names is a name, not a site:
+# the map is an anonymous map of schemas.
+3.1	/components/schemas/Ids/properties	"schema{}"

@@ -1,0 +1,29 @@
+{
+  "comment": "Which members of a Schema Object hold schemas, per schema dialect. The OpenAPI validation schemas cannot say: 3.1 and 3.2 define the Schema Object as any object or Boolean, and 3.0 and 2.0 enumerate keywords without saying which hold schemas. Each list is the dialect's own: JSON Schema 2020-12 (its applicator and unevaluated vocabularies, and contentSchema) for OpenAPI 3.1 and 3.2, the subset OpenAPI 3.0 adopts from draft Wright-00, and the subset Swagger 2.0 adopts from draft-04. schema: one schema; schemaMap: a map of schemas; schemaList: a list of schemas; schemaOrList: one schema or a list of them; objects: an OpenAPI object, by its state; data: plain JSON, never a site. Any other member, x- extensions included, is data.",
+  "dialects": {
+    "2020-12": {
+      "schema": ["additionalProperties", "items", "contains", "propertyNames", "if", "then", "else", "not", "unevaluatedItems", "unevaluatedProperties", "contentSchema"],
+      "schemaMap": ["properties", "patternProperties", "$defs", "dependentSchemas"],
+      "schemaList": ["allOf", "anyOf", "oneOf", "prefixItems"],
+      "schemaOrList": [],
+      "objects": { "discriminator": "discriminator", "xml": "xml", "externalDocs": "externalDocs" },
+      "data": ["example", "examples", "const", "enum", "default"]
+    },
+    "wright-00": {
+      "schema": ["additionalProperties", "items", "not"],
+      "schemaMap": ["properties"],
+      "schemaList": ["allOf", "anyOf", "oneOf"],
+      "schemaOrList": [],
+      "objects": { "discriminator": "discriminator", "xml": "xml", "externalDocs": "externalDocs" },
+      "data": ["example", "enum", "default"]
+    },
+    "draft-04": {
+      "schema": ["additionalProperties"],
+      "schemaMap": ["properties"],
+      "schemaList": ["allOf"],
+      "schemaOrList": ["items"],
+      "objects": { "xml": "xml", "externalDocs": "externalDocs" },
+      "data": ["example", "enum", "default", "discriminator"]
+    }
+  }
+}

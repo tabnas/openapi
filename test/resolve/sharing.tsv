@@ -1,0 +1,12 @@
+input	expected	unresolved	cuts	opts
+# How the sites naming one target hold it. Under inline-once the first
+# site in walk order gets the value and the rest keep the reference, an
+# outer site before one inside its own siblings. Under copy every site
+# gets its own copy, within a budget that copy needs; share and site give
+# the same JSON as copy, and differ only in identity, which
+# ts/test/resolve.test.ts holds.
+{"openapi":"3.1.0","paths":{"/a":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}},"/b":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}}},"components":{"responses":{"Ok":{"description":"ok"}}}}	{"openapi":"3.1.0","paths":{"/a":{"get":{"responses":{"200":{"description":"ok"}}}},"/b":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}}},"components":{"responses":{"Ok":{"description":"ok"}}}}	[]	[]	{"sharing":"inline-once"}
+{"openapi":"3.1.0","components":{"schemas":{"A":{"$ref":"#/components/schemas/T","properties":{"x":{"$ref":"#/components/schemas/T"}}},"T":{"type":"string"}}}}	{"openapi":"3.1.0","components":{"schemas":{"A":{"allOf":[{"type":"string"}],"properties":{"x":{"$ref":"#/components/schemas/T"}}},"T":{"type":"string"}}}}	[]	[]	{"sharing":"inline-once"}
+{"openapi":"3.1.0","paths":{"/a":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}},"/b":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}}},"components":{"responses":{"Ok":{"description":"ok"}}}}	{"openapi":"3.1.0","paths":{"/a":{"get":{"responses":{"200":{"description":"ok"}}}},"/b":{"get":{"responses":{"200":{"description":"ok"}}}}},"components":{"responses":{"Ok":{"description":"ok"}}}}	[]	[]	{"sharing":"copy","budget":10000}
+{"openapi":"3.1.0","paths":{"/a":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}},"/b":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}}},"components":{"responses":{"Ok":{"description":"ok"}}}}	ERROR:openapi_budget			{"sharing":"copy"}
+{"openapi":"3.1.0","paths":{"/a":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}},"/b":{"get":{"responses":{"200":{"$ref":"#/components/responses/Ok"}}}}},"components":{"responses":{"Ok":{"description":"ok"}}}}	ERROR:openapi_budget			{"sharing":"copy","budget":40}
