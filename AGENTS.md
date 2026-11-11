@@ -361,6 +361,13 @@ file. CI does the linked model with the siblings `ci.yml` names.
   `yaml` in Rust. Match a plugin list by the name its runtime gives.
 - **`tabnas_json::make()` also sets `lex.window`,** for parsing from a
   reader. It changes nothing for a string parse.
+- **`make` declares its own window setting, `lex.window` false,** in
+  every port and either mode, after installing the plugins on its base
+  (`makeOn` in Go, `make_on` in Rust): the plugin is not yet verified at
+  the window's edge, so a parse from a reader reads it whole, whatever
+  the base declares. `go/window_test.go`, `rs/tests/window_test.rs` and
+  `ts/test/window.test.ts` hold it, and the Go and Rust tests give the
+  constructor's steps a base that declares the window.
 - **The plugin installs once per instance.** A second `use` changes
   nothing (a WeakSet in TypeScript, the `openapi-installed` decoration in
   Go and Rust): a second subscriber would count every YAML document
@@ -581,8 +588,9 @@ when the sibling checkout is missing. There is no Go equivalent.
 
 - `.github/workflows/ci.yml` is a caller of the org-shared
   `tabnas/.github/.github/workflows/polyglot-ci.yml@main`, with
-  `deps: "parser support debug json jsonic yaml"`, the siblings that
-  workflow clones and links. Its operating systems, Node and Go versions
+  `deps: "parser support debug json jsonic yaml expr"`, the siblings
+  that workflow clones and links; `expr` is there for the resolver, which
+  builds on its tree layer. Its operating systems, Node and Go versions
   and steps live in that shared workflow and are not restated here.
 - `.github/workflows/rust.yml` clones `parser`, `json`, `jsonic`, `yaml`,
   `support` and `debug` beside the checkout and runs `ci/rust/run.sh` on
@@ -590,12 +598,11 @@ when the sibling checkout is missing. There is no Go equivalent.
 - `.github/workflows/docs.yml` runs Vale and the counts check on any
   change to a gated page or the prose configuration.
 
-**Three workflow edits are staged, not live.** The session that
-bootstrapped this repository could not push `.github/workflows/` (its
-token lacked the `workflow` scope), so the `ci.yml` and `rust.yml` above
-are the versions in [`ci/workflows/`](ci/workflows/), and `clib.yml` is
-still live. [`ci/README.md`](ci/README.md) says how to promote them and
-which failures to expect until then.
+**Nothing is staged.** `ci.yml` and `rust.yml` above were staged in
+`ci/workflows/` by a session whose token lacked the `workflow` scope, and
+have been promoted; `clib.yml` was retired with `go/clib/`.
+[`ci/README.md`](ci/README.md) says how a session stages a workflow edit
+it cannot push.
 
 ## Agent tooling
 

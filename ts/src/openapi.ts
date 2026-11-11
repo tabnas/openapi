@@ -215,11 +215,19 @@ type MakeOptions = {
 // A parser instance with the plugin installed: jsonic with the yaml
 // grammar, which reads JSON text as the strict json grammar does and YAML
 // besides, or, with `strict`, json alone.
+//
+// It declares its own window setting, `lex.window` false, so that
+// `parseReader` reads a reader whole (admin ADR-30): the plugin's matchers
+// and actions are not yet verified at the window's edge, and a base that
+// declares the window must not carry it to them. The setting comes last,
+// after everything the base and the plugins set.
 function make(options: MakeOptions = {}): Tabnas {
   const tn = true === options.strict
     ? new Tabnas().use(json)
     : new Tabnas().use(jsonic).use(Yaml)
-  return tn.use(OpenApi)
+  tn.use(OpenApi)
+  tn.options({ lex: { window: false } })
+  return tn
 }
 
 // Options for `parse`.

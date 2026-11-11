@@ -9,25 +9,10 @@ them there in a reviewed pull request. Whether a session can push such an
 edit depends on its token: admin `DECISIONS.md` ADR-8, as amended on
 2026-09-24, allows it, but a token without GitHub's `workflow` scope is
 refused, by `git push` and by the API alike. A session refused that way
-stages the workflow here, under [`workflows/`](workflows/), for a
-maintainer to promote.
+stages the workflow here, under `workflows/`, for a maintainer to
+promote. Nothing is staged at present.
 
-## Staged, waiting for promotion
-
-The Phase 0 bootstrap ran in a session whose token lacked the `workflow`
-scope, so its three workflow edits are staged rather than live:
-
-| Staged | Promote by |
-|---|---|
-| [`workflows/ci.yml`](workflows/ci.yml) | copying it over `.github/workflows/ci.yml`: `yaml` and `expr` join the siblings in `deps`, `expr` so that `ci / ts` builds the resolver against expr's `main` until the tree layer is released |
-| [`workflows/rust.yml`](workflows/rust.yml) | copying it over `.github/workflows/rust.yml`: the yaml clone, the `openapi/` checkout, and path filters for this repository's files |
-| the removal of `.github/workflows/clib.yml` | deleting it: it builds `go/clib/`, which went with the ZON grammar |
-
-Until then the live `rust.yml` stops at the gate script's sibling check,
-because it clones no `yaml`, and the live `clib.yml` fails on a pull
-request that touches `go/`, because `go/clib/` is gone. Both failures are
-expected and name their cause. After promotion, delete `workflows/` and
-this section in the same change.
+## Stamped by admin
 
 `crates-release.yml`, `release.yml`, `notify-status.yml`,
 `scorecard.yml` and `deps-gate.yml` are stamped by admin, and still carry
@@ -44,7 +29,12 @@ maintainer to push that tag.
 
 ## Promoted
 
-Both of these were staged here and now run from `.github/workflows/`:
+These were staged here and now run from `.github/workflows/`:
+
+- **`ci.yml`**, the shared polyglot CI. `deps` names the siblings it
+  clones and builds against their `main`: `parser`, `support`, `debug`,
+  `json`, `jsonic`, `yaml` and `expr`. `expr` is there for the resolver,
+  which builds on its tree layer.
 
 - **`docs.yml`** — the prose gate: Vale over the reader-facing pages at
   the levels set in `.vale.ini`, on the file list
@@ -63,3 +53,6 @@ Both of these were staged here and now run from `.github/workflows/`:
   beside the checkout, because the committed manifest takes them as path
   dependencies, although all of them are on crates.io.
   `make test-rs` is the fast local loop; the script is what CI runs.
+
+`clib.yml` was retired rather than promoted: it built `go/clib/`, which
+went with the ZON grammar.
