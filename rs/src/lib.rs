@@ -240,22 +240,63 @@ pub struct MakeOptions {
 /// ```
 #[must_use]
 pub fn make_with(options: &MakeOptions) -> Tabnas {
-    let mut parser = if options.strict {
+    let base = if options.strict {
         tabnas_json::make()
     } else {
         // The construction `tabnas_yaml::make` makes, spelled out so that
         // this crate depends on jsonic directly, as the TypeScript and Go
         // ports do. `tests/openapi_test.rs` holds the two together.
-        let mut parser = tabnas_jsonic::make();
+        tabnas_jsonic::make()
+    };
+    make_on(base, options)
+}
+
+/// Install the format's grammar (the yaml grammar on jsonic's base, or
+/// none on json's) and this plugin on `parser`, and declare this parser's
+/// own window setting: `lex.window` false, so that
+/// [`Tabnas::parse_reader`] reads a reader whole (admin ADR-30). The
+/// plugin is not yet verified at the window's edge, and a base that
+/// declares the window must not carry it to it; the setting comes last,
+/// after everything the base and the plugins set.
+fn make_on(mut parser: Tabnas, options: &MakeOptions) -> Tabnas {
+    if !options.strict {
         parser
             .use_plugin(tabnas_yaml::plugin(), None)
             .expect("the yaml grammar documents are fixed and valid");
-        parser
-    };
+    }
     parser
         .use_plugin(plugin(), None)
         .expect("the openapi plugin installs on any instance");
     parser
+        .set_options(|options| options.lex.window = false)
+        .expect("lex.window sets");
+    parser
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::MakeOptions;
+
+    /// The parser's own setting wins over its base's: a base that declares
+    /// `lex.window`, as jsonic's and json's own constructors may, given
+    /// the constructor's steps, comes out with the window off, in either
+    /// mode.
+    #[test]
+    fn a_windowed_base_comes_out_without_the_window() {
+        for strict in [false, true] {
+            let mut base = if strict {
+                tabnas_json::make()
+            } else {
+                tabnas_jsonic::make()
+            };
+            base.set_options(|options| options.lex.window = true)
+                .expect("lex.window sets");
+            assert!(base.options.lex.window);
+            let parser = super::make_on(base, &MakeOptions { strict });
+            assert!(!parser.options.lex.window, "strict {strict}");
+            assert!(parser.parse(r#"{"openapi": "3.1.0", "paths": {}}"#).is_ok());
+        }
+    }
 }
 
 /// A parser with the plugin installed and the default options.

@@ -235,6 +235,13 @@ file. CI does the linked model with the siblings `ci.yml` names.
   `yaml` in Rust. Match a plugin list by the name its runtime gives.
 - **`tabnas_json::make()` also sets `lex.window`,** for parsing from a
   reader. It changes nothing for a string parse.
+- **`make` declares its own window setting, `lex.window` false,** in
+  every port and either mode, after installing the plugins on its base
+  (`makeOn` in Go, `make_on` in Rust): the plugin is not yet verified at
+  the window's edge, so a parse from a reader reads it whole, whatever
+  the base declares. `go/window_test.go`, `rs/tests/window_test.rs` and
+  `ts/test/window.test.ts` hold it, and the Go and Rust tests give the
+  constructor's steps a base that declares the window.
 - **The plugin installs once per instance.** A second `use` changes
   nothing (a WeakSet in TypeScript, the `openapi-installed` decoration in
   Go and Rust): a second subscriber would count every YAML document
