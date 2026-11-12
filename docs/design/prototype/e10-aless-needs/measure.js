@@ -27,6 +27,6 @@ const ck={};for(const c of out.connections)ck[c.kind]=(ck[c.kind]||0)+1;console.
 t0=t();let refs=0,nodes=0;const st2=[raw];while(st2.length){const n=st2.pop();nodes++;if(n&&typeof n==='object'){if(!Array.isArray(n)&&'$ref' in n)refs++;for(const k of Object.keys(n))st2.push(n[k])}}
 console.log('raw walk ms',t()-t0,'raw values',nodes,'raw $ref maps',refs)
 // expansion size: how big does a full unfold of resolved tree get (written out), capped
-t0=t();let written=0;const cap=5e7;const st3=[[out.tree,0]];const onpath=new Set()
+t0=t();let written=0;const cap=5e7;const st3=[[out.tree,0]]
 while(st3.length&&written<cap){const [n]=st3.pop();written++;if(n&&typeof n==='object'){for(const k of Object.keys(n))st3.push([n[k]])}}
 console.log('written-out values of resolved tree (cap 5e7)',written,written>=cap?'CAPPED':'', 'ms',t()-t0)

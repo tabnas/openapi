@@ -1,11 +1,11 @@
 const {o,show}=require('./h.cjs');
-function R(label,doc,opts={}){let x;try{x=o.resolve(typeof doc==='string'?o.parse(doc):doc,opts)}catch(e){console.log(label.padEnd(30),'THROWS',e.code||e.name,String(e.message).slice(0,150));return}
- const s=x.tree.components&&x.tree.components.schemas; console.log(label.padEnd(30),'unres=',show(x.unresolved).slice(0,300)); return x}
+function R(label,doc,opts={}){let x;try{x=o.resolve(typeof doc==='string'?o.parse(doc):doc,opts);}catch(e){console.log(label.padEnd(30),'THROWS',e.code||e.name,String(e.message).slice(0,150));return;}
+ console.log(label.padEnd(30),'unres=',show(x.unresolved).slice(0,300)); return x;}
 let x;
 x=R('dynamicRef', {openapi:'3.1.0',components:{schemas:{
   list:{$id:'https://e.com/list',$dynamicAnchor:'T',type:'array',items:{$dynamicRef:'#T'}},
   strs:{$id:'https://e.com/strs',$ref:'list',$defs:{s:{$dynamicAnchor:'T',type:'string'}}}}}});
-if(x){console.log('  list.items=',show(x.tree.components.schemas.list.items),' conns=',show(x.connections))}
+if(x){console.log('  list.items=',show(x.tree.components.schemas.list.items),' conns=',show(x.connections));}
 x=R('$id absolute ref',{openapi:'3.1.0',components:{schemas:{A:{$id:'https://e.com/a',type:'string'},B:{$ref:'https://e.com/a'}}}}); if(x)console.log('  B=',show(x.tree.components.schemas.B));
 x=R('$id relative sibling',{openapi:'3.1.0',components:{schemas:{A:{$id:'https://e.com/s/a.json',type:'string'},B:{$id:'https://e.com/s/b.json',$ref:'a.json'}}}}); if(x)console.log('  B=',show(x.tree.components.schemas.B));
 x=R('$id then #/components',{openapi:'3.1.0',components:{schemas:{A:{type:'string'},B:{$id:'https://e.com/b',properties:{p:{$ref:'#/components/schemas/A'}}}}}}); if(x)console.log('  B.p=',show(x.tree.components.schemas.B.properties.p));

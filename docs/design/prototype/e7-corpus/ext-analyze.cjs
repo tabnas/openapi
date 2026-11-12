@@ -25,7 +25,7 @@ function kindOfFile(p) {
   cache.set(p, k)
   return k
 }
-const targets = {}, bySource = {}, hosts = {}, docsUsing = {}, perSource = {}
+const targets = {}, hosts = {}, docsUsing = {}, perSource = {}
 let docsWithExt = 0
 for (const r of R) {
   const refs = r.resolve?.ext?.refs

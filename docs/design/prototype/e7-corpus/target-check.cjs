@@ -13,8 +13,8 @@ const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7ffffff
 const N = Math.min(Number(process.argv[3]), R.length)
 const pick = R.map((r) => [rnd(), r]).sort((a, b) => a[0] - b[0]).slice(0, N).map((x) => x[1])
 const norm = (frag) => { try { return decodeURIComponent(frag) } catch { return frag } }
-const enc = (p) => p // provenance target is an RFC 6901 pointer
-let sites = 0, checked = 0, bad = [], valueBad = []
+// A provenance target is an RFC 6901 pointer already.
+let sites = 0, checked = 0, bad = []
 pick.forEach((r, i) => {
   if (i % 50 === 0) process.stderr.write(`target-check: ${i} of ${N} (${((100 * i) / N).toFixed(0)}%)\n`)
   const raw = O.parse(Fs.readFileSync(r.path, 'utf8'))

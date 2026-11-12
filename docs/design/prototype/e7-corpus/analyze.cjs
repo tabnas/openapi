@@ -7,7 +7,6 @@ const file = process.argv[2]
 const section = process.argv[3] ?? 'all'
 const R = Fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
 const inc = (o, k, n = 1) => { o[k] = (o[k] ?? 0) + n; return o }
-const pct = (a, b) => (b ? ((100 * a) / b).toFixed(1) + '%' : '-')
 const out = (title, v) => console.log('\n## ' + title + '\n' + (typeof v === 'string' ? v : JSON.stringify(v, null, 1)))
 
 // a document is a "description" if it names a version; a "fragment" otherwise
@@ -30,7 +29,7 @@ if ('all' === section || 'corpus' === section) {
     inc(by[k].versions, r.meta?.version ?? 'none'); inc(by[k].formats, r.meta?.format ?? '?')
   }
   out('corpus by source', by)
-  const v = {}, f = {}
+  const v = {}
   for (const r of R) { inc(v, (r.meta?.version ?? '?') + '/' + (r.meta?.format ?? '?')) }
   out('version/format', v)
   out('total', { docs: R.length, bytes: R.reduce((a, r) => a + r.size, 0), descriptions: R.filter(isDesc).length })
@@ -75,7 +74,7 @@ if ('all' === section || 'compare' === section) {
 }
 if ('all' === section || 'resolve' === section) {
   const o = {}, status = {}, why = {}, whyDocs = {}, kinds = {}, checks = {}, conn = {}, connMissing = {}
-  let cuts = 0, cutDocs = 0, sites = 0, n = 0, anyExt = 0, descResolved = 0
+  let cuts = 0, cutDocs = 0, sites = 0, n = 0, anyExt = 0
   const forms = {}, formDocs = {}
   for (const r of R) {
     if (!r.resolve) { if (isDesc(r) && r.parse?.ok) inc(o, 'no-record:' + (r.timeout ?? 'exit')); continue }

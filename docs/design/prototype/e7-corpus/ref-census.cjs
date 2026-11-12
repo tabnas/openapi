@@ -8,7 +8,7 @@ const YAML = W.YAML
 const M = Fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').map(JSON.parse).filter((r) => !r.dupOf)
 const inc = (o, k, n = 1) => { o[k] = (o[k] ?? 0) + n }
 const RX = /["']?\$ref["']?\s*:\s*["']?([^"'\s,}]+)/g
-const forms = {}, formDocs = {}, srcDocs = {}, target = {}, docKinds = {}
+const forms = {}, formDocs = {}, srcDocs = {}, target = {}
 const cache = new Map()
 function kindOfFile(p) {
   if (cache.has(p)) return cache.get(p)
