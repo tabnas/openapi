@@ -1,0 +1,353 @@
+diff --git a/ts/src/parse.ts b/ts/src/parse.ts
+index 211b429..26ad9fa 100644
+--- a/ts/src/parse.ts
++++ b/ts/src/parse.ts
+@@ -1,7 +1,7 @@
+ /* Copyright (c) 2024-2025 Voxgig, MIT License */
+ 
+ import { Jsonic } from '@tabnas/jsonic'
+-import { Yaml } from '@tabnas/yaml'
++import { parse as readOpenAPI, resolve as resolveOpenAPI } from '@tabnas/openapi'
+ 
+ import { relativizePath } from './utility'
+ import { yamlAliasedSize, yamlAliasLimit } from './yamlalias'
+@@ -9,11 +9,6 @@ import { yamlAliasedSize, yamlAliasLimit } from './yamlalias'
+ import { parseGraphQL } from './parse/graphql'
+ 
+ 
+-// NOTE: @tabnas/yaml types its Plugin against @tabnas/parser, while
+-// Jsonic.use expects @tabnas/jsonic's own (structurally identical) Plugin
+-// type - hence the cast.
+-const yamlParser = Jsonic.make().use(Yaml as any)
+-
+ // Matches any line that is not purely a YAML comment or whitespace.
+ const RE_HAS_CONTENT = /^\s*[^#\s]/m
+ 
+@@ -84,20 +79,17 @@ async function parseOpenAPI(source: any, _meta?: any) {
+   let parsed: any
+ 
+   try {
+-    parsed = yamlParser(source)
++    parsed = readOpenAPI(source)
+   }
+   catch (err: any) {
+-    // Rethrow jsonic parse errors with context
++    if ('openapi_root' === err?.code || 'openapi_stream' === err?.code) {
++      throw new Error(
++        `@voxgig/apidef: parse: JSON/YAML source must be an object`
++      )
++    }
+     throw err
+   }
+ 
+-  // Validate parsed result is a non-null object
+-  if (null == parsed || 'object' !== typeof parsed || Array.isArray(parsed)) {
+-    throw new Error(
+-      `@voxgig/apidef: parse: JSON/YAML source must be an object`
+-    )
+-  }
+-
+   // Validate it's an OpenAPI or Swagger spec
+   if (!parsed.openapi && !parsed.swagger) {
+     throw new Error(
+@@ -117,17 +109,31 @@ async function parseOpenAPI(source: any, _meta?: any) {
+     parsed.paths = renameKeys(parsed.paths, normalizePathKeys(Object.keys(parsed.paths)))
+   }
+ 
+-  // Single-pass: add x-ref properties and resolve $ref pointers together.
+-  addXRefsAndResolve(parsed, parsed)
++  parsed = resolveOpenAPI(parsed, { compat: 'apidef', cycles: 'cut' }).tree
+ 
+   // After resolution, so a pointer into `paths` names the key as written and a
+   // parameter declared by `$ref` counts. See docs/design/derived-names.md
+   normalizeColonPathParams(parsed, _meta)
+   dropIgnoredHeaders(parsed)
+ 
+-  const def = decycle(parsed)
++  return plainObjects(parsed)
++}
++
+ 
+-  return def
++// The resolved tree's maps have no prototype; the model's have Object's.
++function plainObjects(root: any) {
++  const done = new WeakSet<any>()
++  const stack = [root]
++  while (0 < stack.length) {
++    const node = stack.pop()
++    if (null == node || 'object' !== typeof node || done.has(node)) continue
++    done.add(node)
++    if (!Array.isArray(node) && null === Object.getPrototypeOf(node)) {
++      Object.setPrototypeOf(node, Object.prototype)
++    }
++    for (const key of Object.keys(node)) stack.push(node[key])
++  }
++  return root
+ }
+ 
+ 
+@@ -240,183 +246,11 @@ function keepDistinct(keys: string[], next: string[]): string[] {
+ }
+ 
+ 
+-// Edges decycle cut, so the guide can still count through them; a clone has none.
+-const DECYCLED = new WeakMap<object, Map<string, object>>()
+-
+-
+-function decycledChild(holder: any, key: string | number): any {
+-  const cut = DECYCLED.get(holder)?.get(String(key))
+-  return undefined === cut ? holder[key] : cut
+-}
+-
+-
+-function decycle(root: any) {
+-  // Entry path of each node on the current ancestor chain; presence in this
+-  // map is what identifies a back-edge. Nodes are removed on the way out, so
+-  // a node reachable twice as a *sibling* is not treated as a cycle.
+-  const onPath = new Map<any, string[]>()
+-  // Fully-processed nodes. Revisiting one is legitimate sharing, not a cycle,
+-  // and must not be walked (or copied) again.
+-  const done = new WeakSet<any>()
+-  const path: string[] = []
+-
+-  const walk = (node: any) => {
+-    if (null == node || 'object' !== typeof node) return
+-    if (done.has(node)) return
+-
+-    if (!Array.isArray(node) && null === Object.getPrototypeOf(node)) {
+-      Object.setPrototypeOf(node, Object.prototype)
+-    }
+-
+-    onPath.set(node, path.slice())
+-
+-    const keys = Array.isArray(node) ?
+-      node.map((_: any, i: number) => i) : Object.keys(node)
+-
+-    for (const key of keys as any[]) {
+-      const val = node[key]
+-      if (null == val || 'object' !== typeof val) continue
+-
+-      const cyclePath = onPath.get(val)
+-      if (undefined !== cyclePath) {
+-        let cuts = DECYCLED.get(node)
+-        if (undefined === cuts) {
+-          cuts = new Map()
+-          DECYCLED.set(node, cuts)
+-        }
+-        cuts.set(String(key), val)
+-        node[key] = `[Circular *${cyclePath.join('.')}]`
+-        continue
+-      }
+-
+-      path.push(String(key))
+-      walk(val)
+-      path.pop()
+-    }
+-
+-    onPath.delete(node)
+-    done.add(node)
+-  }
+-
+-  walk(root)
+-  return root
+-}
+-
+-
+-function refSiblings(node: any): any {
+-  const out: any = {}
+-  for (const k of Object.keys(node)) {
+-    if ('$ref' === k) continue
+-    out[k] = node[k]
+-  }
+-  return out
+-}
+-
+-
+-function addXRefsAndResolve(
+-  obj: any,
+-  root: any,
+-  visited: WeakSet<any> = new WeakSet(),
+-) {
+-  if (!obj || typeof obj !== 'object') return
+-  if (visited.has(obj)) return
+-  visited.add(obj)
+-
+-  const keys: (string | number)[] =
+-    Array.isArray(obj) ? Array.from(obj.keys()) : Object.keys(obj)
+-
+-  for (const key of keys) {
+-    const val = obj[key]
+-    if (val && typeof val === 'object') {
+-      if (typeof val.$ref === 'string') {
+-        resolveRefSite(val, root, visited)
+-      } else {
+-        addXRefsAndResolve(val, root, visited)
+-      }
+-    }
+-  }
+-}
+-
+-
+-// Resolved in place, as in go/parse.go: the site's own keywords win and the
+-// target's children stay shared, so each target is walked once.
+-function resolveRefSite(site: any, root: any, visited: WeakSet<any>) {
+-  const xref = site.$ref
+-  const resolved = resolvePointer(root, xref)
+-  if (undefined !== resolved) {
+-    replaceOwnKeys(site, { ...resolved, ...refSiblings(site), 'x-ref': xref })
+-  }
+-  else {
+-    site['x-ref'] = xref
+-  }
+-  addXRefsAndResolve(site, root, visited)
+-}
+-
+-
+-// Defined, not assigned, so a key named __proto__ stays data.
+-function replaceOwnKeys(obj: any, src: any) {
+-  for (const k of Object.keys(obj)) delete obj[k]
+-  for (const k of Object.keys(src)) {
+-    Object.defineProperty(obj, k,
+-      { value: src[k], writable: true, enumerable: true, configurable: true })
+-  }
+-}
+-
+-
+-const INDEX_RE = /^(0|[1-9]\d*)$/
+-
+-
+ function isRecord(node: any): boolean {
+   return null != node && 'object' === typeof node && !Array.isArray(node)
+ }
+ 
+ 
+-function isAlias(node: any): boolean {
+-  return isRecord(node) && 'string' === typeof node.$ref
+-}
+-
+-
+-// An own key of an object, or an RFC 6901 index of an array.
+-function pointerChild(node: any, part: string): any {
+-  if (Array.isArray(node)) {
+-    return INDEX_RE.test(part) && Number(part) < node.length ? node[Number(part)] : undefined
+-  }
+-  return isRecord(node) && Object.prototype.hasOwnProperty.call(node, part) ?
+-    node[part] : undefined
+-}
+-
+-
+-// The object a pointer names, following every alias met on the way, so the
+-// answer does not depend on which aliases the walk has already replaced. A
+-// pointer that names no object, or needs itself, names nothing.
+-function resolvePointer(root: any, ref: string, active: Set<string> = new Set()): any {
+-  if (!ref.startsWith('#/') || active.has(ref)) return undefined
+-  active.add(ref)
+-
+-  let node: any = root
+-  for (const raw of ref.substring(2).split('/')) {
+-    node = pointerChild(followAlias(root, node, active),
+-      raw.replace(/~1/g, '/').replace(/~0/g, '~'))
+-    if (undefined === node) break
+-  }
+-  node = followAlias(root, node, active)
+-
+-  active.delete(ref)
+-  return isRecord(node) ? node : undefined
+-}
+-
+-
+-// An alias's own keywords win over its target's. Without them the target
+-// itself is the answer, so references keep sharing one object.
+-function followAlias(root: any, node: any, active: Set<string>): any {
+-  if (!isAlias(node)) return node
+-  const target = resolvePointer(root, node.$ref, active)
+-  if (undefined === target) return undefined
+-  const sib = refSiblings(node)
+-  return 0 === Object.keys(sib).length ? target : { ...target, ...sib }
+-}
+-
+-
+ function validateAliases(kind: string, source: string, meta: { file: string }) {
+   const size = yamlAliasedSize(source)
+   const limit = yamlAliasLimit(source)
+@@ -451,7 +285,6 @@ function validateSource(kind: string, source: any, meta: { file: string }) {
+ 
+ export {
+   parse,
+-  decycledChild,
+   normalizePathKeys,
+   colonPathKeys,
+   IGNORED_HEADERS_KEY,
+diff --git a/ts/src/refcount.ts b/ts/src/refcount.ts
+index 35bd2b4..3beffd9 100644
+--- a/ts/src/refcount.ts
++++ b/ts/src/refcount.ts
+@@ -1,8 +1,5 @@
+ /* Copyright (c) 2026 Voxgig, MIT License */
+ 
+-import { decycledChild } from './parse'
+-
+-
+ const REFCOUNT_CAP = 1_000_000_000
+ 
+ const ROOT = '\x01ROOT'
+@@ -100,7 +97,7 @@ function countRefs(def: any): Record<string, number> {
+           t = undefined
+           break
+         }
+-        t = decycledChild(t, part)
++        t = t[part]
+       }
+       if (!isNode(t)) t = undefined
+     }
+@@ -124,7 +121,7 @@ function countRefs(def: any): Record<string, number> {
+     const stack: any[] = []
+     for (const k of kidKeys(start)) {
+       if ('x-ref' !== k && '$ref' !== k && !skip.has(k)) {
+-        stack.push(decycledChild(start, k))
++        stack.push(start[k])
+       }
+     }
+ 
+@@ -137,7 +134,7 @@ function countRefs(def: any): Record<string, number> {
+         // Expanding a shared plain node once per scan is what ends a cycle of them.
+         if (expanded.has(v)) continue
+         expanded.add(v)
+-        for (const k of kidKeys(v)) stack.push(decycledChild(v, k))
++        for (const k of kidKeys(v)) stack.push(v[k])
+         continue
+       }
+ 
+@@ -145,9 +142,9 @@ function countRefs(def: any): Record<string, number> {
+       const over: string[] = []
+       for (const k of Object.keys(v)) {
+         if ('x-ref' === k || '$ref' === k) continue
+-        const vk = decycledChild(v, k)
++        const vk = v[k]
+         if (hasKid(t, k)) {
+-          const tk = decycledChild(t, k)
++          const tk = t[k]
+           if (same(vk, tk)) continue
+           if (hasKids(tk)) over.push(k)
+         }
+diff --git a/ts/test/tsv.test.ts b/ts/test/tsv.test.ts
+index 3c47047..85cc3f9 100644
+--- a/ts/test/tsv.test.ts
++++ b/ts/test/tsv.test.ts
+@@ -99,7 +99,6 @@ import {
+ 
+ import {
+   parse,
+-  decycledChild,
+   normalizePathKeys,
+   colonPathKeys,
+ } from '../dist/parse'
+@@ -1695,7 +1694,7 @@ describe('tsv-parse-resolve', () => {
+       let node: any = def
+       for (const part of JSON.parse(row.select)) {
+         node = '#keys' === part ? Object.keys(node).sort() :
+-          null == node || 'object' !== typeof node ? undefined : decycledChild(node, part)
++          null == node || 'object' !== typeof node ? undefined : node[part]
+       }
+       assert.deepStrictEqual(JSON.parse(JSON.stringify(node ?? null)), JSON.parse(row.expected))
+     })

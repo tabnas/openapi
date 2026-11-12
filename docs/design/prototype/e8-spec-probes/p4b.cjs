@@ -1,0 +1,10 @@
+const {o,show}=require('./h.cjs');
+const C=(l,d,opt)=>{try{const x=o.resolve(d,opt);console.log(l.padEnd(28),show(x.connections).slice(0,600))}catch(e){console.log(l,'THROWS',e.message)}};
+const ops={'/2.0/repositories/{username}':{get:{operationId:'repos',responses:{}}},'/a':{get:{operationId:'dup',responses:{'200':{description:'d',links:{L1:{operationRef:'#/paths/~12.0~1repositories~1%7Busername%7D/get'},L2:{operationRef:'#/paths/~12.0~1repositories~1{username}/get'},L3:{operationId:'repos'},L4:{operationId:'nope'},L5:{operationRef:'https://na2.gigantic-server.com/#/paths/~12.0~1repositories~1%7Busername%7D/get'}}}}}},'/b':{get:{operationId:'dup',tags:['undeclared'],responses:{}}}};
+C('links 3.1',{openapi:'3.1.0',paths:ops});
+C('sec URI name 3.1',{openapi:'3.1.0',security:[{'#/components/securitySchemes/a':[]}],components:{securitySchemes:{a:{type:'http',scheme:'basic'}}}});
+C('sec URI name 3.2',{openapi:'3.2.0',security:[{'#/components/securitySchemes/a':[]},{missing:[]}],components:{securitySchemes:{a:{type:'http',scheme:'basic'}}}});
+C('2.0 sec',{swagger:'2.0',security:[{k:[]}],securityDefinitions:{k:{type:'apiKey',name:'k',in:'header'}},paths:{'/a':{get:{security:[{zz:[]}],responses:{}}}}});
+C('disc mapping',{openapi:'3.1.0',components:{schemas:{Pet:{oneOf:[{$ref:'#/components/schemas/Cat'}],discriminator:{propertyName:'t',mapping:{c:'Cat',d:'#/components/schemas/Dog',e:'./x.yaml#/Y',f:'Nope'}}},Cat:{},Dog:{}}}});
+C('2.0 discriminator',{swagger:'2.0',definitions:{Pet:{discriminator:'petType',properties:{petType:{type:'string'}}},Cat:{allOf:[{$ref:'#/definitions/Pet'}]}}});
+C('3.2 tag parent cycle',{openapi:'3.2.0',tags:[{name:'a',parent:'b'},{name:'b',parent:'a'},{name:'c',parent:'zz'}]});

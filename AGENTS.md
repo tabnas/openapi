@@ -86,6 +86,14 @@ work is [`expr-tree-layer.md`](docs/design/expr-tree-layer.md) and
 and [`prototype/`](docs/design/prototype/) holds the measured
 experiments, each with its recorded result.
 
+The order of the remaining TypeScript work, and what finished means for
+it, is [`typescript-plan.md`](docs/design/typescript-plan.md), a
+proposal of 12 November 2026 that replaces the earlier plan's Phases 3
+to 7. By the maintainer's direction of that date, porting is deferred
+until the TypeScript version is finished: new behaviour lands in
+TypeScript only, and is pinned outside `test/spec/`, which every runner
+here reads.
+
 ### Where the plan stands
 
 | Phase | What | State |
