@@ -9,6 +9,11 @@ measured findings it builds on, and to the prototype under
 [`prototype/`](prototype/), whose `resolve()` is the sketch of the
 resolver this plan specifies.
 
+The order of the remaining work, and what finished means for the
+TypeScript package, are now in [`typescript-plan.md`](typescript-plan.md),
+a proposal of 12 November 2026. This document stays the record of the
+design through Phase 2.
+
 Status: a proposal for the maintainer, 6 November 2026, fourth revision.
 This revision follows the maintainer's direction that `expr` is vital and
 central: the tree layer is built in `expr` first (`tabnas/expr` pull

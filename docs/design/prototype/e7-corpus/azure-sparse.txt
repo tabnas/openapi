@@ -1,0 +1,13 @@
+/specification/keyvault/
+/specification/storage/
+/specification/compute/
+/specification/monitor/
+/specification/common-types/
+/specification/webpubsub/
+/specification/ai-foundry/data-plane/Foundry/openapi3/
+!examples/
+!*.md
+!cspell.yaml
+!suppressions.yaml
+!tspconfig.yaml
+!*.tsp
