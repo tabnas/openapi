@@ -1,0 +1,317 @@
+{
+  "documents": {
+    "bySource": {
+      "apis-guru": {
+        "descriptions": 4138,
+        "documents": 4138
+      },
+      "azure": {
+        "descriptions": 879,
+        "documents": 929
+      },
+      "digitalocean": {
+        "descriptions": 1,
+        "documents": 3636
+      },
+      "github": {
+        "descriptions": 3,
+        "documents": 3
+      },
+      "github-json": {
+        "descriptions": 1,
+        "documents": 1
+      },
+      "oai-archive-3.0": {
+        "descriptions": 6,
+        "documents": 6
+      },
+      "oai-learn": {
+        "descriptions": 38,
+        "documents": 46
+      },
+      "oai-tests-3.1": {
+        "descriptions": 46,
+        "documents": 46
+      },
+      "oai-tests-3.2": {
+        "descriptions": 66,
+        "documents": 67
+      },
+      "oai-tests-3.3": {
+        "descriptions": 0,
+        "documents": 71
+      },
+      "redocly-starter": {
+        "descriptions": 1,
+        "documents": 40
+      },
+      "stripe": {
+        "descriptions": 2,
+        "documents": 2
+      },
+      "stripe-json": {
+        "descriptions": 1,
+        "documents": 1
+      }
+    },
+    "byVersion": {
+      "2.0": {
+        "json": 883,
+        "yaml": 2176
+      },
+      "3.0": {
+        "json": 8,
+        "yaml": 1879
+      },
+      "3.1": {
+        "json": 4,
+        "yaml": 158
+      },
+      "3.2": {
+        "json": 4,
+        "yaml": 70
+      },
+      "not-a-map": {
+        "yaml": 1
+      },
+      "unknown": {
+        "json": 8,
+        "yaml": 3795
+      }
+    },
+    "descriptions": 5182,
+    "fragments": 3804,
+    "total": 8986
+  },
+  "environment": {
+    "dependencies": {
+      "@tabnas/expr": "0.5.21",
+      "@tabnas/json": "0.5.20",
+      "@tabnas/jsonic": "0.7.11",
+      "@tabnas/parser": "0.12.20",
+      "@tabnas/yaml": "0.5.32"
+    },
+    "node": 24,
+    "options": {
+      "heapMiB": 4096,
+      "parse": "fast"
+    },
+    "package": {
+      "name": "@tabnas/openapi",
+      "version": "0.1.0"
+    },
+    "reference": {
+      "yaml": "2.9.1"
+    }
+  },
+  "external": {
+    "documents": 789,
+    "forms": {
+      "relative:json:nofrag": {
+        "documents": 1,
+        "references": 8
+      },
+      "relative:json:ptrfrag": {
+        "documents": 785,
+        "references": 29566
+      },
+      "relative:yaml:nofrag": {
+        "documents": 2,
+        "references": 17
+      },
+      "relative:yaml:ptrfrag": {
+        "documents": 1,
+        "references": 2
+      },
+      "url:http:json:ptrfrag": {
+        "documents": 2,
+        "references": 2
+      }
+    },
+    "references": 29595
+  },
+  "json": {
+    "documents": 907,
+    "grammarDiffers": 0,
+    "grammarEqualsJsonParse": 907,
+    "grammarRefused": 0,
+    "strictAccepts": 899,
+    "strictRefusesByCode": {
+      "openapi_version": 8
+    }
+  },
+  "ledger": {
+    "accepted": 3,
+    "open": 251,
+    "rows": 254
+  },
+  "parse": {
+    "all": {
+      "died": 1,
+      "parsed": 8965,
+      "refused": 20
+    },
+    "descriptions": {
+      "died": 1,
+      "parsed": 5162,
+      "refused": 19
+    },
+    "diedHow": {
+      "out-of-memory after ref": 1
+    },
+    "referenceRefuses": 0,
+    "refusedByCode": {
+      "openapi_root": 1,
+      "unexpected": 8,
+      "unterminated_comment": 11
+    },
+    "refusedValid": 20
+  },
+  "resolve": {
+    "checks": {
+      "not-found": {
+        "absent:absent": 4
+      }
+    },
+    "connections": {
+      "defaultMapping": {
+        "count": 1,
+        "notFound": 1
+      },
+      "mapping": {
+        "count": 5024,
+        "notFound": 47
+      },
+      "operationId": {
+        "count": 80,
+        "notFound": 11
+      },
+      "operationRef": {
+        "count": 19,
+        "notFound": 19
+      },
+      "securityScheme": {
+        "count": 65564,
+        "notFound": 1
+      },
+      "tag": {
+        "count": 129653,
+        "notFound": 57744
+      },
+      "tagParent": {
+        "count": 197,
+        "notFound": 0
+      }
+    },
+    "cuts": 1972,
+    "dataSlots": 53937,
+    "documentsByUnresolved": {
+      "external": 789,
+      "not-found": 1
+    },
+    "documentsWithCuts": 601,
+    "documentsWithDataSlots": 893,
+    "kinds": {
+      "pathItem": 13,
+      "reference": 470687,
+      "schema": 720299
+    },
+    "notRun": 0,
+    "resolved": 5162,
+    "sites": 1190999,
+    "skipped": {
+      "no-version": 3803
+    },
+    "status": {
+      "cut": 1972,
+      "resolved": 1159428,
+      "unresolved": 29599
+    },
+    "threwByCode": {},
+    "unresolved": {
+      "external": 29595,
+      "not-found": 4
+    }
+  },
+  "trees": {
+    "byClass": {
+      "length:BLOCK_SEQ": {
+        "documents": 6,
+        "values": 29
+      },
+      "type:null->array:PLAIN": {
+        "documents": 2,
+        "values": 20
+      },
+      "type:number->string:other:PLAIN": {
+        "documents": 6,
+        "values": 13
+      },
+      "type:string->boolean:yaml11-bool-word:PLAIN": {
+        "documents": 166,
+        "values": 1036
+      },
+      "type:string->null:comment-syntax:PLAIN": {
+        "documents": 32,
+        "values": 71
+      },
+      "type:string->number:underscore:PLAIN": {
+        "documents": 45,
+        "values": 233
+      },
+      "value:string:BLOCK_FOLDED:>+": {
+        "documents": 1,
+        "values": 1
+      },
+      "value:string:BLOCK_LITERAL:|N-": {
+        "documents": 2,
+        "values": 626
+      },
+      "value:string:PLAIN": {
+        "documents": 4,
+        "values": 9
+      }
+    },
+    "byKind": {
+      "comment-syntax": {
+        "documents": 32,
+        "documentsWithNothingElse": 26,
+        "values": 71
+      },
+      "other": {
+        "documents": 15,
+        "documentsWithNothingElse": 15,
+        "values": 698
+      },
+      "underscore-number": {
+        "documents": 45,
+        "documentsWithNothingElse": 25,
+        "values": 233
+      },
+      "yaml11-word": {
+        "documents": 166,
+        "documentsWithNothingElse": 143,
+        "values": 1036
+      }
+    },
+    "compared": 8965,
+    "differ": 233
+  },
+  "yamlFeatures": {
+    "aliases": 58,
+    "anchors": 70,
+    "blockScalars": 3788,
+    "complexKeys": 0,
+    "directives": 0,
+    "documentEnd": 0,
+    "documentStart": 19,
+    "documents": 8079,
+    "flowCollections": 3544,
+    "mergeKeys": 0,
+    "multiDocument": 0,
+    "nonStringKeyTypes": {},
+    "nonStringKeys": 0,
+    "tagNames": {},
+    "tags": 0
+  }
+}

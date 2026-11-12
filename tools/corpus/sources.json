@@ -1,0 +1,150 @@
+{
+  "about": "The corpus the sweep reads: each source pinned by repository and full commit. `checkout` says what of the commit is checked out: `whole`, a `cone` of folders, sparse `patterns` (non-cone), or a list of `files`. `documents` says which files in the checkout are documents: those under one of `roots` whose path relative to the checkout matches `match`. `files` is the number of such files, and `distinct` the number left once a file identical (by SHA-1) to one in an earlier source, or earlier in this one by path, is counted once. fetch.cjs fails if either differs.",
+  "sources": [
+    {
+      "name": "apis-guru",
+      "repository": "APIs-guru/openapi-directory",
+      "commit": "f04b8d0bcd39c52e1cf3ad7a5fe744709832ae49",
+      "checkout": { "cone": ["APIs"] },
+      "documents": { "roots": ["APIs"], "match": "(^|/)(openapi|swagger)\\.yaml$" },
+      "files": 4138,
+      "distinct": 4138
+    },
+    {
+      "name": "oai-tests-3.1",
+      "repository": "OAI/OpenAPI-Specification",
+      "branch": "v3.1-dev",
+      "commit": "ef5916de74d7f2e946944409f0d942edd04d106f",
+      "checkout": "whole",
+      "documents": { "roots": ["tests/schema"], "match": "\\.(ya?ml|json)$" },
+      "files": 46,
+      "distinct": 46
+    },
+    {
+      "name": "oai-tests-3.2",
+      "repository": "OAI/OpenAPI-Specification",
+      "branch": "v3.2-dev",
+      "commit": "f28506252b573b9e01db1c0c332c730d1eb7c73d",
+      "checkout": "whole",
+      "documents": { "roots": ["tests/schema"], "match": "\\.(ya?ml|json)$" },
+      "files": 67,
+      "distinct": 67
+    },
+    {
+      "name": "oai-tests-3.3",
+      "repository": "OAI/OpenAPI-Specification",
+      "branch": "v3.3-dev",
+      "commit": "dec011bd0047b790c7e672b2dd5dd816c467d8c4",
+      "checkout": "whole",
+      "documents": { "roots": ["tests/schema"], "match": "\\.(ya?ml|json)$" },
+      "files": 71,
+      "distinct": 71
+    },
+    {
+      "name": "oai-archive-3.0",
+      "repository": "OAI/OpenAPI-Specification",
+      "branch": "main",
+      "commit": "4f86429f134f7e48b6351563549b4502fc69de52",
+      "checkout": "whole",
+      "documents": { "roots": ["_archive_/schemas/v3.0/pass"], "match": "\\.(ya?ml|json)$" },
+      "files": 6,
+      "distinct": 6
+    },
+    {
+      "name": "oai-learn",
+      "repository": "OAI/learn.openapis.org",
+      "commit": "5f26927b00d5d3d10c1a1a6bbe2d9b41b4a726e7",
+      "checkout": "whole",
+      "documents": { "roots": ["examples", "referencing", "overlay", "tests"], "match": "\\.(ya?ml|json)$" },
+      "files": 46,
+      "distinct": 46
+    },
+    {
+      "name": "digitalocean",
+      "repository": "digitalocean/openapi",
+      "commit": "02ce3c5265c00900ec67f7e11e5a8fd6fa440b94",
+      "checkout": "whole",
+      "documents": { "roots": ["specification"], "match": "\\.(ya?ml|json)$" },
+      "files": 3661,
+      "distinct": 3636
+    },
+    {
+      "name": "redocly-starter",
+      "repository": "Redocly/openapi-starter",
+      "commit": "9cf62a576cac37ac90c875337fdebb3f09a072c6",
+      "checkout": "whole",
+      "documents": { "roots": ["openapi"], "match": "\\.(ya?ml|json)$" },
+      "files": 40,
+      "distinct": 40
+    },
+    {
+      "name": "github",
+      "repository": "github/rest-api-description",
+      "commit": "e4d3628fe92ed2f26be5dd782f82701ae914c2bd",
+      "checkout": {
+        "files": [
+          "descriptions/api.github.com/api.github.com.yaml",
+          "descriptions-next/api.github.com/api.github.com.json",
+          "descriptions-next/api.github.com/api.github.com.yaml"
+        ]
+      },
+      "documents": { "roots": ["descriptions", "descriptions-next"], "match": "\\.(ya?ml|json)$" },
+      "files": 3,
+      "distinct": 3
+    },
+    {
+      "name": "stripe",
+      "repository": "stripe/openapi",
+      "commit": "6763e1a3f199026b0893cf190d95130d3700c045",
+      "checkout": { "files": ["latest/openapi.spec3.yaml", "latest/openapi.spec3.sdk.yaml"] },
+      "documents": { "roots": ["latest"], "match": "\\.(ya?ml|json)$" },
+      "files": 2,
+      "distinct": 2
+    },
+    {
+      "name": "azure",
+      "repository": "Azure/azure-rest-api-specs",
+      "commit": "b9a9f66a60929903ca26e7952b7d084bc5a89e27",
+      "checkout": {
+        "patterns": [
+          "/specification/keyvault/",
+          "/specification/storage/",
+          "/specification/compute/",
+          "/specification/monitor/",
+          "/specification/common-types/",
+          "/specification/webpubsub/",
+          "/specification/ai-foundry/data-plane/Foundry/openapi3/",
+          "!examples/",
+          "!*.md",
+          "!cspell.yaml",
+          "!suppressions.yaml",
+          "!tspconfig.yaml",
+          "!*.tsp"
+        ]
+      },
+      "documents": { "roots": ["specification"], "match": "\\.(ya?ml|json)$" },
+      "files": 935,
+      "distinct": 929
+    },
+    {
+      "name": "github-json",
+      "note": "GitHub's REST description as JSON, at an earlier commit than `github`: the research sweep read it as a file fetched by hand, and these are its bytes (SHA-1 e3713552511a10dc6eb4427c9bfc5283096c4a4b).",
+      "repository": "github/rest-api-description",
+      "commit": "df36add4edaeda9577169ce42ad4b2b756191852",
+      "checkout": { "files": ["descriptions/api.github.com/api.github.com.json"] },
+      "documents": { "roots": ["descriptions"], "match": "\\.json$" },
+      "files": 1,
+      "distinct": 1
+    },
+    {
+      "name": "stripe-json",
+      "note": "Stripe's description as JSON, at the same commit as `stripe`: the research sweep read it as a file fetched by hand, and these are its bytes (SHA-1 f5f4cdfc73af77bfa62f459aaec781d4f0215f96).",
+      "repository": "stripe/openapi",
+      "commit": "6763e1a3f199026b0893cf190d95130d3700c045",
+      "checkout": { "files": ["openapi/spec3.json"] },
+      "documents": { "roots": ["openapi"], "match": "\\.json$" },
+      "files": 1,
+      "distinct": 1
+    }
+  ]
+}

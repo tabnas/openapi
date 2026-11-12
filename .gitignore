@@ -47,3 +47,6 @@ yarn.lock
 target/
 
 .DS_Store
+
+# The corpus sweep's sources and runs (tools/corpus/), fetched, never committed.
+/.corpus/
