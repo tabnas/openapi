@@ -8,8 +8,7 @@ let rawMax=0;{const st=[[raw,0]];while(st.length){const [n,d]=st.pop();if(d>rawM
 let maxD=0,count=0;const st=[[out.tree,0]];while(st.length){const [n,d]=st.pop();count++;if(d>maxD)maxD=d;if(n&&typeof n==='object')for(const k of Object.keys(n))st.push([n[k],d+1])}
 console.log('raw max depth',rawMax,'resolved written-out max depth',maxD,'values',count)
 // reference hops: from each site, follow target chain: count nested sites inside the target subtree recursively = longest chain of nested refs
-const P=out.provenance;const byAt=new Map(P.map(p=>[p.at,p]))
-const sitesUnder=new Map();for(const p of P){ /* group sites by component root */ }
+const P=out.provenance
 const targets=[...new Set(P.map(p=>p.target).filter(Boolean))]
 const inside=t=>P.filter(p=>p.at===t||p.at.startsWith(t+'/'))
 const memo=new Map()

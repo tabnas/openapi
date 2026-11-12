@@ -122,7 +122,7 @@ if ('all' === section || 'features' === section) {
     if (x.complexKeys) f.complexKeys++
     if (x.flowCollections) f.flow++
     if (x.blockScalars) f.blockScalars++
-    for (const [k, v] of Object.entries(x.nonStringKeys)) inc(nsk, k)
+    for (const k of Object.keys(x.nonStringKeys)) inc(nsk, k)
     for (const k of Object.keys(x.tagNames)) inc(tagNames, k)
   }
   out('YAML feature use (documents using each)', { ...f, nonStringKeyTypes: nsk, tagNames })
