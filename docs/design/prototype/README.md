@@ -42,12 +42,19 @@ pass, as written.
 | `e10-aless-needs/` | What does the `rjrodger/aless` viewer need in order to open a reference in place, and what does the package cost on a 14 MB description? Set aside with that goal until a port exists; kept as a record, and not used by the plan. | `e10-aless-needs.result.md` |
 | `e11-apidef-reads/` | apidef reads through the same base grammars, so are the documents E7 flagged misread by apidef too, and does it show in apidef's output? apidef's own reader over those documents, apidef's models from each document as written against the same document re-read by the reference parser, and what two engine options on this package's own parser repair. | `e11-apidef-reads.result.md` |
 
+Two of these became tools in the plan's T0, and the tools are what to
+run from now on. The corpus sweep is
+[`tools/corpus/`](../../../tools/corpus/README.md), with its sources
+pinned and its findings in `test/corpus/`. The comparison of E9 is
+`tools/apidef-gate.cjs`. The scripts here stay as the record of what
+was measured, and of how.
+
 Every script reads this checkout's build unless `OPENAPI_DIST` names
-another. The corpus sweep needs the sources below cloned into one
+another. The corpus sweep here needs the sources below cloned into one
 folder, named by `CORPUS_SRC`, and the npm `yaml` package installed in
-a scratch folder, named by `YAML_REF`. Nothing here declares that
-package: it is the reference parser of the measurement, not a
-dependency of this repository.
+a scratch folder, named by `YAML_REF`. These scripts declare no
+dependency on that package. The tool that replaced them takes it as the
+`yaml` development dependency that the plan's Decision 17 added.
 
 ```sh
 cd e7-corpus
