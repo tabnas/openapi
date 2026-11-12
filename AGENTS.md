@@ -480,12 +480,15 @@ node tools/apidef-gate.cjs ../apidef --patch docs/design/prototype/e9-apidef-swa
   build, holds each tree to a reference parser's, resolves every
   description, and then compares what it found with
   `test/corpus/ledger.tsv` and `test/corpus/baseline.json`. It ends with
-  0 when nothing moved. A row or a figure that moved is a repair or a
-  regression: say which in the commit, and accept a change that was
-  meant with `--write`, which rewrites both files. A row that is not
-  this package's defect is listed, with its reason, in
-  `test/corpus/accepted.tsv`; the rows left are the open ones, and the
-  plan's G1 is their reaching none.
+  0 when nothing moved. A run is held to the code that made it, by a
+  hash of the build, its dependencies and the tool's measuring code: a
+  sweep after a rebuild refuses the earlier run and `--fresh` starts
+  again, so an earlier build's results are never read as this one's. A
+  row or a figure that moved is a repair or a regression: say which in
+  the commit, and accept a change that was meant with `--write`, which
+  rewrites both files. A row that is not this package's defect is
+  listed, with its reason, in `test/corpus/accepted.tsv`; the rows left
+  are the open ones, and the plan's G1 is their reaching none.
   [`tools/corpus/README.md`](tools/corpus/README.md) has the options and
   how to read a change.
 - **The apidef gate** runs `voxgig/apidef`'s own TypeScript suite on

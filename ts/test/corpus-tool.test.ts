@@ -13,17 +13,20 @@
 // The tool is plain JavaScript, loaded with require so that it stays
 // outside the compilation.
 
-import { describe, test } from 'node:test'
+import { after, describe, test } from 'node:test'
 import assert from 'node:assert'
 import { join } from 'node:path'
-import { readFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 
 type Row = string[]
 type Classes = Record<string, { n: number }>
 type Rec = Record<string, any>
+type Walk = { ok: boolean; err?: string; node?: unknown }
 type Examine = {
   examine(text: string, options?: { ext?: string }): Rec
   kindOfClass(cls: string): string
+  walkPtr(root: unknown, fragment: string, options?: { follow?: boolean }): Walk
 }
 type Accepted = { rows: number; accepted: number; open: number; stranded: Row[]; lines: string[] }
 type Ledger = {
@@ -31,6 +34,8 @@ type Ledger = {
   parseAccepted(text: string): Row[]
   checkAccepted(accepted: Row[], rows: Row[]): Accepted
   rowsOf(record: Rec): Row[]
+  readRecords(file: string): Rec[]
+  closeCutLine(file: string): boolean
   formatLedger(rows: Row[]): string
   parseLedger(text: string): Row[]
   compareLedger(before: Row[], after: Row[]): { added: Row[]; removed: Row[]; changed: unknown[]; lines: string[]; same: boolean }
@@ -38,12 +43,19 @@ type Ledger = {
 type Analyze = {
   compareBaseline(before: object, after: object): { figures: string[]; lines: string[]; same: boolean }
 }
+type Sources = { codeHash(dir: string): string }
+type Sweep = {
+  buildOf(): Record<string, string>
+  runDiffers(was: object, now: object): string[]
+}
 
 // At runtime this file is in ts/dist-test, so the repository root is two up.
 const TOOL = join(__dirname, '..', '..', 'tools', 'corpus')
 const E: Examine = require(join(TOOL, 'examine.cjs'))
 const L: Ledger = require(join(TOOL, 'ledger.cjs'))
 const A: Analyze = require(join(TOOL, 'analyze.cjs'))
+const S: Sources = require(join(TOOL, 'sources.cjs'))
+const W: Sweep = require(join(TOOL, 'sweep.cjs'))
 const CORPUS = join(__dirname, '..', '..', 'test', 'corpus')
 
 // A YAML document examined as the sweep examines a file, with its record's identity.
@@ -88,6 +100,61 @@ describe('corpus tool: classifying one document', () => {
     assert.strictEqual(r.parse.ok, false)
     assert.deepStrictEqual(L.rowsOf(r), [['inline', 'doc.yaml', 'refused', 'unterminated_comment']])
   })
+
+  test('a repeated member name alone leaves no row, and hides no other difference', () => {
+    const alone = sweep('a: x\nb: 1\nb: 2\n')
+    assert.strictEqual(alone.ref.dupKeysOnly, true)
+    assert.strictEqual(alone.compare.n, 0)
+    assert.deepStrictEqual(L.rowsOf(alone), [])
+    const both = sweep('a: on\nb: 1\nb: 2\n')
+    assert.strictEqual(both.compare.n, 1)
+    assert.deepStrictEqual(L.rowsOf(both), [['inline', 'doc.yaml', 'differs', 'type:string->boolean:yaml11-bool-word:PLAIN=1']])
+  })
+
+  test('a reference the check cannot follow to an end is a verdict, and the document finishes', () => {
+    // B names a member that A's example lacks; the example holds a `$ref` of
+    // its own, which the check follows, and which leads back to itself.
+    const missing = '#/components/schemas/A/example/missing'
+    const r = sweep(JSON.stringify({
+      openapi: '3.0.0', info: { title: 't', version: '1' }, paths: {},
+      components: { schemas: { A: { type: 'object', example: { $ref: missing } }, B: { $ref: missing } } },
+    }))
+    assert.ok(r.done, 'the document did not finish')
+    assert.deepStrictEqual(r.resolve.why, { 'not-found': 1 })
+    assert.deepStrictEqual(r.resolve.checks['not-found'].verdicts, { 'absent:absent': 1 })
+    assert.deepStrictEqual(L.rowsOf(r), [])
+  })
+})
+
+describe('corpus tool: walking a pointer', () => {
+  const follow = { follow: true }
+
+  test('a plain pointer lands, or says where it stops', () => {
+    assert.deepStrictEqual(E.walkPtr({ a: { 'b/c': [1, { d: 2 }] } }, '/a/b~1c/1/d'), { ok: true, node: 2 })
+    assert.strictEqual(E.walkPtr({ a: 1 }, '/a/b').err, 'scalar')
+    assert.strictEqual(E.walkPtr({ a: {} }, '/a/b').err, 'absent')
+    assert.strictEqual(E.walkPtr({ a: [1] }, '/a/1').err, 'index')
+  })
+
+  test('with follow, a map that lacks the member is walked through its reference', () => {
+    const tree = { a: { $ref: '#/b' }, b: { x: 1 } }
+    assert.strictEqual(E.walkPtr(tree, '/a/x').ok, false)
+    assert.deepStrictEqual(E.walkPtr(tree, '/a/x', follow), { ok: true, node: 1 })
+  })
+
+  test('references that lead back to themselves end the walk', () => {
+    assert.strictEqual(E.walkPtr({ a: { $ref: '#/a/x' } }, '/a/x', follow).ok, false)
+    assert.strictEqual(E.walkPtr({ a: { $ref: '#/a' } }, '/a/x', follow).err, 'cycle')
+    assert.strictEqual(E.walkPtr({ a: { $ref: '#/b' }, b: { $ref: '#/a' } }, '/a/x', follow).err, 'cycle')
+  })
+
+  test('a pointer through a recursive schema, and a long chain of references, are not cycles', () => {
+    const node = { Node: { properties: { next: { $ref: '#/Node' }, v: { type: 'string' } } } }
+    assert.deepStrictEqual(E.walkPtr(node, '/Node/properties/next/properties/next/properties/v/type', follow), { ok: true, node: 'string' })
+    const chain: Record<string, unknown> = { k300: { x: 1 } }
+    for (let i = 0; i < 300; i++) chain['k' + i] = { $ref: '#/k' + (i + 1) }
+    assert.deepStrictEqual(E.walkPtr(chain, '/k0/x', follow), { ok: true, node: 1 })
+  })
 })
 
 describe('corpus tool: the ledger and its comparison', () => {
@@ -126,6 +193,75 @@ describe('corpus tool: the ledger and its comparison', () => {
     assert.strictEqual(c.same, false)
     assert.deepStrictEqual(c.figures, ['parse.descriptions.parsed: 5162 -> 5174 (+12)', 'parse.descriptions.refused: 19 -> 7 (-12)'])
     assert.strictEqual(A.compareBaseline(was, JSON.parse(JSON.stringify(was))).same, true)
+  })
+})
+
+describe('corpus tool: what a run folder is held to', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'corpus-tool-'))
+  after(() => rmSync(dir, { recursive: true, force: true }))
+
+  test('the hash of a build moves with a file\'s content and its name, and with nothing else', () => {
+    const build = join(dir, 'build')
+    mkdirSync(join(build, 'sub'), { recursive: true })
+    mkdirSync(join(build, 'node_modules', 'dep'), { recursive: true })
+    writeFileSync(join(build, 'a.js'), 'exports.a = 1\n')
+    writeFileSync(join(build, 'sub', 'b.js'), 'exports.b = 1\n')
+    const first = S.codeHash(build)
+    assert.match(first, /^[0-9a-f]{40}$/)
+    assert.strictEqual(S.codeHash(build), first)
+
+    writeFileSync(join(build, 'a.d.ts'), 'export declare const a: number\n')
+    writeFileSync(join(build, 'node_modules', 'dep', 'index.js'), 'exports.dep = 1\n')
+    assert.strictEqual(S.codeHash(build), first, 'a declaration file or a dependency moved the hash')
+
+    writeFileSync(join(build, 'sub', 'b.js'), 'exports.b = 2\n')
+    const edited = S.codeHash(build)
+    assert.notStrictEqual(edited, first, 'an edited file did not move the hash')
+
+    renameSync(join(build, 'sub', 'b.js'), join(build, 'sub', 'c.js'))
+    assert.notStrictEqual(S.codeHash(build), edited, 'a renamed file did not move the hash')
+  })
+
+  test('the code a run is held to is this package\'s build, each dependency it names and the measuring code', () => {
+    const build = W.buildOf()
+    assert.deepStrictEqual(Object.keys(build).sort(), [
+      '@tabnas/expr', '@tabnas/json', '@tabnas/jsonic', '@tabnas/openapi', '@tabnas/parser', '@tabnas/yaml', 'tools/corpus',
+    ])
+    for (const [name, hash] of Object.entries(build)) assert.match(hash, /^[0-9a-f]{40}$/, name)
+  })
+
+  test('a run of the same build is resumed, and a run of other code is named', () => {
+    const env = { node: 24, package: { name: '@tabnas/openapi', version: '0.1.0' } }
+    const build = { '@tabnas/openapi': 'aaaa', '@tabnas/yaml': 'bbbb' }
+    assert.deepStrictEqual(W.runDiffers({ ...env, build }, { ...env, build: { ...build } }), [])
+    assert.deepStrictEqual(
+      W.runDiffers({ ...env, build }, { ...env, build: { ...build, '@tabnas/openapi': 'cccc' } }),
+      ['build.@tabnas/openapi: aaaa -> cccc'],
+    )
+    // A run made before builds were recorded is not this build's either.
+    assert.deepStrictEqual(W.runDiffers(env, { ...env, build }), [
+      'build.@tabnas/openapi: absent -> aaaa', 'build.@tabnas/yaml: absent -> bbbb',
+    ])
+    assert.deepStrictEqual(W.runDiffers({ ...env, build }, { ...env, node: 22, build }), ['node: 24 -> 22 (-2)'])
+  })
+
+  test('a results line cut short is ended, so that the next record is read', () => {
+    const file = join(dir, 'results.jsonl')
+    assert.strictEqual(L.closeCutLine(file), false, 'no file')
+    writeFileSync(file, '')
+    assert.strictEqual(L.closeCutLine(file), false, 'an empty file')
+
+    writeFileSync(file, '{"id":"a","done":{}}\n{"id":"b","par')
+    // Appended to as it is, the next record joins the cut line and both are lost.
+    appendFileSync(file, '{"id":"c","done":{}}\n')
+    assert.deepStrictEqual(L.readRecords(file).map((r) => r.id), ['a'])
+
+    writeFileSync(file, '{"id":"a","done":{}}\n{"id":"b","par')
+    assert.strictEqual(L.closeCutLine(file), true)
+    appendFileSync(file, '{"id":"c","done":{}}\n')
+    assert.deepStrictEqual(L.readRecords(file).map((r) => r.id), ['a', 'c'])
+    assert.strictEqual(L.closeCutLine(file), false, 'a file that ends its last line')
+    assert.deepStrictEqual(L.readRecords(file).map((r) => r.id), ['a', 'c'])
   })
 })
 

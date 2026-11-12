@@ -33,6 +33,14 @@ run the same command again. The results of a run are kept in
 `.corpus/run/`, so a second run with nothing to do goes straight to the
 comparison. `.corpus/` is ignored by git.
 
+A run belongs to the code that made it. After a rebuild, or any other
+change to the code a run is held to (see "One run, one build" below),
+the sweep refuses the earlier run and says so. Start again with:
+
+```sh
+node tools/corpus/sweep.cjs --fresh
+```
+
 Use the Node version that `engines` names in `ts/package.json`. The
 figures can depend on it, since the runtime decides, for one, how much
 a large document costs in memory. The baseline records the major
@@ -58,6 +66,7 @@ reproduces ran under Node 22, and no document came out differently.)
 | Option | What it does |
 |---|---|
 | `--fetch` | fetch any source that is not at its pinned commit first |
+| `--fresh` | discard the run already in `--out`, and sweep again |
 | `--out <dir>` | where the run goes, default `.corpus/run` |
 | `--jobs <n>` | documents at a time, default 3 |
 | `--heap-mb <n>` | the heap limit of each document's process, default 4096 |
@@ -72,11 +81,34 @@ reproduces ran under Node 22, and no document came out differently.)
 `OPENAPI_DIST` names another build of the package to test, and
 `CORPUS_DIR` another folder for the sources.
 
-A run's folder belongs to one environment: the package's version and its
-dependencies, the Node major version, the heap limit and `--nofast`.
-`run.json` records it, and a resumed run with a different environment is
-refused, so that two builds' records never meet in one set of figures.
-To sweep another build, give it another `--out`.
+### One run, one build
+
+A run's folder belongs to one environment and one set of code, and
+`run.json` records both:
+
+- **the environment**: the package's version and its dependencies', the
+  reference parser's version, the Node major version, the heap limit and
+  `--nofast`;
+- **the code**, as a hash of the files that run: the package's build
+  folder, the folder of each dependency's entry point, and this tool's
+  own `examine.cjs` and `worker.cjs`, which make a document's record.
+
+A version does not tell two builds of one checkout apart, nor a linked
+dependency that has moved. Without the hashes, a sweep after a rebuild
+would find every document already done, run nothing, and report the
+earlier build's results as this one's.
+
+So a sweep whose environment or code differs from the folder's is
+refused, with a line for each thing that differs, and ends with 2. That
+holds whether the earlier run was finished or stopped half way: two
+builds' records never meet in one set of figures. `--fresh` discards
+the earlier run's three files and sweeps again; another `--out` keeps
+both runs. The hashes are in the run and not in the baseline, which
+would otherwise move with every build.
+
+A run stopped in the middle of writing a record leaves a last line with
+no end. The next run ends that line before it appends, so the cut record
+is the only one lost, and its document runs again.
 
 ## The sources
 
@@ -138,7 +170,8 @@ that runs out of memory or time keeps the phases it finished.
 - `manifest.jsonl`, one line per file, identified by its SHA-1;
 - `results.jsonl`, one line per document, appended as each finishes,
   with times and memory;
-- `run.json`, the environment of the run.
+- `run.json`, the environment of the run and the hashes of the code
+  that made it.
 
 The committed outputs hold nothing that changes from one run to the
 next, so a sweep that changes nothing rewrites them byte for byte.
@@ -196,7 +229,7 @@ and cut it down:
 
 ```sh
 node tools/corpus/minimize.cjs <file> parse-error unexpected > small.yaml
-node tools/corpus/minimize.cjs <file> mismatch type:string->null > small.yaml
+node tools/corpus/minimize.cjs <file> mismatch 'type:string->null' > small.yaml
 ```
 
 ## Updating the ledger

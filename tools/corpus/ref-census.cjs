@@ -12,7 +12,8 @@
 // property named `$ref` is counted too), and reports them by form (see
 // `extForm` in examine.cjs) and, for a relative reference, by what the
 // file it names holds. A file outside the document's own source is not
-// read: the path is the document's, and the document is untrusted.
+// read, whether the path leads there or a link in the checkout does: the
+// path is the document's, and the document is untrusted.
 // Prints a status line every 15 seconds.
 //
 //   node tools/corpus/ref-census.cjs [--out <dir>]
@@ -30,11 +31,14 @@ const M = Fs.readFileSync(Path.join(OUT, 'manifest.jsonl'), 'utf8').trim().split
 const inc = (o, k, n = 1) => { o[k] = (o[k] ?? 0) + n }
 const RX = /["']?\$ref["']?\s*:\s*["']?([^"'\s,}]+)/g
 
+const OUTSIDE = 'outside-the-source (not read)'
 const cache = new Map()
-function kindOfFile(p) {
+// What the file at `p` holds, if it is really inside `home`.
+function kindOfFile(p, home) {
   if (cache.has(p)) return cache.get(p)
   let k
   if (!Fs.existsSync(p)) k = 'missing-file'
+  else if (!(Fs.realpathSync(p) + Path.sep).startsWith(Fs.realpathSync(home) + Path.sep)) k = OUTSIDE
   else try {
     const t = Fs.readFileSync(p, 'utf8')
     let v
@@ -70,8 +74,8 @@ M.forEach((r, i) => {
       try { rel = decodeURIComponent(ref.split('#')[0]) } catch { rel = ref.split('#')[0] }
       const p = Path.resolve(Path.dirname(r.file), rel)
       // The path comes from the document, so nothing outside its own source's checkout is read.
-      const home = S.sourceDir({ name: r.source }) + Path.sep
-      const kind = p.startsWith(home) ? kindOfFile(p) : 'outside-the-source (not read)'
+      const home = S.sourceDir({ name: r.source })
+      const kind = p.startsWith(home + Path.sep) ? kindOfFile(p, home) : OUTSIDE
       inc(target, (p === r.file ? 'SELF ' : '') + kind + (ref.includes('#') ? ' (with fragment)' : ' (whole file)'))
     }
   }

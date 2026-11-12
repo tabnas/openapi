@@ -235,30 +235,45 @@ function yamlFeatures(text, docs) {
 }
 
 // RFC 6901 on the raw tree, to check what `resolve` says it could not find.
-function walkPtr(root, frag, { decode = true, follow = false } = {}) {
+// With `follow`, a map that lacks the next member and holds a `$ref` is
+// walked through to what that names. `active` is the pointers being
+// walked: one that needs itself to finish is a cycle of references, and
+// the walk fails rather than recurse without end.
+const WALK_DEPTH = 200
+function walkPtr(root, frag, { decode = true, follow = false, active = new Set() } = {}) {
   let s = frag
   if (decode) { try { s = decodeURIComponent(s) } catch { return { ok: false, err: 'decode' } } }
   if ('' === s) return { ok: true }
   if (!s.startsWith('/')) return { ok: false, err: 'not-pointer' }
-  const parts = s.slice(1).split('/').map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'))
-  let node = root
-  for (let i = 0; i < parts.length; i++) {
-    const seg = parts[i]
-    let guard = 0
-    while (follow && isMap(node) && 'string' === typeof node.$ref && node.$ref.startsWith('#') && !Object.prototype.hasOwnProperty.call(node, seg) && guard++ < 50) {
-      const r = walkPtr(root, node.$ref.slice(1), { decode, follow })
-      if (!r.ok) return { ok: false, err: 'via-ref-broken', at: i }
-      node = r.node
+  if (active.has(s)) return { ok: false, err: 'cycle' }
+  if (active.size >= WALK_DEPTH) return { ok: false, err: 'too-deep' }
+  active.add(s)
+  try {
+    const parts = s.slice(1).split('/').map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'))
+    let node = root
+    for (let i = 0; i < parts.length; i++) {
+      const seg = parts[i]
+      const followed = new Set()
+      while (follow && isMap(node) && 'string' === typeof node.$ref && node.$ref.startsWith('#') && !Object.prototype.hasOwnProperty.call(node, seg)) {
+        // A reference met twice before the member is found leads back to itself.
+        if (followed.has(node.$ref)) return { ok: false, err: 'cycle', at: i }
+        followed.add(node.$ref)
+        const r = walkPtr(root, node.$ref.slice(1), { decode, follow, active })
+        if (!r.ok) return { ok: false, err: 'via-ref-broken', at: i }
+        node = r.node
+      }
+      if (Array.isArray(node)) {
+        if (!/^(0|[1-9]\d*)$/.test(seg) || Number(seg) >= node.length) return { ok: false, err: 'index', at: i, seg }
+        node = node[Number(seg)]
+      } else if (isMap(node)) {
+        if (!Object.prototype.hasOwnProperty.call(node, seg)) return { ok: false, err: 'absent', at: i, seg }
+        node = node[seg]
+      } else return { ok: false, err: 'scalar', at: i, seg }
     }
-    if (Array.isArray(node)) {
-      if (!/^(0|[1-9]\d*)$/.test(seg) || Number(seg) >= node.length) return { ok: false, err: 'index', at: i, seg }
-      node = node[Number(seg)]
-    } else if (isMap(node)) {
-      if (!Object.prototype.hasOwnProperty.call(node, seg)) return { ok: false, err: 'absent', at: i, seg }
-      node = node[seg]
-    } else return { ok: false, err: 'scalar', at: i, seg }
+    return { ok: true, node }
+  } finally {
+    active.delete(s)
   }
-  return { ok: true, node }
 }
 function findAnchors(root) {
   const out = new Set()
@@ -327,7 +342,8 @@ function examine(text, { ext = '', fast = true, send = () => {} } = {}) {
         const codes = new Set(errs.map((e) => e.code))
         if (1 === codes.size && codes.has('DUPLICATE_KEY')) {
           const d2 = YAML.parseDocument(text, { version: '1.2', schema: 'core', uniqueKeys: false, merge: false })
-          if (0 === d2.errors.length) { refTree = d2.toJS({ maxAliasCount: -1 }); ref.dupKeysOnly = true; ydoc = d2 }
+          // The last-wins tree is the reference, compared as any other.
+          if (0 === d2.errors.length) { refTree = d2.toJS({ maxAliasCount: -1 }); refOk = true; ref.dupKeysOnly = true; ydoc = d2 }
         }
       }
       if (1 === ydocs.length) {

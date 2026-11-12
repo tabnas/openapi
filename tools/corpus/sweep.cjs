@@ -12,6 +12,13 @@
 // resumes where it stopped. A progress line, with a count and a
 // percentage, comes at least every 15 seconds.
 //
+// A run folder belongs to the code that made it. <out>/run.json records
+// the environment and a hash of that code: the package's build, each
+// dependency it loads, and the two files here that measure a document.
+// A sweep of other code is refused, since it would otherwise read the
+// earlier run as finished and report on code that never ran; --fresh
+// discards the earlier run and starts again.
+//
 // When every document has a record it prints the figures, then compares
 // the ledger and figures of this run with the committed ones,
 // test/corpus/ledger.tsv and test/corpus/baseline.json, says which rows
@@ -22,14 +29,15 @@
 // the sweep non-zero; --write then writes nothing.
 //
 // Run from anywhere, under the Node version `engines` in ts/package.json
-// names, after `npm run build` in ts/. The whole corpus takes about 26
+// names, after `npm run build` in ts/. The whole corpus takes about 22
 // minutes at three jobs:
 //
-//   node tools/corpus/sweep.cjs [--fetch] [--out <dir>] [--jobs 3]
+//   node tools/corpus/sweep.cjs [--fetch] [--fresh] [--out <dir>] [--jobs 3]
 //     [--phase-ms 120000] [--doc-ms 900000] [--heap-mb 4096]
 //     [--only <regex on source/path>] [--nofast] [--retry-failed]
 //     [--write] [--no-compare]
 //
+// --fresh      discard the run already in --out, and sweep again
 // --out        where the manifest, run.json and results.jsonl go (default .corpus/run)
 // --only       sweep only the documents whose `source/path` matches; no comparison
 // --nofast     send JSON text to the grammar too (`fast: false` on every parse)
@@ -55,10 +63,12 @@ const ACCEPTED = Path.join(ROOT, 'test', 'corpus', 'accepted.tsv')
 const WORKER = Path.join(__dirname, 'worker.cjs')
 const PROGRESS_MS = 15000
 const BIG = 4 * 1024 * 1024
+// The files of a run, which --fresh discards.
+const RUN_FILES = ['manifest.jsonl', 'results.jsonl', 'run.json']
 
 function options(argv) {
   const args = argv.slice(2)
-  const known = new Set(['--fetch', '--out', '--jobs', '--phase-ms', '--doc-ms', '--heap-mb', '--only', '--nofast', '--retry-failed', '--write', '--no-compare', '--help'])
+  const known = new Set(['--fetch', '--fresh', '--out', '--jobs', '--phase-ms', '--doc-ms', '--heap-mb', '--only', '--nofast', '--retry-failed', '--write', '--no-compare', '--help'])
   const takes = new Set(['--out', '--jobs', '--phase-ms', '--doc-ms', '--heap-mb', '--only'])
   for (let i = 0; i < args.length; i++) {
     if (!known.has(args[i])) throw new Error(`unknown argument ${args[i]}; see the header of ${__filename}`)
@@ -68,6 +78,7 @@ function options(argv) {
   const o = {
     help: args.includes('--help'),
     fetch: args.includes('--fetch'),
+    fresh: args.includes('--fresh'),
     out: Path.resolve(opt('--out', Path.join(ROOT, '.corpus', 'run'))),
     jobs: Number(opt('--jobs', 3)),
     phaseMs: Number(opt('--phase-ms', 120000)),
@@ -99,23 +110,52 @@ function versionOf(req, name) {
   return 'not found'
 }
 
+// The package under test: its build, its manifest, how it resolves a
+// dependency, and the dependencies it names.
+function subject() {
+  const dist = Path.resolve(process.env.OPENAPI_DIST || Path.join(ROOT, 'ts', 'dist', 'openapi.js'))
+  const pkg = JSON.parse(Fs.readFileSync(Path.join(Path.dirname(dist), '..', 'package.json'), 'utf8'))
+  return { dist, pkg, req: createRequire(dist), deps: Object.keys(pkg.peerDependencies ?? pkg.dependencies ?? {}).sort() }
+}
+
 // What the run measures with: a different value of any of these makes
 // the figures of two runs incomparable, so it is recorded with them.
-function environmentOf(o) {
-  const dist = Path.resolve(process.env.OPENAPI_DIST || Path.join(ROOT, 'ts', 'dist', 'openapi.js'))
-  const pkgFile = Path.join(Path.dirname(dist), '..', 'package.json')
-  const pkg = JSON.parse(Fs.readFileSync(pkgFile, 'utf8'))
-  const req = createRequire(dist)
+function environmentOf(o, sub = subject()) {
   const deps = {}
-  for (const name of Object.keys(pkg.peerDependencies ?? pkg.dependencies ?? {}).sort()) deps[name] = versionOf(req, name)
+  for (const name of sub.deps) deps[name] = versionOf(sub.req, name)
   const tsReq = createRequire(Path.join(ROOT, 'ts', 'package.json'))
   return {
     node: Number(process.versions.node.split('.')[0]),
-    package: { name: pkg.name, version: pkg.version },
+    package: { name: sub.pkg.name, version: sub.pkg.version },
     dependencies: deps,
     reference: { yaml: versionOf(tsReq, 'yaml') },
     options: { parse: o.nofast ? 'nofast' : 'fast', heapMiB: o.heapMb },
   }
+}
+
+// The files here that make a document's record. A record made by other
+// measuring code is no more this run's than one made by another build.
+const MEASURE = ['examine.cjs', 'worker.cjs']
+
+// The code a run's records come from, as hashes: the package's build
+// folder, the folder of each dependency's entry point, and the measuring
+// code of this tool. A version does not tell two builds of one checkout
+// apart, nor a linked dependency that has moved, so this is what a run
+// folder is held to. It is recorded in the run, never in the baseline,
+// which would otherwise move with every build.
+function buildOf(sub = subject()) {
+  const build = { [sub.pkg.name]: S.codeHash(Path.dirname(sub.dist)) }
+  for (const name of sub.deps) {
+    try { build[name] = S.codeHash(Path.dirname(Fs.realpathSync(sub.req.resolve(name)))) } catch { build[name] = 'not found' }
+  }
+  build['tools/corpus'] = S.sha1(Buffer.concat(MEASURE.map((f) => Fs.readFileSync(Path.join(__dirname, f)))))
+  return build
+}
+
+// What differs between the identity a run folder records and this run's,
+// as lines for a person: none when the folder is this run's to resume.
+function runDiffers(was, now) {
+  return A.compareBaseline({ environment: was }, { environment: now }).environment.map((l) => l.replace(/^environment\./, ''))
 }
 
 const secs = (ms) => Math.round(ms / 1000) + 's'
@@ -149,19 +189,32 @@ function buildManifest(sources, o) {
   return recs
 }
 
-// A results file belongs to one environment. Resuming it with another
-// would mix two packages' records in one set of figures.
-function claimOut(o, env) {
+// A run folder belongs to one environment and one build. Resumed by
+// another, it would mix two sets of records in one set of figures; read
+// as finished by another, it would report on code that never ran.
+function claimOut(o, env, build) {
   const file = Path.join(o.out, 'run.json')
-  if (Fs.existsSync(file)) {
-    const was = JSON.parse(Fs.readFileSync(file, 'utf8'))
-    const d = A.compareBaseline({ environment: was }, { environment: env })
-    if (!d.same) {
-      for (const l of d.environment) console.error('sweep: ' + l)
-      console.error(`sweep: ${o.out} holds a run made with the environment above; use another --out, or delete that folder to start again`)
-      process.exit(2)
-    }
-  } else Fs.writeFileSync(file, JSON.stringify(env, null, 2) + '\n')
+  const now = { ...env, build }
+  if (!Fs.existsSync(file)) {
+    Fs.writeFileSync(file, JSON.stringify(now, null, 2) + '\n')
+    return
+  }
+  const lines = runDiffers(JSON.parse(Fs.readFileSync(file, 'utf8')), now)
+  if (!lines.length) return
+  for (const l of lines) console.error('sweep: ' + l)
+  const code = lines.every((l) => l.startsWith('build.'))
+  console.error(code
+    ? `sweep: ${o.out} holds a run of other code: the build under test, a dependency it loads or this tool's measuring code has changed since that run was made, so its results are not this code's`
+    : `sweep: ${o.out} holds a run made in another environment, so its results are not comparable with this run's`)
+  console.error('sweep: run again with --fresh to discard that run and sweep again, or name another folder with --out')
+  process.exit(2)
+}
+
+// --fresh: the earlier run's files, and nothing else in the folder.
+function discardRun(o) {
+  const had = RUN_FILES.filter((f) => Fs.existsSync(Path.join(o.out, f)))
+  for (const f of had) Fs.rmSync(Path.join(o.out, f))
+  console.log(had.length ? `sweep: --fresh: discarded the earlier run in ${o.out} (${had.join(', ')})` : `sweep: --fresh: there was no earlier run in ${o.out}`)
 }
 
 function runAll(todo, o, resultsFile) {
@@ -256,12 +309,15 @@ async function main() {
   if (floor && Number(process.versions.node.split('.')[0]) < floor) console.log(`sweep: warning: Node ${process.versions.node} is older than the ${engines} that ts/package.json names; the figures may differ from the baseline's`)
   const sources = S.loadSources()
   ensureSources(sources, o)
-  const env = environmentOf(o)
+  const sub = subject()
+  const env = environmentOf(o, sub)
+  if (o.fresh) discardRun(o)
   const manifest = buildManifest(sources, o)
-  claimOut(o, env)
+  claimOut(o, env, buildOf(sub))
   const only = null == o.only ? null : new RegExp(o.only)
   const docs = manifest.filter((r) => !r.dupOf).filter((r) => null == only || only.test(r.source + '/' + r.path))
   const resultsFile = Path.join(o.out, 'results.jsonl')
+  if (L.closeCutLine(resultsFile)) console.log('sweep: the results ended in a line that a stopped run cut short; its document runs again')
   const finished = new Set()
   for (const r of L.readRecords(resultsFile)) {
     if (o.retryFailed && !r.done) finished.delete(r.id)
@@ -301,4 +357,9 @@ async function main() {
   return compareWithCommitted(records, baseline) && !acc.stranded.length ? 0 : 1
 }
 
-main().then((code) => { process.exitCode = code }, (e) => { console.error('sweep: ' + e.message); process.exitCode = 2 })
+// For ts/test/corpus-tool.test.ts: what a run folder is held to.
+module.exports = { options, subject, environmentOf, buildOf, runDiffers }
+
+if (require.main === module) {
+  main().then((code) => { process.exitCode = code }, (e) => { console.error('sweep: ' + e.message); process.exitCode = 2 })
+}

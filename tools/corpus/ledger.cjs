@@ -55,6 +55,26 @@ function readRecords(file) {
   return out
 }
 
+// A run stopped in the middle of a write leaves a last line with no end.
+// Appended to as it is, the next record would join that line and both
+// would be unreadable. This ends the line, so that readRecords skips the
+// cut record alone and its document runs again. True when it ended one.
+function closeCutLine(file) {
+  if (!Fs.existsSync(file)) return false
+  const size = Fs.statSync(file).size
+  if (0 === size) return false
+  const fd = Fs.openSync(file, 'r+')
+  try {
+    const last = Buffer.alloc(1)
+    Fs.readSync(fd, last, 0, 1, size - 1)
+    if (0x0a === last[0]) return false
+    Fs.writeSync(fd, '\n', size)
+    return true
+  } finally {
+    Fs.closeSync(fd)
+  }
+}
+
 const codeOf = (err) => err?.code ?? 'uncoded:' + (err?.name ?? 'Error')
 
 // Why a worker ended without finishing, and in which phase.
@@ -164,4 +184,4 @@ function compareLedger(before, after) {
   return { added, removed, changed, lines, same: 0 === lines.length }
 }
 
-module.exports = { HEADER, ACCEPTED_HEADER, OUTCOMES, parseAccepted, formatAccepted, checkAccepted, lastOf, readRecords, rowsOf, deathOf, referenceAccepts, ledgerOf, formatLedger, parseLedger, compareLedger, classesDetail }
+module.exports = { HEADER, ACCEPTED_HEADER, OUTCOMES, parseAccepted, formatAccepted, checkAccepted, lastOf, readRecords, closeCutLine, rowsOf, deathOf, referenceAccepts, ledgerOf, formatLedger, parseLedger, compareLedger, classesDetail }

@@ -38,7 +38,8 @@ if ('measure' === process.env.PARSE_ONLY_ROLE) {
   const hb = setInterval(() => console.log(`parse-only: ${Math.round((Date.now() - t0) / 1000)}s elapsed, still measuring (percentage unknown)`), 10000)
   let result
   child.on('message', (m) => { result = m })
-  child.on('exit', (code, signal) => {
+  // 'close', not 'exit': the result can arrive after 'exit'.
+  child.on('close', (code, signal) => {
     clearInterval(hb)
     if (result) return console.log(JSON.stringify(result))
     console.log(JSON.stringify({ file, failed: { code, signal }, wallMs: Date.now() - t0 }))

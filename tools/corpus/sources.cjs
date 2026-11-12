@@ -88,6 +88,25 @@ function documentsOf(s, dir = sourceDir(s)) {
 
 const sha1 = (buf) => Crypto.createHash('sha1').update(buf).digest('hex')
 
+// The SHA-1 of the code under a folder: every .js, .cjs and .mjs file, by
+// its path within the folder and its content, in path order. A
+// `node_modules` folder is left out, since what the code depends on is
+// hashed as itself.
+function codeHash(dir) {
+  const hash = Crypto.createHash('sha1')
+  const walk = (rel) => {
+    const entries = Fs.readdirSync(Path.join(dir, rel), { withFileTypes: true })
+    for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+      if ('node_modules' === e.name || '.git' === e.name) continue
+      const r = rel ? rel + '/' + e.name : e.name
+      if (e.isDirectory()) walk(r)
+      else if (e.isFile() && /\.[cm]?js$/.test(e.name)) hash.update(r + '\0').update(Fs.readFileSync(Path.join(dir, r))).update('\0')
+    }
+  }
+  walk('')
+  return hash.digest('hex')
+}
+
 // One record per file: { id, source, path, file, size, dupOf? }. `id` is
 // the file's SHA-1, so a record names the same bytes in every run.
 // `progress(source, index, files)` is called as each source starts, and
@@ -128,4 +147,4 @@ function countCheck(sources, records, { distinct: checkDistinct = true } = {}) {
   return problems
 }
 
-module.exports = { ROOT, SOURCES_FILE, corpusDir, loadSources, sourceDir, sparseOf, headOf, isCurrent, documentsOf, manifest, countCheck, sha1 }
+module.exports = { ROOT, SOURCES_FILE, corpusDir, loadSources, sourceDir, sparseOf, headOf, isCurrent, documentsOf, manifest, countCheck, sha1, codeHash }
