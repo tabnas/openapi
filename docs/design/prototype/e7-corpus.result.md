@@ -3,6 +3,9 @@
 The report of one research pass for [`../typescript-plan.md`](../typescript-plan.md),
 taken on 12 November 2026 against `@tabnas/openapi` 0.1.0 as built from this
 repository, and kept as it was written. The scripts are in [`e7-corpus/`](e7-corpus/), with their defaults changed to read this checkout.
+One command below was corrected after review: the large-heap re-run needs
+`--retry-failed`, which the driver gained then, since a failed document is
+otherwise skipped as already done.
 A path under `<scratch>` names the working folder of that research session,
 which is not kept; a path under `/home/user` names a checkout on the machine
 that ran it.
@@ -224,12 +227,12 @@ Commands, run from `tools/`. Set `OPENAPI_DIST=<path to openapi.js>` to test ano
 ```
 node manifest.cjs > ../run/manifest.jsonl
 node driver.cjs ../run/manifest.jsonl ../run/results-NEW.jsonl --jobs 4 > ../run/sweep-NEW.log     # ~26 min; rerun to resume
-node driver.cjs ../run/manifest.jsonl ../run/results-NEW.jsonl --jobs 1 --heap-mb 8192 --only graph-beta   # the 58 MB file
+node driver.cjs ../run/manifest.jsonl ../run/results-NEW.jsonl --jobs 1 --heap-mb 8192 --only graph-beta --retry-failed   # the 58 MB file
 node analyze.cjs ../run/results-NEW.jsonl            # sections: corpus parse compare resolve features perf
 node ext-analyze.cjs ../run/results-NEW.jsonl; node ref-census.cjs ../run/manifest.jsonl
 node target-check.cjs ../run/results-NEW.jsonl 600; node repros.cjs
 ```
-`driver.cjs` takes `--jobs`, `--phase-ms` (default 120000), `--heap-mb` (default 4096), `--only <regex>` and `--nofast`. A record counts as a worker failure when its process ends without sending its `done` message. I fixed a race that lost messages part-way through the sweep and reran the one affected document, so it no longer occurs.
+`driver.cjs` takes `--jobs`, `--phase-ms` (default 120000), `--heap-mb` (default 4096), `--only <regex>`, `--nofast` and `--retry-failed`. A record counts as a worker failure when its process ends without sending its `done` message. I fixed a race that lost messages part-way through the sweep and reran the one affected document, so it no longer occurs.
 
 ## (7) What I could not do
 - **Azure examples:** I left `examples/` out of the Azure checkout, so their 17k `x-ms-examples` references point at missing files. I took 6 services, not more.

@@ -3,10 +3,12 @@
 // Sweep driver: runs tools/worker.cjs once per document in the manifest, in
 // a fresh process with a heap limit and a per-phase time limit, and appends
 // one JSON line per document to the results file. Resumable: documents
-// already in the results file are skipped.
+// already in the results file are skipped. With --retry-failed, a document
+// whose latest record is a worker failure (no `done`) runs again and a new
+// record is appended; the analysis scripts read the last record of each id.
 //
 // usage: node driver.cjs <manifest.jsonl> <results.jsonl> [--jobs 3] [--phase-ms 120000]
-//        [--heap-mb 4096] [--only <regex on path>] [--nofast]
+//        [--heap-mb 4096] [--only <regex on path>] [--nofast] [--retry-failed]
 const Fs = require('node:fs')
 const Path = require('node:path')
 const { fork } = require('node:child_process')
@@ -20,13 +22,23 @@ const DOC_MS = Number(opt('--doc-ms', 900000))
 const HEAP_MB = Number(opt('--heap-mb', 4096))
 const ONLY = opt('--only', null)
 const NOFAST = args.includes('--nofast')
+const RETRY_FAILED = args.includes('--retry-failed')
 const BIG = 4 * 1024 * 1024
 const WORKER = Path.join(__dirname, 'worker.cjs')
 
 const all = Fs.readFileSync(manifestFile, 'utf8').trim().split('\n').map(JSON.parse)
   .filter((r) => !r.dupOf).filter((r) => null == ONLY || new RegExp(ONLY).test(r.path))
 const done = new Set()
-if (Fs.existsSync(resultsFile)) for (const l of Fs.readFileSync(resultsFile, 'utf8').split('\n')) if (l) try { done.add(JSON.parse(l).id) } catch {}
+if (Fs.existsSync(resultsFile)) {
+  for (const l of Fs.readFileSync(resultsFile, 'utf8').split('\n')) {
+    if (!l) continue
+    let r
+    try { r = JSON.parse(l) } catch { continue }
+    // The last record of an id decides: a later success supersedes a failure.
+    if (RETRY_FAILED && !r.done) done.delete(r.id)
+    else done.add(r.id)
+  }
+}
 const todo = all.filter((r) => !done.has(r.id))
 // big ones last, so the bulk reports early; and at most one big at a time
 todo.sort((a, b) => (a.size > BIG) - (b.size > BIG))

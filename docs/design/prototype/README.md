@@ -52,6 +52,7 @@ dependency of this repository.
 cd e7-corpus
 node manifest.cjs > manifest.jsonl
 node driver.cjs manifest.jsonl results.jsonl --jobs 4 > sweep.log   # about 26 minutes; run again to resume
+node driver.cjs manifest.jsonl results.jsonl --jobs 1 --heap-mb 8192 --only graph-beta --retry-failed   # a failed document again, with more heap
 node analyze.cjs results.jsonl
 node repros.cjs                                                     # the minimal reproductions, 16 failing
 ```

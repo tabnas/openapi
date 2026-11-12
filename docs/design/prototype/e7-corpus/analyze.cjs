@@ -5,7 +5,9 @@
 const Fs = require('node:fs')
 const file = process.argv[2]
 const section = process.argv[3] ?? 'all'
-const R = Fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+// The driver appends; where a document ran more than once, its last record stands.
+const lastOf = (rows) => [...new Map(rows.map((r) => [r.id, r])).values()]
+const R = lastOf(Fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l)))
 const inc = (o, k, n = 1) => { o[k] = (o[k] ?? 0) + n; return o }
 const out = (title, v) => console.log('\n## ' + title + '\n' + (typeof v === 'string' ? v : JSON.stringify(v, null, 1)))
 

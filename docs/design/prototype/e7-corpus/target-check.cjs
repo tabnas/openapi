@@ -6,7 +6,9 @@
 const Fs = require('node:fs')
 const W = require('./worker.cjs')
 const O = W.O
-const R = Fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').map(JSON.parse)
+// The driver appends; where a document ran more than once, its last record stands.
+const lastOf = (rows) => [...new Map(rows.map((r) => [r.id, r])).values()]
+const R = lastOf(Fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').map((l) => JSON.parse(l)))
   .filter((r) => r.resolve?.ok && r.resolve.sites > 0 && r.size < 3e6)
 let seed = Number(process.argv[4] ?? 7)
 const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)

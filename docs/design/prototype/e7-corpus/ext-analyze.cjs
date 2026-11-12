@@ -4,7 +4,9 @@
 // usage: node ext-analyze.cjs <results.jsonl>
 const Fs = require('node:fs'), Path = require('node:path')
 const YAML = require(process.env.YAML_REF || 'yaml')
-const R = Fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+// The driver appends; where a document ran more than once, its last record stands.
+const lastOf = (rows) => [...new Map(rows.map((r) => [r.id, r])).values()]
+const R = lastOf(Fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').map((l) => JSON.parse(l)))
 const inc = (o, k, n = 1) => { o[k] = (o[k] ?? 0) + n }
 const cache = new Map()
 function kindOfFile(p) {
