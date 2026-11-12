@@ -90,7 +90,9 @@ The order of the remaining TypeScript work, and what finished means for
 it, is [`typescript-plan.md`](docs/design/typescript-plan.md), a
 proposal of 12 November 2026 that replaces the earlier plan's Phases 3
 to 7. By the maintainer's direction of that date, porting is deferred
-until the TypeScript version is finished. The plan's section 5 proposes
+until the TypeScript version is finished; nothing is published until
+then; and apidef is the proving ground, validated from a clone linked to
+this checkout (the plan's section 2.4). The plan's section 5 proposes
 how the suites stay consistent meanwhile: new behaviour lands in
 TypeScript as an option or a new function and is pinned outside
 `test/spec/`, which every suite here reads, and no default that a shared

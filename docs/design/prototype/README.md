@@ -27,7 +27,7 @@ no `fold`.
 
 ## The measurements behind the TypeScript plan
 
-Four more, taken on 12 November 2026 for
+Five more, taken on 12 November 2026 for
 [`../typescript-plan.md`](../typescript-plan.md) against this
 repository's own build (`ts/dist/openapi.js`, with `@tabnas/parser`
 0.12.20, `@tabnas/yaml` 0.5.32, `@tabnas/jsonic` 0.7.11, `@tabnas/json`
@@ -39,7 +39,8 @@ pass, as written.
 | `e7-corpus/` | What does the package do with 8,986 real documents: which does it refuse, which trees differ from a reference parser's, what does `resolve` leave as written, and at what cost? | `e7-corpus.result.md` |
 | `e8-spec-probes/` | What can a valid description contain, by the texts of 2.0, 3.0.4, 3.1.2 and 3.2.0, that the package reads or resolves wrongly? `verify.cjs` re-runs the defects the plan leans on. | `e8-spec-probes.result.md` |
 | `e9-apidef-swap/` | Does `voxgig/apidef`'s own suite pass with its parsing and resolution replaced by this package, and what does each remaining hand-written step need? Two diffs against apidef at 3058271, and `preset-shapes.cjs`, the shapes where apidef's reading of a pointer and the preset part. | `e9-apidef-swap.result.md` |
-| `e10-aless-needs/` | What does the `rjrodger/aless` viewer need in order to open a reference in place, and what does the package cost on a 14 MB description? | `e10-aless-needs.result.md` |
+| `e10-aless-needs/` | What does the `rjrodger/aless` viewer need in order to open a reference in place, and what does the package cost on a 14 MB description? Set aside with that goal until a port exists; kept as a record, and not used by the plan. | `e10-aless-needs.result.md` |
+| `e11-apidef-reads/` | apidef reads through the same base grammars, so are the documents E7 flagged misread by apidef too, and does it show in apidef's output? apidef's own reader over those documents, apidef's models from each document as written against the same document re-read by the reference parser, and what two engine options on this package's own parser repair. | `e11-apidef-reads.result.md` |
 
 Every script reads this checkout's build unless `OPENAPI_DIST` names
 another. The corpus sweep needs the sources below cloned into one
