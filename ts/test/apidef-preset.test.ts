@@ -19,7 +19,7 @@ import { after, describe, test } from 'node:test'
 import assert from 'node:assert'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import * as O from '../dist/openapi'
 
@@ -213,7 +213,9 @@ describe('apidef-preset', () => {
       '/x/apidef', '--corpus', '/x/src', '--rows', '/x/a.tsv', '/x/b.tsv', '--options', '{"refs":"uri"}', '--seed', '7',
     ])
     assert.deepEqual(all.sets, ['hand', 'generated', 'corpus', 'rows'])
-    assert.deepEqual([all.rows, all.options, all.seed], [['/x/a.tsv', '/x/b.tsv'], { refs: 'uri' }, 7])
+    // A path is made absolute as the platform has it, so the expectation is too.
+    assert.deepEqual([all.apidef, all.corpus], [resolve('/x/apidef'), resolve('/x/src')])
+    assert.deepEqual([all.rows, all.options, all.seed], [[resolve('/x/a.tsv'), resolve('/x/b.tsv')], { refs: 'uri' }, 7])
   })
 
   test('the hand shapes and the classes are well formed', () => {
