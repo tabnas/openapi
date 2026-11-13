@@ -31,7 +31,7 @@ type Compared = {
 }
 type Options = {
   apidef: string | null
-  patch: string | null
+  patch: string[]
   ref: string | null
   base: string | null
   extra: string[]
@@ -191,11 +191,12 @@ describe('apidef gate: the pieces of the comparison', () => {
 describe('apidef gate: its arguments', () => {
   test('the run this repository documents reads as written', () => {
     const o = G.readArgs([
-      '../apidef', '--patch', 'docs/x.diff', '--allow-failures', '1',
+      '../apidef', '--patch', 'docs/x.diff', '--patch', 'docs/y.diff', '--allow-failures', '1',
       '--extra', 'a.json', 'b.yaml', '--no-build', '--jobs', '2', '--timeout', '60',
     ])
     assert.strictEqual(o.apidef, resolve('../apidef'))
-    assert.strictEqual(o.patch, resolve('docs/x.diff'))
+    // Each --patch is one diff, applied in the order given.
+    assert.deepStrictEqual(o.patch, [resolve('docs/x.diff'), resolve('docs/y.diff')])
     assert.strictEqual(o.allowFailures, 1)
     assert.deepStrictEqual(o.extra, [resolve('a.json'), resolve('b.yaml')])
     assert.strictEqual(o.build, false)
@@ -207,7 +208,7 @@ describe('apidef gate: its arguments', () => {
     const o = G.readArgs(['../apidef'])
     assert.strictEqual(o.allowFailures, 0)
     assert.strictEqual(o.build, true)
-    assert.strictEqual(o.patch, null)
+    assert.deepStrictEqual(o.patch, [])
     assert.deepStrictEqual(o.extra, [])
     assert.strictEqual(o.keep, false)
   })

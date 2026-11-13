@@ -48,7 +48,8 @@
 //
 // Options:
 //
-//   --patch <diff>        apply this diff to the candidate
+//   --patch <diff>        apply this diff to the candidate; given again, a
+//                         further diff, applied after the one before
 //   --ref <commit>        the candidate's commit (default: the checkout's HEAD)
 //   --base <commit>       the base's commit, without --patch (default: main)
 //   --extra <file>...     further descriptions to compare (until the next option)
@@ -112,7 +113,7 @@ heartbeat.unref()
 
 function usage(msg) {
   if (msg) console.error('apidef-gate: ' + msg)
-  console.error('usage: node tools/apidef-gate.cjs <apidef checkout> [--patch <diff>] [--ref <commit>]')
+  console.error('usage: node tools/apidef-gate.cjs <apidef checkout> [--patch <diff>]... [--ref <commit>]')
   console.error('         [--base <commit>] [--extra <file>...] [--allow-failures <n>] [--jobs <n>]')
   console.error('         [--timeout <seconds>] [--no-build] [--work <dir>] [--keep] [--report <file>]')
   process.exit(2)
@@ -120,7 +121,7 @@ function usage(msg) {
 
 function readArgs(argv) {
   const opts = {
-    apidef: null, patch: null, ref: null, base: null, extra: [], allowFailures: 0,
+    apidef: null, patch: [], ref: null, base: null, extra: [], allowFailures: 0,
     jobs: Math.max(1, Math.min(4, (Os.availableParallelism?.() ?? Os.cpus().length) - 1)),
     timeout: 300, build: true, work: null, keep: false, report: null,
   }
@@ -134,7 +135,7 @@ function readArgs(argv) {
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
-    if ('--patch' === a) opts.patch = Path.resolve(value(i++, a))
+    if ('--patch' === a) opts.patch.push(Path.resolve(value(i++, a)))
     else if ('--ref' === a) opts.ref = value(i++, a)
     else if ('--base' === a) opts.base = value(i++, a)
     else if ('--allow-failures' === a) opts.allowFailures = count(value(i++, a), a)
@@ -153,7 +154,7 @@ function readArgs(argv) {
     else usage(`unexpected argument ${a}`)
   }
   if (null == opts.apidef) usage('name the apidef checkout')
-  if (opts.patch && opts.base) usage('--base is for runs without --patch; with --patch the base is the patched commit')
+  if (0 < opts.patch.length && opts.base) usage('--base is for runs without --patch; with --patch the base is the patched commit')
   return opts
 }
 
@@ -412,8 +413,8 @@ async function prepare(opts, report) {
   if (null == candidate) throw new GroundError(`apidef has no commit ${opts.ref}`)
   let baseRef
   let base
-  if (opts.patch) {
-    if (!Fs.existsSync(opts.patch)) throw new GroundError(`no patch at ${opts.patch}`)
+  if (0 < opts.patch.length) {
+    for (const patch of opts.patch) if (!Fs.existsSync(patch)) throw new GroundError(`no patch at ${patch}`)
     baseRef = '(the candidate\'s commit)'
     base = candidate
   } else {
@@ -423,7 +424,7 @@ async function prepare(opts, report) {
     if (null == base) throw new GroundError(`apidef has no commit ${baseRef}`)
   }
   report.mode = {
-    patch: opts.patch ? shown(opts.patch) : null,
+    patch: 0 < opts.patch.length ? opts.patch.map(shown).join(', then ') : null,
     candidate: { ref: opts.ref ?? 'HEAD', commit: candidate },
     base: { ref: baseRef, commit: base },
   }
@@ -443,17 +444,20 @@ async function prepare(opts, report) {
 
   const cand = await addWorktree(opts, 'candidate', candidate)
   log(`   candidate: ${cand}, apidef at ${candidate.slice(0, 7)}`)
-  if (opts.patch) {
-    const check = await run('git', ['-C', cand, 'apply', '--check', opts.patch])
-    if (0 !== check.code) throw new GroundError(`the patch does not apply at ${candidate.slice(0, 7)}: ${check.err.trim()}`)
-    const applied = await run('git', ['-C', cand, 'apply', opts.patch])
+  for (const patch of opts.patch) {
+    const check = await run('git', ['-C', cand, 'apply', '--check', patch])
+    if (0 !== check.code) {
+      throw new GroundError(`${shown(patch)} does not apply at ${candidate.slice(0, 7)}` +
+        `${patch === opts.patch[0] ? '' : ', after the patches before it'}: ${check.err.trim()}`)
+    }
+    const applied = await run('git', ['-C', cand, 'apply', patch])
     if (0 !== applied.code) throw new GroundError(`git apply failed: ${applied.err.trim()}`)
     const files = gitSync(cand, 'diff', '--stat').split('\n')
-    log(`   patched with ${shown(opts.patch)}: ${files[files.length - 1].trim()}`)
+    log(`   patched with ${shown(patch)}; in all: ${files[files.length - 1].trim()}`)
   }
   const baseDir = await addWorktree(opts, 'base', base)
   log(`   base: ${baseDir}, apidef at ${base.slice(0, 7)} ${baseRef}, unpatched`)
-  if (base === candidate && !opts.patch) {
+  if (base === candidate && 0 === opts.patch.length) {
     log('   note: the base is the candidate\'s own commit, so the comparison shows only that apidef\'s output is repeatable')
   }
 
