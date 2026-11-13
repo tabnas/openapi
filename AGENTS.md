@@ -87,26 +87,28 @@ and [`prototype/`](docs/design/prototype/) holds the measured
 experiments, each with its recorded result.
 
 The order of the remaining TypeScript work, and what finished means for
-it, is [`typescript-plan.md`](docs/design/typescript-plan.md), a
-proposal of 12 November 2026 that replaces the earlier plan's Phases 3
-to 7. By the maintainer's direction of that date, porting is deferred
-until the TypeScript version is finished; nothing is published until
-then; and apidef is the proving ground, validated from a clone linked to
-this checkout (the plan's section 2.4). The plan's section 5 proposes
-how the suites stay consistent meanwhile: new behaviour lands in
-TypeScript as an option or a new function and is pinned outside
-`test/spec/`, which every suite here reads, and no default that a shared
-row pins changes until porting starts.
+it, is [`typescript-plan.md`](docs/design/typescript-plan.md), which
+the maintainer accepted on 12 November 2026 and which replaces the
+earlier plan's Phases 3 to 7. By the maintainer's direction of that
+date, porting is deferred until the TypeScript version is finished;
+nothing is published until then; and apidef is the proving ground,
+validated from a clone linked to this checkout (the plan's section 2.4).
+The plan's section 5 says how the suites stay consistent meanwhile: new
+behaviour lands in TypeScript as an option or a new function and is
+pinned outside `test/spec/`, which every suite here reads, and no
+default that a shared row pins changes until porting starts.
 
 ### Where the plan stands
 
 | Phase | What | State |
 |---|---|---|
-| E | expr tree layer (key operators, `fold`) | TypeScript on expr's `main`, not yet released; the Go and Rust ports are next |
+| E | expr tree layer (key operators, `fold`) | done: released in `@tabnas/expr` 0.5.20 |
 | 0 | this repository bootstrapped from the ZON template, all three runtimes | done |
 | 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | done in all three runtimes |
-| 2 | the resolver over `fold`, against expr's `main` | TypeScript done within one document: the object model, `resolve` with every option and output shape, the connections report, and the apidef preset; Go and Rust wait on the expr ports |
-| 3 to 7 | ports of the resolver, documents, bundling, release | see the plan |
+| 2 | the resolver over `fold` | TypeScript done within one document: the object model, `resolve` with every option and output shape, the connections report, and the apidef preset. Porting it is deferred |
+| T0 | gates: the corpus sweep and its ledger, the apidef gate, the fixture homes | done |
+| T1 | apidef's swap, proven locally | next |
+| T2 to T6 | reading, the site index, several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
 `ts/test/debug-model.test.ts` and `rs/tests/debug_model_test.rs` hold
@@ -253,9 +255,11 @@ keeps cycles.
 | [`rs/`](rs/) | Rust port, crate `tabnas-openapi`, library `tabnas_openapi`: `parse(&ParseOptions)`, `Fast`, `version`, `openapi` / `plugin()`, `make` / `make_with(&MakeOptions)`, `OpenApiOptions`, `VERSION`, `OpenApiError`. `rs/AGENTS.md` has the crate's own notes, including how raw mode works around the engine's Rust API. The README's examples run as doctests. |
 | [`test/spec/`](test/spec/) | Shared `.tsv` fixtures. All three runners discover and run every file, so a row added here covers TypeScript, Go and Rust together. See [`test/AGENTS.md`](test/AGENTS.md). |
 | [`test/petstore/`](test/petstore/) | One OpenAPI 3.1 description in YAML and the same in JSON. Every runtime's suite reads both and holds them to `JSON.parse` of the JSON form. |
+| [`test/resolve/`](test/resolve/), [`test/model/`](test/model/) | Fixtures only the TypeScript suite runs: the resolver's and the object model's. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
+| [`test/corpus/`](test/corpus/) | The corpus sweep's record over real documents: `ledger.tsv`, one row per way a document fails, and `baseline.json`, the headline figures, both written by the sweep and never by hand; and `accepted.tsv`, written by hand, the ledger rows that are not this package's defect, each with its reason. |
 | [`docs/design/`](docs/design/) | The design notes, the plan and the prototypes. Working documents, outside the prose gate. |
 | [`ts/doc/`](ts/doc/), [`go/doc/`](go/doc/) | Per-runtime Diátaxis docs: `tutorial.md`, `guide.md`, `reference.md`, `concepts.md`. Gated, with the READMEs, by [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). |
-| [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions. |
+| [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions; [`corpus/`](tools/corpus/README.md), the corpus sweep; `apidef-gate.cjs`, the apidef gate, with its helpers in `apidef-gate/`. The last two are gates run by hand: see "Verify your work". |
 | [`model/`](model/) | The object model's inputs (the vendored OAI schemas, the applicator lists, the overlay) and the generated `object-model.json`. |
 | [`ci/`](ci/) | `ci/rust/run.sh`, the Rust gate; see [`ci/README.md`](ci/README.md). |
 | [`tabnas.plugin.json`](tabnas.plugin.json) | The plugin descriptor. **Generated by admin `make ax-descriptor`; never hand-edit it.** It still describes the ZON template until admin regenerates it. |
@@ -284,19 +288,22 @@ path, a `replace` or a `go.work`.
 - **`@tabnas/expr` is a TypeScript dependency, and not yet a Go or Rust
   one.** The maintainer instructed it on 2026-11-09 (the plan's
   Decision 7): a peer (`>=0`) mirrored as a `"*"` devDependency, for the
-  resolver, which is built on expr's tree layer. That layer is on expr's
-  `main` and in no published release yet, so the registry's
-  `@tabnas/expr` has no `fold` and the TypeScript build needs expr's
-  `main`:
-  - **locally**, build `../expr/ts` and link it over the registry copy,
-    `ln -sfn "$PWD/../expr/ts" ts/node_modules/@tabnas/expr`, which
-    edits no tracked file;
-  - **in CI**, the staged `ci/workflows/ci.yml` adds `expr` to the
-    shared workflow's `deps`, which clones and links expr's `main`; until
-    a maintainer promotes it, `ci / ts` fails to compile the resolver.
+  resolver, which is built on expr's tree layer. That layer shipped in
+  expr 0.5.20, so `npm install` takes it from the registry as it takes
+  every other dependency, and `ci.yml` names `expr` in the shared
+  workflow's `deps`.
 
   `tools/port-deps.json` records the difference between the ports, with
   its repair: Go and Rust take expr when they port the resolver.
+- **`yaml` is a development dependency of the TypeScript package**,
+  pinned exactly, by the maintainer's instruction of 2026-11-12
+  (Decision 17 of [`typescript-plan.md`](docs/design/typescript-plan.md)).
+  It is the reference YAML parser the corpus sweep holds this package
+  against, read under YAML 1.2's core schema, and `tools/corpus/` is the
+  only code that loads it. The pin is exact because the sweep's figures
+  depend on the reference parser's version, which the baseline records.
+  Nothing in `ts/src/` may import it: the package reads YAML with
+  `@tabnas/yaml`.
 
 All three ports must depend on the same tabnas repositories at runtime:
 `ts/test/port-deps.test.ts` runs `tools/port-deps.cjs`, which compares
@@ -445,12 +452,68 @@ What "correct" means here, in order of authority:
    [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). A change to a gated page
    moves the alert counts, and `node ts/scripts/vale-counts.cjs --write`
    re-measures them; commit `.vale.ini` and the style guide with the page.
+5. **The corpus record moves only on purpose**, by the corpus sweep.
+6. **apidef behaves on this checkout as it did before**, by the apidef
+   gate.
+
+The last two are gates run by hand: see "Two gates run by hand" below.
 
 The docs workflow runs Vale 3.22.0. Where no release binary can be
 fetched, `go install github.com/vale-cli/vale/v3/cmd/vale@v3.22.0` builds
 the same version, and `VALE=<path> node ts/scripts/vale-counts.cjs`
 uses it; such a build reports its version as `undefined`, which the
 script flags as a version mismatch while still comparing every count.
+
+### Two gates run by hand
+
+Neither is in `make test`, because each needs more than this checkout.
+A change to `parse`, to `resolve` or to an option of either is not
+verified until both have run, under the Node version `engines` names in
+`ts/package.json`:
+
+```bash
+node tools/corpus/sweep.cjs --fetch    # needs the network, 1.1 GB of disk and about half an hour
+node tools/apidef-gate.cjs ../apidef --patch docs/design/prototype/e9-apidef-swap/variant1.diff --allow-failures 1
+```
+
+- **The corpus sweep** reads 8,986 real documents with this checkout's
+  build, holds each tree to a reference parser's, resolves every
+  description, and then compares what it found with
+  `test/corpus/ledger.tsv` and `test/corpus/baseline.json`. It ends with
+  0 when nothing moved. A run is held to the code that made it, by a
+  hash of the build, its dependencies and the tool's measuring code: a
+  sweep after a rebuild refuses the earlier run and `--fresh` starts
+  again, so an earlier build's results are never read as this one's. A
+  row or a figure that moved is a repair or a regression: say which in
+  the commit, and accept a change that was meant with `--write`, which
+  rewrites both files. A row that is not this package's defect is
+  listed, with its reason, in `test/corpus/accepted.tsv`; the rows left
+  are the open ones, and the plan's G1 is their reaching none.
+  [`tools/corpus/README.md`](tools/corpus/README.md) has the options and
+  how to read a change.
+- **The apidef gate** runs `voxgig/apidef`'s own TypeScript suite on
+  this checkout's build, and compares apidef's guide and model, for its
+  test definitions and `test/petstore/`, with those of apidef as it was.
+  It needs a clone of apidef with `npm ci` run in its `ts/`. It works in
+  temporary worktrees of that clone and changes no tracked file there;
+  its one write is the link `ts/node_modules/@tabnas/openapi`, made only
+  when it is absent. It ends with 0 for a pass, 1 for a failure, 2 when
+  it could not run, and 3 when apidef at that commit does not import
+  this package, so that the run proved nothing about it. Until apidef's
+  own branch imports this package (T1), the gate applies the prototype's
+  diff with `--patch` and one test is expected to fail, which
+  `--allow-failures 1` accepts. At apidef 3058271 that is 2,473 of 2,475
+  tests passing, one failing (`the operations of one path spelled twice
+  merge`), one skipped, and every definition byte-identical. `--extra`
+  adds descriptions to the comparison. The plan's G2 names the eleven
+  OpenAPI Initiative examples and GitHub's description, which the corpus
+  fetch leaves under `.corpus/src/oai-learn/examples/` and
+  `.corpus/src/github-json/`.
+
+Both print a status line at least every 20 seconds. Neither publishes,
+pushes or installs anything. The code in each that decides what a
+failure is does run in `npm test`, on small inline values:
+`ts/test/corpus-tool.test.ts` and `ts/test/apidef-gate.test.ts`.
 
 ## Releasing
 

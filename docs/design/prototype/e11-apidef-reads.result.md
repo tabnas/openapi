@@ -72,8 +72,10 @@ is the same in 160 and differs in 38:
 | A logo URL | 1 | `rumble.run`: `null` where the document has `//www.rumble.run/img/…` |
 | Descriptive text | 1 | `amazonaws.com/kafka`: the reference parser's own error, not apidef's |
 
-apidef's own suite does not exercise any of this: of its 47 OpenAPI test
-definitions, 45 are JSON and 2 are YAML.
+apidef's own suite does not exercise any of this: of the 43 OpenAPI
+definitions in its `ts/test/def/`, 41 are JSON and 2 are YAML. (An
+earlier text of this page said 47 and 45. That counted four generated
+`.full.json` files, two of them GraphQL dumps, as definitions.)
 
 ### 3. Two options on this package's own parser repair the comment and number kinds
 

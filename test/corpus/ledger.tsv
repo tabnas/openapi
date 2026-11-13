@@ -1,0 +1,255 @@
+source	path	outcome	detail
+apis-guru	APIs/adyen.com/AccountService/3/openapi.yaml	differs	type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/AccountService/4/openapi.yaml	differs	type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/AccountService/5/openapi.yaml	differs	type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/AccountService/6/openapi.yaml	differs	type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/BalancePlatformConfigurationNotification-v1/1/openapi.yaml	differs	type:string->number:underscore:PLAIN=30
+apis-guru	APIs/adyen.com/BalancePlatformService/1/openapi.yaml	differs	type:string->number:underscore:PLAIN=9
+apis-guru	APIs/adyen.com/BalancePlatformService/2/openapi.yaml	differs	type:string->number:underscore:PLAIN=9
+apis-guru	APIs/adyen.com/CheckoutService-v71/71/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/37/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/40/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/41/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/46/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/49/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/50/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/51/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/52/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/53/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/64/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/65/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/66/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/67/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/68/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/69/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/CheckoutService/70/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3; type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/LegalEntityService/1/openapi.yaml	differs	type:string->number:underscore:PLAIN=6
+apis-guru	APIs/adyen.com/LegalEntityService/2/openapi.yaml	differs	type:string->number:underscore:PLAIN=6
+apis-guru	APIs/adyen.com/LegalEntityService/3/openapi.yaml	differs	type:string->number:underscore:PLAIN=28
+apis-guru	APIs/adyen.com/ManagementNotificationService-v1/1/openapi.yaml	differs	type:string->number:underscore:PLAIN=7
+apis-guru	APIs/adyen.com/ManagementService-v3/3/openapi.yaml	differs	type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/ManagementService/1/openapi.yaml	differs	type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/MarketPayNotificationService/3/openapi.yaml	differs	type:string->number:underscore:PLAIN=2
+apis-guru	APIs/adyen.com/MarketPayNotificationService/4/openapi.yaml	differs	type:string->number:underscore:PLAIN=2
+apis-guru	APIs/adyen.com/MarketPayNotificationService/5/openapi.yaml	differs	type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/MarketPayNotificationService/6/openapi.yaml	differs	type:string->number:underscore:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/25/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/30/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/40/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/46/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/49/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/50/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/51/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/52/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/64/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/67/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/adyen.com/PaymentService/68/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/agco-ats.com/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/amazonaws.com/kafka/2018-11-14/openapi.yaml	differs	value:string:BLOCK_LITERAL:|N-=624
+apis-guru	APIs/amazonaws.com/pipes/2015-10-07/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=6
+apis-guru	APIs/api2cart.com/1.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/atlassian.com/jira/1001.0.0-SNAPSHOT/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/ato.gov.au/0.0.6/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=2
+apis-guru	APIs/azure.com/batch-BatchService/2019-08-01.10.0/swagger.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/azure.com/cosmos-db/2015-04-01/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/cosmos-db/2015-04-08/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/cosmos-db/2015-11-06/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/cosmos-db/2016-03-19/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/cosmos-db/2016-03-31/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/cosmos-db/2019-08-01/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/cosmos-db/2019-12-12/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/frontdoor/2018-08-01/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/frontdoor/2019-04-01/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/frontdoor/2019-05-01/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/frontdoor/2020-01-01/swagger.yaml	refused	unterminated_comment
+apis-guru	APIs/azure.com/logic/2016-06-01/swagger.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/azure.com/logic/2018-07-01-preview/swagger.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/azure.com/logic/2019-05-01/swagger.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/azure.com/machinelearning-webservices/2017-01-01/swagger.yaml	differs	length:BLOCK_SEQ=5; value:string:PLAIN=5
+apis-guru	APIs/azure.com/recoveryservicessiterecovery-service/2018-07-10/swagger.yaml	differs	value:string:BLOCK_LITERAL:|N-=2
+apis-guru	APIs/azure.com/resourcegraph/2018-09-01-preview/swagger.yaml	differs	length:BLOCK_SEQ=1; value:string:PLAIN=1
+apis-guru	APIs/azure.com/resourcegraph/2019-04-01/swagger.yaml	differs	length:BLOCK_SEQ=1; value:string:PLAIN=1
+apis-guru	APIs/bclaws.ca/bclaws/1.0.0/openapi.yaml	differs	type:string->number:underscore:PLAIN=4
+apis-guru	APIs/biapi.pro/2.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/billingo.hu/3.0.7/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/braze.com/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/canada-holidays.ca/1.8.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=6
+apis-guru	APIs/clearblade.com/3.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/clever-cloud.com/1.0.0/openapi.yaml	refused	unexpected
+apis-guru	APIs/codat.io/sync-for-expenses/prealpha/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/contract-p.fit/1.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/daniweb.com/4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/deutschebahn.com/stada/2.2.01/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/digitalocean.com/2.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=10
+apis-guru	APIs/docker.com/engine/1.33/openapi.yaml	refused	unexpected
+apis-guru	APIs/drchrono.com/v4 (Hunt Valley)/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=8
+apis-guru	APIs/edrv.io/v1/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/epa.gov/air/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=11
+apis-guru	APIs/epa.gov/case/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/epa.gov/cwa/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=10
+apis-guru	APIs/epa.gov/dfr/0.0.0/swagger.yaml	refused	unexpected
+apis-guru	APIs/epa.gov/echo/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/epa.gov/rcra/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/epa.gov/sdw/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/files.com/0.0.1/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/firebrowse.org/1.1.38/swagger.yaml	differs	type:string->number:underscore:PLAIN=40
+apis-guru	APIs/frankiefinancial.io/1.5.3/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/gamesparks.net/game-details/v2/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/gerermesaffaires.com/1.0.6/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=42
+apis-guru	APIs/getgo.com/gotowebinar/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/github.com/api.github.com.2022-11-28/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=30
+apis-guru	APIs/github.com/api.github.com/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=30
+apis-guru	APIs/github.com/ghec.2022-11-28/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=30
+apis-guru	APIs/github.com/ghec/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=30
+apis-guru	APIs/github.com/ghes-3.2/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/github.com/ghes-3.3/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/github.com/ghes-3.4/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/github.com/ghes-3.5/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/github.com/ghes-3.6/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/github.com/ghes-3.7/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=30
+apis-guru	APIs/github.com/ghes-3.8/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=30
+apis-guru	APIs/github.com/github.ae/1.1.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=30
+apis-guru	APIs/googleapis.com/abusiveexperiencereport/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/adexperiencereport/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/androidmanagement/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/googleapis.com/apigee/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/appengine/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/googleapis.com/appengine/v1alpha/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/googleapis.com/appengine/v1beta/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/googleapis.com/bigquery/v2/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/cloudsearch/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/googleapis.com/compute/alpha/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=8
+apis-guru	APIs/googleapis.com/compute/beta/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=6
+apis-guru	APIs/googleapis.com/compute/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=6
+apis-guru	APIs/googleapis.com/contentwarehouse/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2; type:string->null:comment-syntax:PLAIN=11
+apis-guru	APIs/googleapis.com/customsearch/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/dataproc/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/googleapis.com/dns/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/dns/v1beta2/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/dns/v2/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/firebaseappcheck/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/googleapis.com/firebaseappcheck/v1beta/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/identitytoolkit/v2/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/googleapis.com/integrations/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/integrations/v1alpha/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/googleapis.com/remotebuildexecution/v1alpha/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/googleapis.com/vmmigration/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/googleapis.com/vmmigration/v1alpha1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/gov.bc.ca/geocoder/2.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/graphhopper.com/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/greip.io/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=15
+apis-guru	APIs/gsmtasks.com/2.4.13/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/handwrytten.com/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/hetzner.cloud/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=5
+apis-guru	APIs/ibanapi.com/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=7
+apis-guru	APIs/icons8.com/1.0.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=2
+apis-guru	APIs/id4i.de/1.0.2/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/just-eat.co.uk/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/launchdarkly.com/5.3.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/linode.com/4.151.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/mailchimp.com/3.0.55/openapi.yaml	differs	length:BLOCK_SEQ=2; value:string:PLAIN=2
+apis-guru	APIs/mashape.com/geodb/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/mastercard.com/CurrencyConversionCalculator/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/mastercard.com/Locations/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/mastercard.com/PaymentAccountReferenceInquiryAPI/1.1/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/mastercard.com/SpendingPulse/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=5
+apis-guru	APIs/mcw.edu/1.1/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/meraki.com/0.0.0-streaming/openapi.yaml	refused	unexpected
+apis-guru	APIs/meraki.com/1.32.0/openapi.yaml	refused	unexpected
+apis-guru	APIs/mercedes-benz.com/configurator/1.0/swagger.yaml	differs	type:string->number:underscore:PLAIN=2
+apis-guru	APIs/mermade.org.uk/openapi-converter/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/microsoft.com/cognitiveservices-AutoSuggest/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/microsoft.com/cognitiveservices-CustomImageSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/microsoft.com/cognitiveservices-CustomSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/microsoft.com/cognitiveservices-EntitySearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/microsoft.com/cognitiveservices-ImageSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/microsoft.com/cognitiveservices-LocalSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/microsoft.com/cognitiveservices-NewsSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/microsoft.com/cognitiveservices-VideoSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/microsoft.com/cognitiveservices-VisualSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/microsoft.com/cognitiveservices-WebSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/microsoft.com/graph-beta/1.0.1/openapi.yaml	died	out-of-memory after ref
+apis-guru	APIs/microsoft.com/graph/1.0.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=24
+apis-guru	APIs/mist.com/0.37.7/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/naviplancentral.com/plan/v1/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/netatmo.net/1.1.5/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/nexmo.com/number-insight/1.2.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/nordigen.com/2.0 (v2)/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=6
+apis-guru	APIs/notion.com/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=13
+apis-guru	APIs/nowpayments.io/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=5
+apis-guru	APIs/openapi-generator.tech/6.5.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/openbanking.org.uk/payment-initiation-openapi/3.1.7/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=24
+apis-guru	APIs/openbanking.org.uk/v1.3/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/openfigi.com/1.4.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/openstates.org/2021.11.12/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/opensuse.org/obs/2.10.50/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=11
+apis-guru	APIs/opentargets.io/19.02.1/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/opentrials.local/0.0.1/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/optimade.local/1.1.0~develop/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/osf.io/2.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=5
+apis-guru	APIs/ote-godaddy.com/abuse/1.0.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/ote-godaddy.com/aftermarket/1.0.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/ote-godaddy.com/agreements/1.0.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/ote-godaddy.com/certificates/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1; type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/ote-godaddy.com/countries/1.0.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/ote-godaddy.com/domains/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2; type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/ote-godaddy.com/orders/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1; type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/ote-godaddy.com/shoppers/1.0.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/ote-godaddy.com/subscriptions/1.0.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/pandascore.co/2.23.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/plaid.com/2020-09-14_1.345.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=55
+apis-guru	APIs/probely.com/1.2.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/rebilly.com/2.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/rev.ai/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/reverb.com/3.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/rubrikinc.github.io/v1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/rumble.run/2.15.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
+apis-guru	APIs/sendgrid.com/1.0.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=18
+apis-guru	APIs/sheerseo.com/0.0.1/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=5
+apis-guru	APIs/shipengine.com/1.1.202304191404/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=8
+apis-guru	APIs/shutterstock.com/1.1.32/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1; type:string->number:underscore:PLAIN=3
+apis-guru	APIs/spoonacular.com/1.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=9
+apis-guru	APIs/squareup.com/2.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/storecove.com/2.0.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
+apis-guru	APIs/stream-io-api.com/v80.2.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/stripe.com/2022-11-15/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=10
+apis-guru	APIs/surevoip.co.uk/9dcb0dc8/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/thebluealliance.com/3.8.2/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=12
+apis-guru	APIs/theracingapi.com/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/threatjammer.com/1.2.27/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/ticketmaster.com/discovery/v2/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=50; type:string->null:comment-syntax:PLAIN=1; type:string->number:underscore:PLAIN=3
+apis-guru	APIs/ticketmaster.com/publish/v2/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1; type:string->number:underscore:PLAIN=3
+apis-guru	APIs/tisane.ai/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=10
+apis-guru	APIs/trakt.tv/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
+apis-guru	APIs/trashnothing.com/1.3/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/truora.com/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/twilio.com/twilio_insights_v1/1.55.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/unicourt.com/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/vercel.com/0.0.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/viator.com/1.0.0/openapi.yaml	differs	value:string:BLOCK_FOLDED:>+=1
+apis-guru	APIs/visma.net/9.66.02.1023/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=6
+apis-guru	APIs/vtex.local/Checkout-API/1.0/openapi.yaml	differs	type:string->number:underscore:PLAIN=13
+apis-guru	APIs/vtex.local/Logistics-API/1.0/openapi.yaml	differs	type:string->number:underscore:PLAIN=25
+apis-guru	APIs/vtex.local/Marketplace-Protocol/1.0/openapi.yaml	differs	type:string->number:underscore:PLAIN=3
+apis-guru	APIs/vtex.local/Orders-API-(PII-version)/1.0/openapi.yaml	differs	type:string->number:underscore:PLAIN=5
+apis-guru	APIs/vtex.local/Orders-API/1.0/openapi.yaml	differs	type:string->number:underscore:PLAIN=8
+apis-guru	APIs/whapi.com/sportsdata/2/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=11
+apis-guru	APIs/wordassociations.net/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=6
+apis-guru	APIs/wowza.com/1/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
+apis-guru	APIs/xero.com/xero_accounting/2.9.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/xero.com/xero_bankfeeds/2.9.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+apis-guru	APIs/zoom.us/2.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=42
+apis-guru	APIs/zuora.com/2021-08-20/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=124
+digitalocean	specification/resources/apps/responses/examples.yml	differs	type:number->string:other:PLAIN=2
+digitalocean	specification/resources/droplets/models/droplet.yml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
+digitalocean	specification/resources/droplets/responses/examples.yml	differs	type:number->string:other:PLAIN=2
+digitalocean	specification/resources/images/responses/examples.yml	differs	type:number->string:other:PLAIN=6
+digitalocean	specification/resources/regions/responses/all_regions.yml	differs	type:number->string:other:PLAIN=1
+digitalocean	specification/resources/sizes/responses/all_sizes.yml	differs	type:number->string:other:PLAIN=1
+digitalocean	specification/resources/ssh_keys/responses/sshKeys_all.yml	differs	type:number->string:other:PLAIN=1
+github	descriptions-next/api.github.com/api.github.com.yaml	differs	length:BLOCK_SEQ=14; type:null->array:PLAIN=14
+github	descriptions/api.github.com/api.github.com.yaml	differs	length:BLOCK_SEQ=6; type:null->array:PLAIN=6
+oai-learn	examples/v2.0/yaml/petstore-minimal.yaml	refused	unexpected
+oai-learn	examples/v2.0/yaml/petstore-simple.yaml	refused	unexpected
+oai-learn	examples/v2.0/yaml/petstore-with-external-docs.yaml	refused	unexpected
+oai-tests-3.3	tests/schema/minimal-objects.yaml	refused	openapi_root

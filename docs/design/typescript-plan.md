@@ -7,9 +7,10 @@ to:
 1. it fully parses and handles every valid OpenAPI description;
 2. it fully replaces the custom parsing in `voxgig/apidef`.
 
-Status: a proposal for the maintainer, 12 November 2026, third revision.
-Section 11 says what each revision changed. Four directions from the
-maintainer shape it:
+Status: accepted by the maintainer on 12 November 2026, in its third
+revision, with Decisions 16 to 19 taken as section 6 records. Section 11
+says what each revision changed. Four directions from the maintainer
+shape it:
 
 - Porting is deferred until the TypeScript version is finished, and is
   outside this plan.
@@ -81,9 +82,12 @@ instruction to make one.
 | G1 | Every valid description is read and handled | (a) Every valid document in the corpus parses to the tree the reference parsers give, under the reading of Decision 21. (b) Every reference is resolved to what the specification says it names, or reported with a reason. (c) A description in several documents resolves, given its documents or a loader. (d) Input built to exhaust the reader ends in a coded refusal. (e) The reading rules the specification states for an operation are applied, to the scope of Decision 32 | the corpus sweep as a gate; a fixture for each defect of section 2.3; the multi-document corpora |
 | G2 | apidef's TypeScript package has no parsing of its own | `ts/src/parse.ts` in apidef holds only apidef's policy; apidef's suite is green against this package; its models are byte-identical on its 43 definitions, the 11 OpenAPI Initiative examples and the GitHub description; the definition it hands to other tools is unchanged | the apidef gate |
 
-In (a), the ledger may keep two kinds of row only: a document where the
-reference parser is the one in error, and a reading the maintainer has
-decided. Every defect class in section 2.1 reaches zero.
+In (a), the ledger may keep three kinds of row only: a document where
+the reference parser is the one in error, a reading the maintainer has
+decided, and the correct refusal of a document that is not a
+description. `test/corpus/accepted.tsv` names each such row with its
+reason. Every other row is open, and every defect class in section 2.1
+reaches zero.
 
 G2 has two limits, both of which follow from the directions above:
 
@@ -114,8 +118,9 @@ GitHub's and Stripe's descriptions, and a sample of Azure's (929 files).
 5,182 declare a version this package knows; the rest are fragments of
 multi-file descriptions and a few drafts. The reference parsers
 (`JSON.parse`, and the npm `yaml` package under the core schema) accept
-every one. The sweep ran under Node 22 with a 4 GB limit per document;
-`engines` names Node 24.
+every one. The sweep ran under Node 22 with a 4 GB limit per document.
+`engines` names Node 24, and the tool of T0 ran it again there, from a
+fresh fetch: every figure below is the same, document by document.
 
 | Measure | Result |
 |---|---|
@@ -184,9 +189,9 @@ Why these are not known defects in apidef:
   built twice from each flagged document up to 1 MB: from the document
   as written, and from the same document re-read by the reference
   parser. Of the 198 that parse, the output is the same in 160.
-- **apidef's own tests barely read YAML.** Its suite runs 47 OpenAPI
-  definitions: 45 are JSON and 2 are YAML. Every difference above is in
-  YAML.
+- **apidef's own tests barely read YAML.** Its `ts/test/def/` holds 43
+  OpenAPI definitions: 41 are JSON and 2 are YAML. Every difference
+  above is in YAML.
 - **The documents are rare.** Each defect kind touches under one
   description in a hundred.
 - **Where apidef has met a reading defect, it was found and repaired.**
@@ -370,7 +375,9 @@ Nothing below can be called done without these.
 2. **The ledger.** `test/corpus/ledger.tsv`: one row per document that
    fails, with its class. Today it holds the rows of section 2.1. A
    number that moves is a repair or a regression, and the ledger moves
-   in the same commit.
+   in the same commit. `test/corpus/accepted.tsv`, written by hand,
+   names the rows that are not this package's defect, each with its
+   reason; the sweep counts the rest as open.
 3. **The apidef gate.** A script that builds this checkout, makes the
    link of section 2.4 in the apidef clone, and runs apidef's suite and
    the model comparison of E9 there, printing progress as the sweep
@@ -378,9 +385,13 @@ Nothing below can be called done without these.
    used (3058271); from T1 it runs the apidef branch as it is.
 4. **Fixture homes.** `test/spec/` is read by every suite in the
    repository. Behaviour only the TypeScript package has goes in
-   `test/resolve/`, `test/model/`, `test/docs/` and a new
-   `test/pending/`, each with a TypeScript runner; section 5 has the
-   rule.
+   `test/resolve/` and `test/model/`, which exist, and in two folders
+   to come: `test/pending/`, for parse rows in the format of
+   `test/spec/`, and `test/docs/`, for the cases of several documents
+   (T4). Each has a TypeScript runner. Section 5 has the rule and
+   `test/AGENTS.md` carries it. A new folder and its runner arrive with
+   their first fixture, `test/pending/` in T1, since this repository
+   fails a fixture folder with nothing in it.
 
 Acceptance: the sweep reproduces section 2.1 from a clean checkout
 under Node 24; the apidef gate reports 2,473 passing.
@@ -597,10 +608,10 @@ Numbered from 16, after the earlier plan's fifteen.
 
 | | Decision | Default the plan takes | Needed by |
 |---|---|---|---|
-| 16 | The rules of section 5 | as written: options now, defaults when porting starts | T0 |
-| 17 | A reference YAML parser for the corpus tool | the npm `yaml` package, declared as this repository's other third-party development dependencies are | T0 |
-| 18 | A repeated member name. No document of the corpus has one; one apidef test does | `duplicates: 'merge'` added and used by apidef; last wins stays the default. This replaces the earlier Decision 11, which put the merge in the preset | T1 |
-| 19 | The apidef preset | exact: it reads pointers as apidef does and resolves nothing apidef leaves as written. The other course keeps what it resolves today and documents each difference from apidef | T1 |
+| 16 | The rules of section 5 | as written: options now, defaults when porting starts. **Taken, 12 November 2026** | T0 |
+| 17 | A reference YAML parser for the corpus tool | the npm `yaml` package, declared as this repository's other third-party development dependencies are. **Taken, 12 November 2026** | T0 |
+| 18 | A repeated member name. No document of the corpus has one; one apidef test does | `duplicates: 'merge'` added and used by apidef; last wins stays the default. This replaces the earlier Decision 11, which put the merge in the preset. **Taken, 12 November 2026** | T1 |
+| 19 | The apidef preset | exact: it reads pointers as apidef does and resolves nothing apidef leaves as written. The other course keeps what it resolves today and documents each difference from apidef. **Taken, 12 November 2026: exact** | T1 |
 | 20 | Where apidef's changes live until this package is published | on a pushed branch of apidef, proven by the gate, merged after the release. The other course teaches apidef's continuous integration to check out and build this repository, which its guide allows | T1 |
 | 21 | How YAML plain scalars and comments are read. 3.2 recommends YAML 1.2 and names no schema; 3.0 and 3.1 point at YAML's JSON schema for tags | `reading: 'spec'`: comments are `#` alone, numbers and words follow the core schema; an option now, the default when porting starts; merge keys stay | T2 |
 | 22 | Integers past 2^53 | the tree unchanged and a `lossy` report with the source text; no BigInt in the tree | T2 |
@@ -678,6 +689,18 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, while T0 was built:
+
+- Section 2.2 counted apidef's test definitions as 47, of which 45 were
+  JSON. Four of those files are apidef's own generated output. It holds
+  43 definitions: 41 JSON and 2 YAML.
+- The ledger gained `test/corpus/accepted.tsv`, so that the rows which
+  may stay are data the sweep checks. Section 1 names a third kind of
+  row that may stay: the correct refusal of a document that is not a
+  description. The corpus has one.
+- T0's fourth item says which fixture folders exist and which arrive
+  with their first fixture. Nothing was made empty.
 
 **Third revision**, on the maintainer's directions of 12 November:
 

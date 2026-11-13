@@ -30,6 +30,54 @@ own suite reads both and holds each parse to the standard JSON reading of
 the JSON from the YAML with a YAML 1.2 reader if you change it, and keep
 plain scalars free of commas: the comparison is the point of the pair.
 
+`corpus/` is a record, not a set of fixtures. It holds what the corpus
+sweep found over real documents: `ledger.tsv`, one row per way a document
+fails, and `baseline.json`, the sweep's headline figures.
+`node tools/corpus/sweep.cjs --write` writes both from a finished run, so
+never edit either by hand. `accepted.tsv` is the one file there a person
+writes: the ledger rows that are not this package's defect, each with its
+reason. The documents themselves are fetched, not committed, and the
+sweep is run by hand. `npm test` runs `ts/test/corpus-tool.test.ts`,
+which holds the tool's own code on small inline documents, and the
+committed files to their format and to each other.
+[`tools/corpus/README.md`](../tools/corpus/README.md) says how to run the
+sweep and how to read a row that moved.
+
+## Where a new fixture goes
+
+`spec/` is the one folder every suite reads, so it holds only what every
+suite agrees on. Until porting starts, the TypeScript package moves ahead
+of the others, and what it gains is pinned outside `spec/`. The rule is
+section 5 of
+[`../docs/design/typescript-plan.md`](../docs/design/typescript-plan.md):
+
+| The fixture pins | Where it goes | What runs it |
+|---|---|---|
+| a parse that every suite gives today | `spec/` | every runner |
+| a parse only the TypeScript package gives: a new option, a new code | `pending/`, in the format of `spec/` | a TypeScript runner |
+| what `resolve` gives | `resolve/` | `ts/test/resolve-spec.test.ts` |
+| the object model | `model/` | `ts/test/model.test.ts` |
+| a description in several files | `docs/<case>/` | a TypeScript runner |
+
+Two of those folders are not on disk yet. `pending/` arrives with its
+first fixture and `docs/` with the first case of several files, and each
+brings its runner in the same change. Neither is made ahead of its
+contents, because a fixture folder with nothing in it fails here, as an
+empty fixture does. When porting starts, a file in `pending/` moves to
+`spec/` as it is, and every suite runs it from then on.
+
+Two things hold until then:
+
+- **No row is added to `spec/` for behaviour only the TypeScript package
+  has.** The other suites would run it and fail.
+- **No default that a `spec/` row pins changes.** A new reading arrives
+  as an option that is off by default. Its change to the default is one
+  coordinated change to the shared rows, made when porting starts.
+
+A base grammar's repair that turns a `spec/` row red is the exception
+the rules below already cover: the row is updated, and every suite moves
+to the release that carries the repair, in one pull request.
+
 ## Format
 
 Tab-separated, one case per line, with a header row naming the columns.
