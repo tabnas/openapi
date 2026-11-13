@@ -107,7 +107,7 @@ default that a shared row pins changes until porting starts.
 | 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | done in all three runtimes |
 | 2 | the resolver over `fold` | TypeScript done within one document: the object model, `resolve` with every option and output shape, the connections report, and the apidef preset. Porting it is deferred |
 | T0 | gates: the corpus sweep and its ledger, the apidef gate, the fixture homes | done |
-| T1 | apidef's swap, proven locally | next |
+| T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
 | T2 to T6 | reading, the site index, several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -120,10 +120,14 @@ last-wins merge), never rules.
 ### Raw mode, in one paragraph
 
 `parse(text, { strict, fast, instance })` (Go `Parse`, Rust `parse`) is
-the entry every fixture runner calls. It passes a per-parse state as the
-engine's parse metadata (TypeScript `tn.parse(text, { openapi })`, Go
-`ParseMeta`), and the plugin's subscriber acts only when that state is
-there, so a parser's own parse raises nothing of the plugin. The
+the entry every fixture runner calls. The TypeScript `parse` also takes
+`duplicates`, pinned in `test/pending/`: under `'merge'` the plugin's
+`map.merge` joins the two values of a repeated member with the engine's
+own `deep`, and the fast path is not taken. `parse` passes a per-parse
+state as the engine's parse metadata (TypeScript
+`tn.parse(text, { openapi })`, Go `ParseMeta`), and the plugin's
+subscriber acts only when that state is there, so a parser's own parse
+raises nothing of the plugin. The
 subscriber counts the YAML stream's documents (`stream` open passes that
 push `val`), checks a repeated key at a `pair` open pass under strict,
 and checks the root when the depth-0 rule closes for the last time. An
@@ -149,21 +153,49 @@ prototype E6 sketched:
   record: its sequence number, kind, and target or the reason it has
   none. Report arrays sort by that number, which is the plan's pre-order
   with a target entered at its first reference; `evaluate` runs in
-  post-order, so do not let its order leak into a report.
-- `evaluate` reads the target through `site.at`, applies the chain rule
-  (a site naming a site left as written is left as written, reported as
-  that one is), the sibling rule by version and kind, and the output
-  shape.
+  post-order, so do not let its order leak into a report. Under
+  `cycles: 'keep'` no target is entered early, so the number is plain
+  document order.
+- `evaluate` finds the site's target and hands it to `settleSite`, which
+  applies the chain rule (a site naming a site left as written is left
+  as written, reported as that one is), the sibling rule by version and
+  kind, and the output shape. Under `cycles: 'cut'` it reads the target
+  through `site.at`. Under `cycles: 'keep'` it reads nothing: see below.
 
-Sharing (one result per location) and cycle detection are the fold's.
-The shapes beyond `share` are small post-passes: `cycles: 'keep'` has
-each edge that closed a cycle hold a placeholder until the fold is done,
-then settles them in place (a placeholder met again while it is being
-settled is a loop of references, which stays cut); `inline-once` and
-`copy` deep-copy the finished graph, `copy` counting the compact JSON's
-UTF-8 bytes against `budget`. `xref` (apidef's `x-ref`) implies a copy per
-site and is written last, after stripping the `x-ref` a chain's earlier
-link carried, which is what keeps apidef's key order.
+Sharing (one result per location) is the fold's, and under
+`cycles: 'cut'` so is cycle detection. Under `cycles: 'keep'` the fold
+follows no reference at all. Every site holds a placeholder until the
+fold is done, and `keepCycles` then settles each one, in document
+order, in place: it reads
+the target on the finished tree, from the root's own map, a member at a
+time, and settles any placeholder it meets on the way first. A
+placeholder met again while it is being settled is a loop of
+references, which is cut, and so is a walk through a site that was cut,
+where it comes to something. Every placeholder is settled, the ones in
+members that a resolved site dropped included, so that each site is
+reported as what it is.
+
+That is deliberate, and it is not to be folded back into `site.at`. A
+graph cannot be read off a tree that is still being built, and the fold
+has a defect there: when it follows a reference into a container that
+is still being folded, it hands back the map as written, unresolved and
+unreported. Section 2.3 of the plan records that defect as W10. It
+still reaches `cycles: 'cut'`, and `ts/test/resolve.test.ts` pins it
+there, so that its repair in `expr` shows.
+
+`inline-once` and `copy` deep-copy the finished graph, `copy` counting
+the compact JSON's UTF-8 bytes against `budget`. `xref` (apidef's
+`x-ref`) implies a copy per site and is written last, after stripping
+the `x-ref` a chain's earlier link carried.
+
+`refs: 'pointer'` is apidef's reading of a reference, and it changes
+three things: `locatePointer` stands in for `locateUri`, `recognise`
+makes no site of the root, and a walk ends at a reference left as
+written (in `keepCycles`, and by `throughLeft` under `cycles: 'cut'`).
+`compat: 'apidef'` is the seven options of `PRESETS.apidef`, with two
+details that no option names, both under `asApidef`: `settleSite` leaves
+out a `__proto__` member beside a `$ref`, and `orderAsWalked` puts each
+site's members in the order that apidef's resolving in place leaves.
 
 `ts/src/connections.ts` builds the `connections` report: one model walk
 over the raw tree for the names (operationId, operationRef, security
@@ -179,12 +211,15 @@ Phase 3. `test/resolve/*.tsv` pins the resolver, with
 `connections` columns); identity, cyclic graphs and the byte budget,
 which JSON cannot carry, are in `ts/test/resolve.test.ts`.
 
-`compat: 'apidef'` was checked against apidef's own resolver on apidef's
-whole test corpus, 43 descriptions and 588 sites, by running apidef's
-`addXRefsAndResolve` and ours side by side and decycling both with its
-`decycle`: byte-identical, key order included. `test/resolve/apidef.tsv`
-carries rows 2 to 25 of apidef's `parse-resolve.tsv`. Re-run that
-comparison after any change to the sibling, sharing or cycle code.
+`compat: 'apidef'` is held to apidef's own resolver by
+`tools/apidef-preset.cjs`, which runs both on one raw tree and compares
+the results as graphs: members, member order, values, and which objects
+are shared. `test/resolve/apidef.tsv` carries rows 2 to 25 of apidef's
+`parse-resolve.tsv`, and `test/resolve/apidef-extra.tsv` the shapes
+where apidef's reading of a reference parts from the specification's.
+The same tool holds every row of both to apidef's resolver, so that no
+row pins what apidef does not do. Run it after any change to `resolve`:
+see "Three gates run by hand".
 
 ### The object model
 
@@ -255,11 +290,11 @@ keeps cycles.
 | [`rs/`](rs/) | Rust port, crate `tabnas-openapi`, library `tabnas_openapi`: `parse(&ParseOptions)`, `Fast`, `version`, `openapi` / `plugin()`, `make` / `make_with(&MakeOptions)`, `OpenApiOptions`, `VERSION`, `OpenApiError`. `rs/AGENTS.md` has the crate's own notes, including how raw mode works around the engine's Rust API. The README's examples run as doctests. |
 | [`test/spec/`](test/spec/) | Shared `.tsv` fixtures. All three runners discover and run every file, so a row added here covers TypeScript, Go and Rust together. See [`test/AGENTS.md`](test/AGENTS.md). |
 | [`test/petstore/`](test/petstore/) | One OpenAPI 3.1 description in YAML and the same in JSON. Every runtime's suite reads both and holds them to `JSON.parse` of the JSON form. |
-| [`test/resolve/`](test/resolve/), [`test/model/`](test/model/) | Fixtures only the TypeScript suite runs: the resolver's and the object model's. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
+| [`test/resolve/`](test/resolve/), [`test/model/`](test/model/), [`test/pending/`](test/pending/) | Fixtures only the TypeScript suite runs: the resolver's, the object model's, and parse fixtures for what only the TypeScript `parse` gives yet. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
 | [`test/corpus/`](test/corpus/) | The corpus sweep's record over real documents: `ledger.tsv`, one row per way a document fails, and `baseline.json`, the headline figures, both written by the sweep and never by hand; and `accepted.tsv`, written by hand, the ledger rows that are not this package's defect, each with its reason. |
-| [`docs/design/`](docs/design/) | The design notes, the plan and the prototypes. Working documents, outside the prose gate. |
+| [`docs/design/`](docs/design/) | The design notes, the plan, the prototypes, and [`apidef-swap/`](docs/design/apidef-swap/README.md): apidef's side of T1, as two diffs. Working documents, outside the prose gate. |
 | [`ts/doc/`](ts/doc/), [`go/doc/`](go/doc/) | Per-runtime Diátaxis docs: `tutorial.md`, `guide.md`, `reference.md`, `concepts.md`. Gated, with the READMEs, by [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). |
-| [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions; [`corpus/`](tools/corpus/README.md), the corpus sweep; `apidef-gate.cjs`, the apidef gate, with its helpers in `apidef-gate/`. The last two are gates run by hand: see "Verify your work". |
+| [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions; [`corpus/`](tools/corpus/README.md), the corpus sweep; `apidef-gate.cjs`, the apidef gate, with its helpers in `apidef-gate/`; `apidef-preset.cjs`, the preset comparison, with its helpers in `apidef-preset/`. The last three are gates run by hand: see "Verify your work". |
 | [`model/`](model/) | The object model's inputs (the vendored OAI schemas, the applicator lists, the overlay) and the generated `object-model.json`. |
 | [`ci/`](ci/) | `ci/rust/run.sh`, the Rust gate; see [`ci/README.md`](ci/README.md). |
 | [`tabnas.plugin.json`](tabnas.plugin.json) | The plugin descriptor. **Generated by admin `make ax-descriptor`; never hand-edit it.** It still describes the ZON template until admin regenerates it. |
@@ -455,8 +490,11 @@ What "correct" means here, in order of authority:
 5. **The corpus record moves only on purpose**, by the corpus sweep.
 6. **apidef behaves on this checkout as it did before**, by the apidef
    gate.
+7. **The preset gives what apidef's resolver gives**, by the preset
+   comparison.
 
-The last two are gates run by hand: see "Two gates run by hand" below.
+The last three are gates run by hand: see "Three gates run by hand"
+below.
 
 The docs workflow runs Vale 3.22.0. Where no release binary can be
 fetched, `go install github.com/vale-cli/vale/v3/cmd/vale@v3.22.0` builds
@@ -464,16 +502,17 @@ the same version, and `VALE=<path> node ts/scripts/vale-counts.cjs`
 uses it; such a build reports its version as `undefined`, which the
 script flags as a version mismatch while still comparing every count.
 
-### Two gates run by hand
+### Three gates run by hand
 
-Neither is in `make test`, because each needs more than this checkout.
-A change to `parse`, to `resolve` or to an option of either is not
-verified until both have run, under the Node version `engines` names in
-`ts/package.json`:
+None is in `make test`, because each needs more than this checkout. A
+change to `parse`, to `resolve` or to an option of either is not
+verified until all three have run, under the Node version `engines`
+names in `ts/package.json`:
 
 ```bash
 node tools/corpus/sweep.cjs --fetch    # needs the network, 1.1 GB of disk and about half an hour
-node tools/apidef-gate.cjs ../apidef --patch docs/design/prototype/e9-apidef-swap/variant1.diff --allow-failures 1
+node tools/apidef-gate.cjs ../apidef --patch docs/design/apidef-swap/1-error-wrapping.diff --patch docs/design/apidef-swap/2-swap.diff
+node tools/apidef-preset.cjs ../apidef --ref 3b24341 --corpus .corpus/src --rows test/resolve/apidef.tsv test/resolve/apidef-extra.tsv
 ```
 
 - **The corpus sweep** reads 8,986 real documents with this checkout's
@@ -499,21 +538,43 @@ node tools/apidef-gate.cjs ../apidef --patch docs/design/prototype/e9-apidef-swa
   its one write is the link `ts/node_modules/@tabnas/openapi`, made only
   when it is absent. It ends with 0 for a pass, 1 for a failure, 2 when
   it could not run, and 3 when apidef at that commit does not import
-  this package, so that the run proved nothing about it. Until apidef's
-  own branch imports this package (T1), the gate applies the prototype's
-  diff with `--patch` and one test is expected to fail, which
-  `--allow-failures 1` accepts. At apidef 3058271 that is 2,473 of 2,475
-  tests passing, one failing (`the operations of one path spelled twice
-  merge`), one skipped, and every definition byte-identical. `--extra`
+  this package, so that the run proved nothing about it. Until a branch
+  of apidef imports this package, the gate applies apidef's side of T1
+  with `--patch`, once for each diff of
+  [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), and
+  nothing is allowed to fail. At apidef 3b24341 that is 2,477 of 2,478
+  tests passing, none failing, one skipped as on apidef's `main`, and
+  every definition byte-identical: the 45 it compares by itself, and
+  the twelve of G2 below. A diff that no longer applies stops
+  the gate, and is to be made again at apidef's new commit. `--extra`
   adds descriptions to the comparison. The plan's G2 names the eleven
   OpenAPI Initiative examples and GitHub's description, which the corpus
   fetch leaves under `.corpus/src/oai-learn/examples/` and
   `.corpus/src/github-json/`.
+- **The preset comparison** holds `resolve(raw, { compat: 'apidef' })`
+  to the resolver inside apidef, as apidef built it at the commit
+  `--ref` names. 3b24341 is the last commit before the swap deletes that
+  resolver, so the reference stays there. It runs both resolvers on one
+  raw tree for each document of four sets: 167 hand-written edge shapes,
+  documents from a seeded generator, the corpus, and the rows of the two
+  apidef fixtures. It ends with 0 when every document compared is equal,
+  1 for a difference or a failure, and 2 when it could not run. A
+  document that `parse` refuses reaches neither resolver, and is counted
+  apart as unread. `--options` puts `resolve` options beside the preset,
+  which shows what one of its options is there for: under `--options
+  '{"refs":"uri"}'` every difference found is named by its cause. The
+  nine corpus documents over 10 MB are left out by default, and
+  `--sets corpus --min-bytes 10000001 --max-bytes 100000000 --jobs 1
+  --heap-mb 12288` runs them by themselves, in about two and a half
+  minutes. On 2026-11-13 the comparison found no difference: 167 shapes,
+  94,000 generated documents under seeds 1 to 12, 8,966 corpus
+  documents with the 20 that `parse` refuses unread, and all 46 rows.
 
-Both print a status line at least every 20 seconds. Neither publishes,
-pushes or installs anything. The code in each that decides what a
-failure is does run in `npm test`, on small inline values:
-`ts/test/corpus-tool.test.ts` and `ts/test/apidef-gate.test.ts`.
+All three print a status line at least every 20 seconds. None
+publishes, pushes or installs anything. The code in each that decides
+what a failure is does run in `npm test`, on small inline values:
+`ts/test/corpus-tool.test.ts`, `ts/test/apidef-gate.test.ts` and
+`ts/test/apidef-preset.test.ts`.
 
 ## Releasing
 

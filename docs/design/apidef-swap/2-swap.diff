@@ -1,0 +1,183 @@
+diff --git a/ts/src/parse.ts b/ts/src/parse.ts
+index b6e995f..fcb7d6f 100644
+--- a/ts/src/parse.ts
++++ b/ts/src/parse.ts
+@@ -1,7 +1,7 @@
+ /* Copyright (c) 2024-2025 Voxgig, MIT License */
+ 
+ import { Jsonic } from '@tabnas/jsonic'
+-import { Yaml } from '@tabnas/yaml'
++import { parse as readOpenAPI, resolve as resolveOpenAPI } from '@tabnas/openapi'
+ 
+ import { relativizePath } from './utility'
+ import { yamlAliasedSize, yamlAliasLimit } from './yamlalias'
+@@ -9,11 +9,6 @@ import { yamlAliasedSize, yamlAliasLimit } from './yamlalias'
+ import { parseGraphQL } from './parse/graphql'
+ 
+ 
+-// NOTE: @tabnas/yaml types its Plugin against @tabnas/parser, while
+-// Jsonic.use expects @tabnas/jsonic's own (structurally identical) Plugin
+-// type - hence the cast.
+-const yamlParser = Jsonic.make().use(Yaml as any)
+-
+ // Matches any line that is not purely a YAML comment or whitespace.
+ const RE_HAS_CONTENT = /^\s*[^#\s]/m
+ 
+@@ -84,20 +79,17 @@ async function parseOpenAPI(source: any, _meta?: any) {
+   let parsed: any
+ 
+   try {
+-    parsed = yamlParser(source)
++    parsed = readOpenAPI(source, { duplicates: 'merge' })
+   }
+   catch (err: any) {
+-    // Rethrow jsonic parse errors with context
++    if ('openapi_root' === err?.code || 'openapi_stream' === err?.code) {
++      throw new Error(
++        `@voxgig/apidef: parse: JSON/YAML source must be an object`
++      )
++    }
+     throw err
+   }
+ 
+-  // Validate parsed result is a non-null object
+-  if (null == parsed || 'object' !== typeof parsed || Array.isArray(parsed)) {
+-    throw new Error(
+-      `@voxgig/apidef: parse: JSON/YAML source must be an object`
+-    )
+-  }
+-
+   // Validate it's an OpenAPI or Swagger spec
+   if (!parsed.openapi && !parsed.swagger) {
+     throw new Error(
+@@ -117,8 +109,7 @@ async function parseOpenAPI(source: any, _meta?: any) {
+     parsed.paths = renameKeys(parsed.paths, normalizePathKeys(Object.keys(parsed.paths)))
+   }
+ 
+-  // Single-pass: add x-ref properties and resolve $ref pointers together.
+-  addXRefsAndResolve(parsed, parsed)
++  parsed = resolveOpenAPI(parsed, { compat: 'apidef' }).tree
+ 
+   // After resolution, so a pointer into `paths` names the key as written and a
+   // parameter declared by `$ref` counts. See docs/design/derived-names.md
+@@ -303,120 +294,11 @@ function decycle(root: any) {
+ }
+ 
+ 
+-function refSiblings(node: any): any {
+-  const out: any = {}
+-  for (const k of Object.keys(node)) {
+-    if ('$ref' === k) continue
+-    out[k] = node[k]
+-  }
+-  return out
+-}
+-
+-
+-function addXRefsAndResolve(
+-  obj: any,
+-  root: any,
+-  visited: WeakSet<any> = new WeakSet(),
+-) {
+-  if (!obj || typeof obj !== 'object') return
+-  if (visited.has(obj)) return
+-  visited.add(obj)
+-
+-  const keys: (string | number)[] =
+-    Array.isArray(obj) ? Array.from(obj.keys()) : Object.keys(obj)
+-
+-  for (const key of keys) {
+-    const val = obj[key]
+-    if (val && typeof val === 'object') {
+-      if (typeof val.$ref === 'string') {
+-        resolveRefSite(val, root, visited)
+-      } else {
+-        addXRefsAndResolve(val, root, visited)
+-      }
+-    }
+-  }
+-}
+-
+-
+-// Resolved in place, as in go/parse.go: the site's own keywords win and the
+-// target's children stay shared, so each target is walked once.
+-function resolveRefSite(site: any, root: any, visited: WeakSet<any>) {
+-  const xref = site.$ref
+-  const resolved = resolvePointer(root, xref)
+-  if (undefined !== resolved) {
+-    replaceOwnKeys(site, { ...resolved, ...refSiblings(site), 'x-ref': xref })
+-  }
+-  else {
+-    site['x-ref'] = xref
+-  }
+-  addXRefsAndResolve(site, root, visited)
+-}
+-
+-
+-// Defined, not assigned, so a key named __proto__ stays data.
+-function replaceOwnKeys(obj: any, src: any) {
+-  for (const k of Object.keys(obj)) delete obj[k]
+-  for (const k of Object.keys(src)) {
+-    Object.defineProperty(obj, k,
+-      { value: src[k], writable: true, enumerable: true, configurable: true })
+-  }
+-}
+-
+-
+-const INDEX_RE = /^(0|[1-9]\d*)$/
+-
+-
+ function isRecord(node: any): boolean {
+   return null != node && 'object' === typeof node && !Array.isArray(node)
+ }
+ 
+ 
+-function isAlias(node: any): boolean {
+-  return isRecord(node) && 'string' === typeof node.$ref
+-}
+-
+-
+-// An own key of an object, or an RFC 6901 index of an array.
+-function pointerChild(node: any, part: string): any {
+-  if (Array.isArray(node)) {
+-    return INDEX_RE.test(part) && Number(part) < node.length ? node[Number(part)] : undefined
+-  }
+-  return isRecord(node) && Object.prototype.hasOwnProperty.call(node, part) ?
+-    node[part] : undefined
+-}
+-
+-
+-// The object a pointer names, following every alias met on the way, so the
+-// answer does not depend on which aliases the walk has already replaced. A
+-// pointer that names no object, or needs itself, names nothing.
+-function resolvePointer(root: any, ref: string, active: Set<string> = new Set()): any {
+-  if (!ref.startsWith('#/') || active.has(ref)) return undefined
+-  active.add(ref)
+-
+-  let node: any = root
+-  for (const raw of ref.substring(2).split('/')) {
+-    node = pointerChild(followAlias(root, node, active),
+-      raw.replace(/~1/g, '/').replace(/~0/g, '~'))
+-    if (undefined === node) break
+-  }
+-  node = followAlias(root, node, active)
+-
+-  active.delete(ref)
+-  return isRecord(node) ? node : undefined
+-}
+-
+-
+-// An alias's own keywords win over its target's. Without them the target
+-// itself is the answer, so references keep sharing one object.
+-function followAlias(root: any, node: any, active: Set<string>): any {
+-  if (!isAlias(node)) return node
+-  const target = resolvePointer(root, node.$ref, active)
+-  if (undefined === target) return undefined
+-  const sib = refSiblings(node)
+-  return 0 === Object.keys(sib).length ? target : { ...target, ...sib }
+-}
+-
+-
+ function validateAliases(kind: string, source: string, meta: { file: string }) {
+   const size = yamlAliasedSize(source)
+   const limit = yamlAliasLimit(source)

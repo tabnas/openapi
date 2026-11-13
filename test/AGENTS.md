@@ -16,12 +16,25 @@ are in walk order, so a row's order is part of what it pins.
 `apidef.tsv` is rows 2 to 25 of @voxgig/apidef's `parse-resolve.tsv`,
 under `compat: 'apidef'`, with apidef's own select paths and values;
 keep it in step with apidef's file rather than editing its expected
-values. They run in `ts/test/resolve-spec.test.ts`.
+values. `apidef-extra.tsv` is this repository's own: the shapes where
+apidef's reading of a reference parts from the specification's, each
+expected value being what apidef's own resolver gives. Before adding or
+changing a row of either, run `node tools/apidef-preset.cjs <apidef
+checkout> --ref 3b24341 --sets rows --rows <the file>`, which holds
+every row to that resolver. Under `cycles: 'keep'`, which the preset
+sets, the report arrays are in document order. They run in
+`ts/test/resolve-spec.test.ts`.
 
 `model/` holds the object model's fixtures, `classify.tsv`: a version, an
 RFC 6901 pointer and the state the classifier must reach. They run in
 `ts/test/model.test.ts`, outside `spec/` because they test the model, not
 a parse.
+
+`pending/` holds parse fixtures in the format of `spec/`, for what only
+the TypeScript package's `parse` gives yet: `parse-duplicates.tsv`, the
+`duplicates` option. They run in `ts/test/pending.test.ts`, under the
+same runner as `spec/`. "Where a new fixture goes", below, says why they
+are not in `spec/`, and when they move there.
 
 `petstore/` holds one OpenAPI 3.1 description twice: `petstore.yaml` as
 written, and `petstore.json`, the same document as JSON. Every runtime's
@@ -54,17 +67,17 @@ section 5 of
 | The fixture pins | Where it goes | What runs it |
 |---|---|---|
 | a parse that every suite gives today | `spec/` | every runner |
-| a parse only the TypeScript package gives: a new option, a new code | `pending/`, in the format of `spec/` | a TypeScript runner |
+| a parse only the TypeScript package gives: a new option, a new code | `pending/`, in the format of `spec/` | `ts/test/pending.test.ts` |
 | what `resolve` gives | `resolve/` | `ts/test/resolve-spec.test.ts` |
 | the object model | `model/` | `ts/test/model.test.ts` |
 | a description in several files | `docs/<case>/` | a TypeScript runner |
 
-Two of those folders are not on disk yet. `pending/` arrives with its
-first fixture and `docs/` with the first case of several files, and each
-brings its runner in the same change. Neither is made ahead of its
-contents, because a fixture folder with nothing in it fails here, as an
-empty fixture does. When porting starts, a file in `pending/` moves to
-`spec/` as it is, and every suite runs it from then on.
+`docs/` is not on disk yet. It arrives with the first case of several
+files and brings its runner in the same change, as `pending/` did. A
+folder is not made ahead of its contents, because a fixture folder with
+nothing in it fails here, as an empty fixture does. When porting starts,
+a file in `pending/` moves to `spec/` as it is, and every suite runs it
+from then on.
 
 Two things hold until then:
 

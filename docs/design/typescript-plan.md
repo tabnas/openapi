@@ -245,6 +245,20 @@ One cost is this repository's to remove: `parse` keeps one parser for
 every call, and after a grammar parse of the GitHub description that
 parser holds about 840 MB until it is dropped.
 
+**Found in T1: W10.** A reference that reaches its own container while
+it is being folded is left in the tree as the raw map, and reported as
+resolved. In `A: { $ref: '#/…/C/properties/q' }` written before
+`C: { properties: { q: { $ref: '#/…/C' } } }`, the fold follows `q` to
+`C`, and `C` holds `q`, which is still being folded. `expr`'s fold then
+gives `C` the map as written for it. Nothing is cut and nothing is
+listed as unresolved, and the resolved tree shares that map with the
+raw tree. With `C` written first, `q` is cut and `A` with it, which is
+the right answer for both orders. Unlike W1 to W6, this one shows in the
+corpus: under the default options, 180 references in 23 documents, all
+versions of one Azure description. `ts/test/resolve.test.ts` pins it, so
+that its repair in `expr` shows here. `cycles: 'keep'` no longer meets
+it (section 11).
+
 ### 2.4 What apidef needs (E9)
 
 With apidef's resolver deleted and the preset in its place, 2,473 of
@@ -328,7 +342,8 @@ percent-encoded pointer.
 | a bundled schema that references its own `$defs`, and a reference to it | as written | as written | resolves |
 
 `prototype/e9-apidef-swap/preset-shapes.cjs` runs these against apidef's
-own resolver.
+own resolver. T1 made the preset equal to apidef's resolver on all
+three, and on every other shape and document compared (section 11).
 
 **Typing an untyped target** (Decision 28). Appendix G of the
 specification leaves it to the implementation what a reference means
@@ -485,7 +500,9 @@ difference outside the two kinds section 1 allows.
    - how many references in the corpus need the lenient pointer rule,
      which is the evidence for Decision 27.
 2. **The index** of section 3, and `resolve` on it. W1 to W6 repaired;
-   `fold_depth` surfaced as `openapi_depth`.
+   `fold_depth` surfaced as `openapi_depth`. W10 repaired in `expr`
+   (section 7), and the sweep made to count a site that is reported
+   resolved and holds its map as written, which it cannot see today.
 3. **Dialects** (Decision 29): draft-04, draft-06, draft-07 and 2019-09
    read by their own rules (`id`, `definitions`, `$recursiveRef`),
    identifiers normalised, an unknown dialect read as 2020-12 and
@@ -498,9 +515,11 @@ difference outside the two kinds section 1 allows.
 5. **Fixtures**: a row for every probe of E8 and for every new field of
    `provenance`.
 
-Acceptance: every fixture green; the apidef gate unchanged; the Stripe
-and GitHub censuses in `AGENTS.md` unchanged, or each change explained;
-in the sweep, no reference `not-found` whose target exists.
+Acceptance: every fixture green; the apidef gate and the preset
+comparison unchanged; the Stripe and GitHub censuses in `AGENTS.md`
+unchanged, or each change explained; in the sweep, no reference
+`not-found` whose target exists, and no site reported resolved that
+holds its map as written.
 
 ### T4: several documents (L)
 
@@ -635,13 +654,14 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 |---|---|---|---|
 | expr | fold a location as written, not through the sites above it | T3 | S |
 | expr | a step budget, so that a caller can bound or cancel a walk | T3 | S |
+| expr | W10: a result folded while a site it needs is still being folded is not final. The fold reports a cycle to that site, and folds the container again once the site is settled | T3; 23 documents | S to M |
 | yaml | an option for the core schema's words | T2b; 166 documents | S to M |
 | yaml | compact nested lists; a list at its key's indent with an empty entry; a scalar on the line after its key; `>+` with a trailing blank line | T2b; 13 documents | S to M each |
 | yaml | an indented root mapping; a digit-led key with colons and a block value; `.5 x` | T2b; 7 documents | S to M each |
 | yaml | an explicit key with a lone-surrogate escape keeps its quotes | T2b; apidef's last workaround | S |
 | yaml | CR-only line breaks; JSON text after a blank first line; a recursive alias; tab indentation refused | T2b | S each |
 | yaml, parser | memory per byte of YAML | T2b | M, after measurement |
-| apidef | the branch of T1, which grows as T2 and T5 land | G2 | M |
+| apidef | the change of T1, which grows as T2 and T5 land. Until Decision 20 is taken it is the two diffs of `docs/design/apidef-swap/` | G2 | M |
 | aontu | at the release: pins that let `@tabnas/expr` 0.5.20 reach apidef, or apidef overrides them | T6 | S |
 | admin | at the release: the workflows and the descriptor restamped | T6 | S |
 
@@ -689,6 +709,53 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, while T1 was built:
+
+- The preset is apidef's resolver exactly, by measurement. A new tool,
+  `tools/apidef-preset.cjs`, runs both resolvers on one raw tree and
+  compares the results as graphs: members, member order, values, and
+  which objects are shared. Before T1 it found seventeen kinds of
+  difference. Three of them were in real documents: a percent-encoded
+  pointer, which apidef does not decode, in 29; W10 in 23; and a member
+  of a reference that names nothing in 1. After T1 it finds none in 167
+  hand-written shapes, 94,000 generated documents, and every corpus
+  document that `parse` reads, which is 8,966 of 8,986.
+- The preset's reading of a reference is an option of its own, `refs:
+  'pointer'`, since the preset is a set of options that can each be
+  turned back. Two details of apidef's resolver that are not readings
+  hang on the preset itself: a `__proto__` member beside a `$ref` is left
+  out, and `x-ref` takes the place of the `x-ref` of a target resolved
+  earlier.
+- `cycles: 'keep'` no longer follows a reference inside the fold.
+  Every site holds a placeholder until the fold is done, and is then
+  settled on the finished tree. Section 3 planned that rebuild for T3,
+  on landings; W10 made it necessary now, because the preset keeps
+  cycles and W10 is in real documents. Under `cycles: 'keep'` the
+  reports are therefore in document order, where they were in the order
+  targets were entered. One row of `test/resolve/apidef.tsv` changed its
+  report column for that, and no tree changed.
+- Outside the preset, `cycles: 'keep'` now says of a reference left as
+  written what `cycles: 'cut'` says of it; before, the two disagreed in
+  places, and W10 reached both. This was measured on 12,167 documents,
+  hand-written and generated to be awkward. Where `cut` cuts nothing,
+  which is 4,549 of them, `keep` gives the same graph and the same
+  reports. In the rest, of 46,620 references, five that `cut` does not
+  cut come out otherwise under `keep`, four of them resolved because the
+  reference they pass through is now kept. The default did not move:
+  the build before T1 and this one give the same tree and the same
+  reports, in the same order, for 6,167 of those documents under five
+  sets of options that cut cycles.
+- W10 is new (section 2.3). Its repair is `expr`'s (section 7).
+- apidef's `main` moved from 3058271 to 3b24341 while T1 was built, and
+  its suite grew to 2,478 tests. The gate passes there with nothing
+  allowed to fail and apidef's own resolver deleted: 2,477 passing, one
+  skipped as on `main`, and apidef's output byte-identical for all 57
+  definitions compared, which are apidef's 43, this repository's two,
+  and the twelve of G2.
+- apidef's side is kept in this repository, as the two diffs of
+  `docs/design/apidef-swap/`, until Decision 20 says where it lives in
+  apidef. The gate applies them in order.
 
 **Since acceptance**, while T0 was built:
 

@@ -1,0 +1,56 @@
+diff --git a/test/parse-errors.tsv b/test/parse-errors.tsv
+index dd5ff49..2130687 100644
+--- a/test/parse-errors.tsv
++++ b/test/parse-errors.tsv
+@@ -4,3 +4,6 @@ OpenAPI	bad	JSON
+ OpenAPI	{}	Unsupported
+ OpenAPI	# just a comment	empty
+ OpenAPI	   	empty
++OpenAPI	{"openapi":"3.0.0"}}	(^|Error: )@voxgig/apidef: parse: syntax: 
++OpenAPI	bad	(^|Error: )@voxgig/apidef: parse: JSON/YAML source must be an object \(test-file\)$
++OpenAPI	{}	(^|Error: )@voxgig/apidef: parse: Unsupported spec: 
+diff --git a/ts/src/parse.ts b/ts/src/parse.ts
+index 211b429..b6e995f 100644
+--- a/ts/src/parse.ts
++++ b/ts/src/parse.ts
+@@ -30,21 +30,16 @@ async function parse(kind: string, source: any, meta: { file: string }) {
+       return def
+     }
+     catch (pe: any) {
+-      if (pe.originalError) {
+-        pe.originalError.message =
+-          `@voxgig/apidef: parse: syntax: ${pe.originalError.message}` +
+-          ` (${relativizePath(meta.file)})`
+-        pe = pe.originalError
++      const where = ` (${relativizePath(meta.file)})`
++      if (isOwnError(pe)) {
++        pe.message += where
+       }
+-      else if (pe.code && pe.code.startsWith('jsonic')) {
+-        pe.message =
+-          `@voxgig/apidef: parse: syntax: ${pe.message}` +
+-          ` (${relativizePath(meta.file)})`
++      // The reader's refusals carry a code.
++      else if ('string' === typeof pe.code) {
++        pe.message = `@voxgig/apidef: parse: syntax: ${pe.message}` + where
+       }
+       else {
+-        pe.message =
+-          `@voxgig/apidef: parse: internal: ${pe.message}` +
+-          ` (${relativizePath(meta.file)})`
++        pe.message = `@voxgig/apidef: parse: internal: ${pe.message}` + where
+       }
+ 
+       throw pe
+@@ -80,6 +75,11 @@ async function parse(kind: string, source: any, meta: { file: string }) {
+ }
+ 
+ 
++function isOwnError(err: any): boolean {
++  return 'string' === typeof err?.message && err.message.startsWith('@voxgig/apidef:')
++}
++
++
+ async function parseOpenAPI(source: any, _meta?: any) {
+   let parsed: any
+ 

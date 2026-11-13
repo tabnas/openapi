@@ -13,7 +13,7 @@
 // as external and left as written. The plan is
 // docs/design/implementation-plan.md, Phase 2.
 
-import { fold } from '@tabnas/expr'
+import { fold, FoldError } from '@tabnas/expr'
 import type { FoldOptions, Op, Positions, Site } from '@tabnas/expr'
 
 import { connectionsOf, reuseOf } from './connections'
@@ -105,6 +105,15 @@ type ResolveOptions = {
   // Whether a reference may resolve to a value that is not a map ('any',
   // the default) or is left as written ('object').
   targets?: 'any' | 'object'
+  // How a `$ref` names its target. 'uri', the default: as a URI reference,
+  // resolved against the base in force, with `$id`, anchors, schema
+  // dialects and percent-decoding. 'pointer': as a JSON Pointer into this
+  // document, written `#/…`, and nothing else. The pointer is read from
+  // the document's root, which is then never a site itself, with `~0` and
+  // `~1` but no percent-decoding; the walk ends at a reference left as
+  // written, where 'uri' reads on in the map as written; `$id`, anchors,
+  // dialects and `$dynamicRef` are not read at all.
+  refs?: 'uri' | 'pointer'
   // Write `x-ref`, the reference as written, beside every site, resolved
   // or not. Each site then holds its own copy.
   xref?: boolean
@@ -114,7 +123,11 @@ type ResolveOptions = {
   extensions?: string[]
   // A named set of the options above. 'apidef' resolves as @voxgig/apidef
   // does: { siblings: 'merge', xref: true, sharing: 'site', cycles: 'keep',
-  // slots: 'all', targets: 'object' }. Options given beside it win.
+  // slots: 'all', targets: 'object', refs: 'pointer' }. Options given
+  // beside it win. It also keeps two details of how apidef builds a
+  // site's value, which no option names: a member named `__proto__` beside
+  // a `$ref` is left out, and `x-ref` takes the place of an `x-ref` the
+  // target's value already has.
   compat?: 'apidef'
 }
 
@@ -231,7 +244,15 @@ const OVERRIDE: Record<string, Record<string, string[]>> = {
 }
 
 const PRESETS: Record<string, ResolveOptions> = {
-  apidef: { siblings: 'merge', xref: true, sharing: 'site', cycles: 'keep', slots: 'all', targets: 'object' },
+  apidef: {
+    siblings: 'merge',
+    xref: true,
+    sharing: 'site',
+    cycles: 'keep',
+    slots: 'all',
+    targets: 'object',
+    refs: 'pointer',
+  },
 }
 
 const CHOICES: Record<string, string[]> = {
@@ -240,10 +261,11 @@ const CHOICES: Record<string, string[]> = {
   siblings: ['spec', 'merge'],
   slots: ['spec', 'all'],
   targets: ['any', 'object'],
+  refs: ['uri', 'pointer'],
 }
 
 type Settled = Required<Omit<ResolveOptions, 'positions' | 'maxDepth' | 'budget' | 'retrievalUri' | 'compat'>> &
-  Pick<ResolveOptions, 'positions' | 'maxDepth' | 'budget' | 'retrievalUri'>
+  Pick<ResolveOptions, 'positions' | 'maxDepth' | 'budget' | 'retrievalUri' | 'compat'>
 
 // The options in force: the preset, then what was given, then the
 // defaults, each choice checked.
@@ -263,6 +285,7 @@ function settle(options: ResolveOptions): Settled {
     siblings: 'spec',
     slots: 'spec',
     targets: 'any',
+    refs: 'uri',
     xref: false,
     extensions: [],
     ...preset,
@@ -341,6 +364,12 @@ type SiteInfo = {
   why?: Why
   status: Status
   token?: { rI: number; cI: number }
+  // For `orderAsWalked`: the value the site landed on, and the names of
+  // its own other members, in document order.
+  landing?: object
+  siblings?: string[]
+  // The value a resolved site holds, for `throughLeft`.
+  value?: any
 }
 
 // A site left as written, and whether that is for a cycle or a reason.
@@ -379,15 +408,33 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   const left = new WeakMap<object, Left>()
   // The copies this resolver wrote `x-ref` on.
   const ours = new WeakSet<object>()
-  // Under 'keep', the placeholder each edge that closed a cycle holds
-  // until the fold is done.
+  // Under `compat: 'apidef'` with `x-ref`, each resolved site by its value.
+  const siteValue = new Map<object, SiteInfo>()
+  // Under 'keep', the placeholder each site holds until the fold is done.
   const deferred = new Map<object, { info: SiteInfo; siblings: any; plain: any }>()
   let seq = 0
   let dataSlots = 0
 
+  // Under `refs: 'pointer'`, a root that is itself a reference is followed
+  // before any pointer is read, and following it needs the root again: no
+  // pointer names anything in such a document.
+  const pointers = 'pointer' === o.refs
+  const rootIsReference = pointers && isMap(raw) && 'string' === typeof raw.$ref
+  // The preset's two details that no option names: see `settleSite` and
+  // `orderAsWalked`.
+  const asApidef = 'apidef' === o.compat
+
+  // A reference read as a pointer into this document and nothing else:
+  // `#/…`, from the root, with `~1` and `~0` and no percent-decoding.
+  const locatePointer = (ref: string): { target?: Path; why?: Why } => {
+    if (!ref.startsWith('#/')) return { why: ref.startsWith('#') ? 'bad-fragment' : 'external' }
+    if (rootIsReference) return { why: 'not-found' }
+    return { target: ref.slice(2).split('/').map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~')) }
+  }
+
   // A URI reference, against a base: the location it names in this
   // document, or why it names none here.
-  const locate = (ref: string, base: string): { target?: Path; why?: Why } => {
+  const locateUri = (ref: string, base: string): { target?: Path; why?: Why } => {
     const abs = resolveUri(base, ref)
     const doc = withoutFragment(abs)
     const fragment = fragmentOf(abs)
@@ -405,6 +452,35 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       return null == named ? { why: 'no-anchor' } : { target: named }
     }
     return { why: 'bad-fragment' }
+  }
+
+  const locate = (ref: string, base: string) => (pointers ? locatePointer(ref) : locateUri(ref, base))
+
+  // The first reference left as written that the walk to a location
+  // passes through, if any. Under `refs: 'pointer'` such a walk ends
+  // there, even where the map as written has the next member.
+  // A `$ref` that is not a string makes no reference, so the walk reads
+  // through that map as it reads through any other. Past the first site
+  // that resolved, the fold steps on in that site's value, and so does
+  // this, where the references left as written are known by their values.
+  const throughLeft = (target: Path): Left | undefined => {
+    const ended = (why: Left): Left => (why.cut ? { cut: true } : { cut: false, why: 'not-found' })
+    for (let i = 1; i < target.length; i++) {
+      const via = infos.get(pointer(target.slice(0, i)))
+      if (null == via || 'not-a-string' === via.why) continue
+      if ('cut' === via.status) return { cut: true }
+      if (null != via.why || 'unresolved' === via.status) return { cut: false, why: 'not-found' }
+      let node = via.value
+      for (let j = i; j < target.length; j++) {
+        if (null == node || 'object' !== typeof node) return undefined
+        const why = left.get(node)
+        if (null != why) return ended(why)
+        node = stepInto(node, target[j])
+        if (NOTHING === node) return undefined
+      }
+      return undefined
+    }
+    return undefined
   }
 
   const kindOf = (state: string): Kind | null => {
@@ -503,6 +579,13 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       return asWritten(plain, info)
     }
     info.status = 'resolved'
+    // @voxgig/apidef gathers a site's other members by assignment into a
+    // plain object, where a member named `__proto__` sets the prototype
+    // and makes no member. Under the preset it is left out likewise.
+    if (asApidef && isMap(siblings) && own(siblings, '__proto__')) {
+      siblings = merged(siblings)
+      delete siblings.__proto__
+    }
     let out = combine(body(value), siblings, info)
     if (siteShape && out === value && (isMap(out) || Array.isArray(out))) {
       out = Array.isArray(out) ? out.slice() : merged(out)
@@ -510,7 +593,13 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     if (o.xref && isMap(out)) {
       define(out, 'x-ref', info.ref)
       ours.add(out)
+      if (asApidef && null != value && 'object' === typeof value) {
+        info.landing = value
+        info.siblings = isMap(siblings) ? Object.keys(siblings) : []
+        siteValue.set(out, info)
+      }
     }
+    info.value = out
     return out
   }
 
@@ -549,7 +638,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     // in walk order, so each site's record is made here.
     recognise: (site: Site, op: Op) => {
       const kind = kindOf(site.k.state)
-      if ('$dynamicRef' === op.src) return 'schema' === kind && hasIds(mv)
+      if ('$dynamicRef' === op.src) return !pointers && 'schema' === kind && hasIds(mv)
       const ref = (site.node as any).$ref
       let k: Kind | null = kind
       if (null == k) {
@@ -557,6 +646,9 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
         if ('string' !== typeof ref || ('all' !== o.slots && true !== site.k.ext)) return false
         k = 'data'
       }
+      // Under `refs: 'pointer'` the root is where pointers start, never a
+      // site of its own.
+      if (pointers && 0 === site.path.length) return false
       const s = slot(mv, site.k.state)
       const info: SiteInfo = {
         seq: seq++,
@@ -568,7 +660,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       }
       if (null != site.token) info.token = site.token
       if ('string' !== typeof ref) info.why = 'not-a-string'
-      else if ('schema' === k && hasIds(mv) && !supportedDialect(site.k.dialect)) info.why = 'unsupported-dialect'
+      else if (!pointers && 'schema' === k && hasIds(mv) && !supportedDialect(site.k.dialect)) info.why = 'unsupported-dialect'
       else {
         const where = locate(ref, site.k.base)
         if (null != where.why) info.why = where.why
@@ -594,54 +686,105 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
         unresolvedHere(info, info.why)
         return asWritten(site.plain(), info, { cut: false, why: info.why })
       }
-      const hit = site.at(info.target!)
-      if (!hit.found) {
-        unresolvedHere(info, 'not-found')
-        return asWritten(site.plain(), info, { cut: false, why: 'not-found' })
+      // Under 'keep' the tree becomes a graph, and what a site lands on
+      // is read from the finished tree: see `keepCycles`. The site holds a
+      // placeholder until then.
+      if ('keep' === o.cycles) {
+        const placeholder = Object.create(null)
+        deferred.set(placeholder, { info, siblings, plain: site.plain() })
+        return placeholder
       }
-      if (hit.cycle || deferred.has(hit.value)) {
-        if ('keep' === o.cycles) {
-          const placeholder = Object.create(null)
-          deferred.set(placeholder, { info, siblings, plain: site.plain() })
-          return placeholder
-        }
+      const hit = site.at(info.target!)
+      const via = pointers && !hit.cycle ? throughLeft(info.target!) : undefined
+      if (hit.cycle || true === via?.cut) {
         cutHere(info)
         return asWritten(site.plain(), info, { cut: true })
+      }
+      if (!hit.found || null != via) {
+        unresolvedHere(info, 'not-found')
+        return asWritten(site.plain(), info, { cut: false, why: 'not-found' })
       }
       return settleSite(info, hit.value, siblings, site.plain())
     },
   }
 
-  // Under 'keep', each edge that closed a cycle held a placeholder while
-  // the fold ran; now every target is built, each placeholder becomes its
-  // site's value, in place, which makes the tree a cyclic graph. A target
-  // that is itself a placeholder is settled first, and one met again while
-  // it is being settled is a loop of references, which is cut.
+  // Under 'keep' every site held a placeholder while the fold ran, so the
+  // fold made one pass over the document, top to bottom, and followed no
+  // reference. Now that every container is built, each placeholder
+  // becomes its site's value, in place, which makes the tree a graph
+  // where a reference closes a cycle.
+  //
+  // A site's landing is read on the finished tree, from the root as
+  // written, one member at a time. A placeholder met on the way, or
+  // landed on, is settled first, so a reference is followed before the
+  // next member is read. One met again while it is being settled is a
+  // loop of references with no value in it, and is cut, as is any
+  // reference to an edge that was cut, or through one to something that
+  // is there. A site left as written is read through as written, except
+  // under `refs: 'pointer'`, where the walk ends there.
+  //
+  // (The fold can follow references itself, and under 'cut' it does. It
+  // is not used for that here because of a defect in it: a container
+  // first reached through a reference is still being folded when the fold
+  // of its own target comes to it as a member, and the fold then gives
+  // that member the map as written, unresolved and unreported.)
   function keepCycles(root: any): any {
     const finals = new Map<object, any>()
     const busy = new Set<object>()
     const LOOP = Symbol('loop')
+    const limit = o.maxDepth ?? 1000
+    // Where every walk starts: the root's own map, whatever `$ref` the
+    // root has itself.
+    const start = deferred.has(root) ? deferred.get(root)!.plain : root
 
     const finalOf = (ph: object): any => {
-      const done = finals.get(ph)
-      if (undefined !== done || finals.has(ph)) return done
+      if (finals.has(ph)) return finals.get(ph)
+      // The fold's own error, as it raises under 'cut' for a chain of
+      // references this deep.
+      if (limit <= busy.size) {
+        const at = deferred.get(ph)!.info.at
+        throw new FoldError('fold_depth', `references deeper than ${limit} at ${quoted(at)}`, { doc: entry, at })
+      }
       const d = deferred.get(ph)!
       busy.add(ph)
-      let node: any = root
+      let node: any = start
+      // Whether the walk has passed through a reference that was cut.
+      let throughCut = false
       const land = () => {
         if (deferred.has(node)) node = busy.has(node) ? LOOP : finalOf(node)
       }
-      land()
+      // A reference to the whole document lands on the root itself, which
+      // may be a site.
+      if (0 === d.info.target!.length) {
+        node = root
+        land()
+      }
       for (const seg of d.info.target!) {
         if (LOOP === node || NOTHING === node) break
+        // The walk has come to a site left as written. The root is where
+        // it starts, and is not on its way.
+        const why = node !== start && null != node && 'object' === typeof node ? left.get(node) : undefined
+        if (null != why) {
+          if (pointers) {
+            node = why.cut ? LOOP : NOTHING
+            break
+          }
+          if (why.cut) throughCut = true
+        }
         node = stepInto(node, seg)
         land()
       }
+      // What lies past a cut reference is cut with it, where it is there
+      // at all.
+      if (throughCut && NOTHING !== node) node = LOOP
       busy.delete(ph)
       let v: any
-      if (LOOP === node || NOTHING === node) {
+      if (LOOP === node) {
         cutHere(d.info)
         v = asWritten(d.plain, d.info, { cut: true })
+      } else if (NOTHING === node) {
+        unresolvedHere(d.info, 'not-found')
+        v = asWritten(d.plain, d.info, { cut: false, why: 'not-found' })
       } else {
         v = settleSite(d.info, node, d.siblings, d.plain)
       }
@@ -649,6 +792,11 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       return v
     }
 
+    // Every site is settled, in document order. One inside members that
+    // its own site dropped is in no value of the tree, and is settled all
+    // the same, so that it is reported as what it is.
+    const inOrder = [...deferred.keys()].sort((a, b) => deferred.get(a)!.info.seq - deferred.get(b)!.info.seq)
+    for (const ph of inOrder) finalOf(ph)
     const top = deferred.has(root) ? finalOf(root) : root
     const seen = new Set<object>()
     const stack: any[] = [top]
@@ -675,11 +823,64 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     return top
   }
 
+  // Under `compat: 'apidef'` with `x-ref`, the order of a resolved site's
+  // members is the order that @voxgig/apidef's resolving in place leaves,
+  // one site after another as a walk of the document meets them: the
+  // target's members, then the site's own that the target lacks, then
+  // `x-ref`. A target that is itself a site already resolved by then
+  // carries its own `x-ref`, and the new one takes that place; one not yet
+  // met is read through to what it names, and carries none. A site here is
+  // settled when its value is first needed, or once the walk is done, so
+  // which of the two a walk in place would have seen is not known then.
+  // This puts each site's members in that order afterwards. No value
+  // changes, and no map is replaced.
+  function orderAsWalked(root: any): void {
+    // The order in which a walk of the finished graph first meets each
+    // resolved site, which is the order a walk in place resolves them in.
+    const met = new Map<object, number>()
+    const seen = new Set<object>()
+    const stack: any[] = [root]
+    while (0 < stack.length) {
+      const node = stack.pop()
+      if (null == node || 'object' !== typeof node || seen.has(node)) continue
+      seen.add(node)
+      if (siteValue.has(node)) met.set(node, met.size)
+      const inside = Array.isArray(node) ? node : Object.keys(node).map((k) => node[k])
+      for (let i = inside.length - 1; 0 <= i; i--) stack.push(inside[i])
+    }
+
+    const union = (a: string[], b: string[]) => {
+      const has = new Set(a)
+      return [...a, ...b.filter((k) => !has.has(k))]
+    }
+    // The member names a landing gave a site met at `time`: its own, in
+    // place, when it is a plain map or a site met earlier; else what it
+    // named in turn, then its own other members.
+    const namesOf = (landing: object, time: number, depth: number): string[] => {
+      const site = siteValue.get(landing)
+      const at = met.get(landing)
+      if (null == site || (undefined !== at && at < time) || 1000 < depth) return Object.keys(landing)
+      return union(namesOf(site.landing!, time, depth + 1), site.siblings!)
+    }
+
+    for (const [value, time] of met) {
+      const site = siteValue.get(value)!
+      const want = union(union(namesOf(site.landing!, time, 0), site.siblings!), ['x-ref'])
+      const have = Object.keys(value)
+      if (want.length !== have.length || want.some((k) => !own(value, k))) continue
+      if (want.every((k, i) => k === have[i])) continue
+      const values = want.map((k) => (value as any)[k])
+      for (const k of have) delete (value as any)[k]
+      want.forEach((k, i) => define(value, k, values[i]))
+    }
+  }
+
   let tree = fold(raw, opts)
-  if (0 < deferred.size) tree = keepCycles(tree)
+  if ('keep' === o.cycles) tree = keepCycles(tree)
+  if (asApidef && o.xref) orderAsWalked(tree)
 
   const connections = [
-    ...connectionsOf(raw, tree, mv, docBase, locate, hasIds(mv)),
+    ...connectionsOf(raw, tree, mv, docBase, locateUri, hasIds(mv)),
     ...mergeRows.sort((a, b) => a[0] - b[0]).map((r) => r[1]),
     ...reuseOf(tree, mv),
   ]
