@@ -98,6 +98,33 @@ const { parse } = require('@tabnas/openapi')
 parse('{"openapi":"3.1.0"}', { fast: false }) // => { openapi: '3.1.0' }
 ```
 
+## Merge a member name written twice
+
+A member name given twice in one map keeps its last value. Some
+descriptions are written for a reader that merges the two values, so
+that the operations of one path can be spelled in two places. Pass
+`duplicates: 'merge'` to read them that way:
+
+```js
+const { parse } = require('@tabnas/openapi')
+
+const text = `
+openapi: 3.0.0
+paths:
+  /pets:
+    get: { responses: {} }
+  /pets:
+    post: { responses: {} }
+`
+
+Object.keys(parse(text).paths['/pets']) // => ['post']
+Object.keys(parse(text, { duplicates: 'merge' }).paths['/pets']) // => ['get', 'post']
+```
+
+The merge is the one the grammars beneath this package make by
+themselves. The [reference](reference.md#parsetext-options) has its
+rules.
+
 ## Resolve the references in a description
 
 `resolve` takes the raw tree `parse` returns and gives back a new tree

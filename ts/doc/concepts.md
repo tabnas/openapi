@@ -79,6 +79,12 @@ whole, at the place where the name first appeared. Under `strict` a
 repeated name is an error, since a description meant for other tools
 should not depend on which one reads it.
 
+The merge is still there for a caller that asks for it. A tool whose
+descriptions were written for the merging reader passes
+`duplicates: 'merge'`, and gets the merge the grammars make by
+themselves. That is a choice made for one parse. The default stays the
+last value.
+
 ## Resolution is a separate pass
 
 Resolving a reference means replacing it with what it names. That cannot

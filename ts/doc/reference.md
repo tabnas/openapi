@@ -17,9 +17,10 @@ import type { Connection, ParseOptions, ResolveOptions, ResolveResult, VersionIn
 function parse(text: string, options?: ParseOptions): any
 
 type ParseOptions = {
-  strict?: boolean          // default false
-  fast?: boolean | 'auto'   // default 'auto'
-  instance?: Tabnas         // default: a shared parser per `strict`
+  strict?: boolean                // default false
+  fast?: boolean | 'auto'         // default 'auto'
+  duplicates?: 'last' | 'merge'   // default 'last'
+  instance?: Tabnas               // default: a shared parser per `strict`
 }
 ```
 
@@ -45,8 +46,23 @@ grammar:
 
 When `JSON.parse` refuses the text, or its root is not a map, the
 grammar reads the text instead, so every error comes from the grammar.
-Under `strict` the grammar always reads it. Both paths give the same
-tree.
+Under `strict`, and under `duplicates: 'merge'`, the grammar always
+reads it. Both paths give the same tree.
+
+`duplicates` decides what a member name given twice in one map gives:
+
+| `duplicates` | The member's value |
+|---|---|
+| `'last'` | the last value, whole, as `JSON.parse` keeps it |
+| `'merge'` | the values merged, as the base grammars merge them |
+
+Under `'merge'`, two maps merge member by member and two lists index by
+index, to any depth. Where the two values are not both maps or both
+lists, the later one replaces the earlier. A later member named
+`__proto__`, `constructor` or `prototype` is left out, because the
+engine's merge skips those names. Under `strict` a repeated name is
+refused, whatever `duplicates` says. `parse` throws a `TypeError` for
+any other value of `duplicates`.
 
 `instance` must be a parser from `make`, or one with the plugin
 installed; `parse` throws an `Error` otherwise. It throws a `TypeError`
@@ -303,8 +319,8 @@ type OpenApiOptions = Record<string, never>
 The plugin. Install it after the base grammar, with `tn.use(OpenApi)`.
 It takes no options; `OpenApi.defaults` is `{}`. It adds no rule. It
 declares the four error codes `parse` raises, makes a repeated member
-name keep its last value, and runs the checks when `parse` asks for
-them.
+name keep its last value unless `parse` asks for the merge, and runs the
+checks when `parse` asks for them.
 
 ### `VERSION`
 
@@ -330,9 +346,9 @@ A parse returns the document as written, with nothing followed:
 
 A member named `__proto__` is an ordinary member. A member name that
 appears twice in one map keeps its last value, whole, at the place of its
-first appearance, as `JSON.parse` keeps it. These hold for both paths and
-both base grammars, with one exception: only the default parser reads
-YAML.
+first appearance, as `JSON.parse` keeps it. `duplicates: 'merge'` merges
+the two values there instead. These hold for both paths and both base
+grammars, with one exception: only the default parser reads YAML.
 
 YAML rules that decide a value's type:
 
