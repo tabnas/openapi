@@ -273,9 +273,9 @@ out.tree.components.schemas.Charge['x-expansionResources'].oneOf[0] // => { type
 
 ## Resolve as @voxgig/apidef does
 
-`compat: 'apidef'` gives the tree that `@voxgig/apidef` builds: every
-string `$ref` resolved, the site's own members laid over the target's,
-and `x-ref` beside them:
+`compat: 'apidef'` gives the tree that `@voxgig/apidef`'s own resolver
+builds: every `$ref` that is a pointer into the document resolved, the
+site's own members laid over the target's, and `x-ref` beside them:
 
 ```js
 const { parse, resolve } = require('@tabnas/openapi')
@@ -293,6 +293,26 @@ resolve(raw, { compat: 'apidef' }).tree.components.schemas.A // => { type: 'stri
 
 It keeps cycles, so the tree can loop. Write it out with `cycles: 'cut'`
 beside the preset, or walk it as a graph.
+
+The preset reads a reference as `@voxgig/apidef` does, which is narrower
+than the specification: only a pointer written `#/...` names anything.
+An anchor, a URI, and a percent-encoded pointer are left as written. To
+resolve those too, give `refs: 'uri'` beside the preset:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+components:
+  schemas:
+    A: { $ref: "#tee" }
+    T: { $anchor: tee, type: string }
+`)
+
+resolve(raw, { compat: 'apidef' }).tree.components.schemas.A // => { $ref: '#tee', 'x-ref': '#tee' }
+resolve(raw, { compat: 'apidef', refs: 'uri' }).tree.components.schemas.A // => { '$anchor': 'tee', type: 'string', 'x-ref': '#tee' }
+```
 
 ## Tell parse errors apart
 

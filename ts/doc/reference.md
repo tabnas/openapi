@@ -85,6 +85,7 @@ type ResolveOptions = {
   siblings?: 'spec' | 'merge'                         // default 'spec'
   slots?: 'spec' | 'all'                              // default 'spec'
   targets?: 'any' | 'object'                          // default 'any'
+  refs?: 'uri' | 'pointer'                            // default 'uri'
   xref?: boolean                                      // default false
   extensions?: string[]                               // default []
   compat?: 'apidef'
@@ -137,6 +138,25 @@ map's own members are members.
 A reference to a site left as written is left as written too, and
 reported as that site is.
 
+`refs: 'pointer'` reads a `$ref` as a JSON Pointer into the document
+and nothing else:
+
+- A reference names something only where it begins `#/`. Any other is
+  left as written, with `why` set to `bad-fragment` where it begins `#`
+  and to `external` where it does not.
+- The pointer is read from the document's root. `~1` and `~0` are
+  decoded, and nothing is percent-decoded.
+- `$id`, anchors, schema dialects, `$self` and `retrievalUri` are not
+  read, and `$dynamicRef` makes no site.
+- A pointer that passes through a string `$ref` left as written ends
+  there. Its site is cut where that reference was cut, and has `why` set
+  to `not-found` otherwise. Under `uri` it reads on in that map as
+  written.
+- The root is never a site. Where the root has a string `$ref`, no
+  pointer names anything, and every one is `not-found`.
+
+`refs` does not change `connections`.
+
 #### Siblings
 
 What happens to the members beside a `$ref` under `siblings: 'spec'`:
@@ -171,25 +191,44 @@ closes a cycle. Under `cycles: 'cut'` it is left as written and listed
 in `cuts`, and so is a reference to it. Under `cycles: 'keep'` it holds
 its target's value once the walk is done, which makes the tree a cyclic
 graph that `JSON.stringify` refuses. A loop made of references alone has
-no value to hold, and is cut either way.
+no value to hold, and is cut either way. Under `cycles: 'keep'` a
+reference to a member of such a loop is cut with it, and so is one whose
+pointer passes through a member of the loop to something that is there.
 
-`xref: true` writes `x-ref`, the reference as written, as the last
-member of every site's value, resolved or not, except where the `$ref`
-is not a string. Each site then holds a copy, as under `site`.
+`xref: true` writes `x-ref`, the reference as written, in every site's
+value, resolved or not, except where the `$ref` is not a string. It is
+the last member, or takes the place of an `x-ref` the document wrote
+there. Each site then holds a copy, as under `site`.
 
 `targets: 'object'` leaves a reference to anything but a map as
 written, with `why` set to `non-object-target`.
 
-The walk runs from the root in document order, a target entered at its
-first reference. That order decides which edge of a cycle is cut and
-which site `inline-once` fills, and it is the order of `unresolved`,
-`cuts` and `provenance`.
+The walk runs from the root in document order. Under `cycles: 'cut'` a
+target is entered at its first reference, and that order decides which
+edge of a cycle is cut and which site `inline-once` fills. It is also
+the order of `unresolved`, `cuts` and `provenance`. Under `cycles:
+'keep'` no target is entered early, and those three are in document
+order.
+
+`maxDepth` bounds how deep the walk nests and how many references it
+follows at once. Past it, `resolve` throws an error named `FoldError`
+and coded `fold_depth`, with the place it stopped in `at`.
 
 #### `compat: 'apidef'`
 
 The resolution `@voxgig/apidef` makes: `{ siblings: 'merge', xref:
-true, sharing: 'site', cycles: 'keep', slots: 'all', targets: 'object'
-}`. An option given beside it wins.
+true, sharing: 'site', cycles: 'keep', slots: 'all', targets: 'object',
+refs: 'pointer' }`. An option given beside it wins.
+
+The preset also keeps two details of how `@voxgig/apidef` builds a
+site's value, which no option names:
+
+- A member named `__proto__` beside a `$ref` is left out of the value
+  of a site that resolves.
+- Where a site's target is itself a resolved site, and a walk of the
+  resolved tree, from the root in member order, meets the target before
+  the site, the site's `x-ref` takes the place of the target's. It is
+  then not the last member where the site has members the target lacks.
 
 #### What is left as written
 
@@ -200,9 +239,9 @@ in `unresolved`, with `why`:
 |---|---|
 | `not-found` | names nothing in the document |
 | `no-anchor` | names an anchor nothing declares |
-| `bad-fragment` | has a fragment that is not a well-formed JSON Pointer or, before 3.1, any anchor |
+| `bad-fragment` | has a fragment that is not a well-formed JSON Pointer or, before 3.1, any anchor. Under `refs: 'pointer'`: begins `#` and not `#/` |
 | `not-a-string` | is not a string; its map is resolved as a plain map |
-| `external` | names another document, which this release does not load |
+| `external` | names another document, which this release does not load. Under `refs: 'pointer'`: does not begin `#` |
 | `non-object-target` | names a value that is not a map, under `targets: 'object'` |
 | `unsupported-dialect` | is in a schema of a dialect other than JSON Schema 2020-12 or OpenAPI's |
 
