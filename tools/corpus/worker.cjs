@@ -3,13 +3,13 @@
 
 // tools/corpus/worker.cjs: one document, in its own process.
 //
-// sweep.cjs forks this with the document's path and `fast` or `nofast`,
-// with a heap limit, and sends it nothing. Each phase's result goes back
+// sweep.cjs forks this with the document's path, `fast` or `nofast`, and
+// the reading, with a heap limit, and sends it nothing. Each phase's result goes back
 // by IPC as soon as it is known (see examine.cjs), so a timeout or a
 // crash keeps the phases already done. Every send is awaited before the
 // process exits, since process.exit can drop queued messages.
 //
-//   node tools/corpus/worker.cjs <file> [fast|nofast]    (by sweep.cjs)
+//   node tools/corpus/worker.cjs <file> [fast|nofast] [base|spec]    (by sweep.cjs)
 
 const Fs = require('node:fs')
 const Path = require('node:path')
@@ -22,8 +22,9 @@ const flush = () => Promise.all(pending)
 function main() {
   const file = process.argv[2]
   const fast = 'nofast' !== process.argv[3]
+  const reading = process.argv[4] ?? 'base'
   const text = Fs.readFileSync(file, 'utf8')
-  E.examine(text, { ext: Path.extname(file), fast, send })
+  E.examine(text, { ext: Path.extname(file), fast, reading, send })
 }
 
 try { main(); flush().then(() => process.exit(0)) } catch (e) { send('crash', E.errInfo(e)); flush().then(() => process.exit(1)) }

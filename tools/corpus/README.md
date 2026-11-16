@@ -41,6 +41,24 @@ the sweep refuses the earlier run and says so. Start again with:
 node tools/corpus/sweep.cjs --fresh
 ```
 
+### Two readings
+
+`parse` reads YAML in one of two ways, and the sweep has a record for
+each. The plain command sweeps under the base reading, the default.
+This one sweeps under `reading: 'spec'`:
+
+```sh
+node tools/corpus/sweep.cjs --reading spec
+```
+
+It keeps its run in `.corpus/run-spec/`, and is held to its own
+committed pair,
+[`ledger-spec.tsv`](../../test/corpus/ledger-spec.tsv) and
+[`baseline-spec.json`](../../test/corpus/baseline-spec.json). Everything
+below about the ledger and the baseline holds for that pair under
+`--reading spec`. Both readings are held to the one `accepted.tsv`. A
+change to `parse` is swept under both.
+
 Use the Node version that `engines` names in `ts/package.json`. The
 figures can depend on it, since the runtime decides, for one, how much
 a large document costs in memory. The baseline records the major
@@ -67,7 +85,8 @@ reproduces ran under Node 22, and no document came out differently.)
 |---|---|
 | `--fetch` | fetch any source that is not at its pinned commit first |
 | `--fresh` | discard the run already in `--out`, and sweep again |
-| `--out <dir>` | where the run goes, default `.corpus/run` |
+| `--reading <base\|spec>` | the `reading` every parse is given, default `base` |
+| `--out <dir>` | where the run goes, default `.corpus/run`, or `.corpus/run-spec` under `--reading spec` |
 | `--jobs <n>` | documents at a time, default 3 |
 | `--heap-mb <n>` | the heap limit of each document's process, default 4096 |
 | `--phase-ms <n>` | the time limit of each phase of one document, default 120000 |
@@ -87,8 +106,8 @@ A run's folder belongs to one environment and one set of code, and
 `run.json` records both:
 
 - **the environment**: the package's version and its dependencies', the
-  reference parser's version, the Node major version, the heap limit and
-  `--nofast`;
+  reference parser's version, the Node major version, the heap limit,
+  `--nofast` and `--reading`;
 - **the code**, as a hash of the files that run: the package's build
   folder, the folder of each dependency's entry point, and this tool's
   own `examine.cjs` and `worker.cjs`, which make a document's record.
@@ -197,7 +216,7 @@ in documents and in values; the YAML features used; the totals of
 `resolve`; and the forms of reference into other documents. Its
 `environment` records the package's version, the versions of its
 dependencies the sweep ran with, the reference parser's version, the Node
-major version, the heap limit and the parse mode.
+major version, the heap limit, the parse mode and the reading.
 
 ## Reading a difference
 

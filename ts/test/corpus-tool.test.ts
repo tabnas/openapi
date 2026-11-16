@@ -47,6 +47,8 @@ type Sources = { codeHash(dir: string): string }
 type Sweep = {
   buildOf(): Record<string, string>
   runDiffers(was: object, now: object): string[]
+  options(argv: string[]): Rec
+  committed(reading: string): { ledger: string; baseline: string }
 }
 
 // At runtime this file is in ts/dist-test, so the repository root is two up.
@@ -56,7 +58,8 @@ const L: Ledger = require(join(TOOL, 'ledger.cjs'))
 const A: Analyze = require(join(TOOL, 'analyze.cjs'))
 const S: Sources = require(join(TOOL, 'sources.cjs'))
 const W: Sweep = require(join(TOOL, 'sweep.cjs'))
-const CORPUS = join(__dirname, '..', '..', 'test', 'corpus')
+const ROOT = join(__dirname, '..', '..')
+const CORPUS = join(ROOT, 'test', 'corpus')
 
 // A YAML document examined as the sweep examines a file, with its record's identity.
 function sweep(text: string): Rec {
@@ -288,30 +291,69 @@ describe('corpus tool: accepted rows', () => {
   })
 })
 
-describe('corpus tool: the committed ledger, accepted rows and baseline', () => {
-  const ledgerText = readFileSync(join(CORPUS, 'ledger.tsv'), 'utf8')
-  const ledger = L.parseLedger(ledgerText)
-  const acceptedText = readFileSync(join(CORPUS, 'accepted.tsv'), 'utf8')
+// Each reading of `parse` has a committed ledger and baseline of its own,
+// and both are held to the one list of accepted rows.
+describe('corpus tool: a reading has its own run and its own record', () => {
+  const argv = (...args: string[]) => ['node', 'sweep.cjs', ...args]
 
-  test('the ledger reads back byte for byte, sorted, with known outcomes only', () => {
-    assert.strictEqual(L.formatLedger(ledger), ledgerText)
-    const unknown = ledger.filter((r) => !L.OUTCOMES.includes(r[2]))
-    assert.deepStrictEqual(unknown, [])
-    assert.ok(ledger.length > 0)
+  test('the base reading is the default, with the plain names', () => {
+    const o = W.options(argv())
+    assert.strictEqual(o.reading, 'base')
+    assert.strictEqual(o.out, join(ROOT, '.corpus', 'run'))
+    assert.deepStrictEqual(W.committed('base'), {
+      ledger: join(CORPUS, 'ledger.tsv'),
+      baseline: join(CORPUS, 'baseline.json'),
+    })
   })
 
-  test('every accepted entry equals a ledger row, once, with a reason', () => {
-    const accepted = L.parseAccepted(acceptedText) // refuses an empty reason and a repeat
-    assert.ok(accepted.length > 0)
-    for (const a of accepted) assert.ok(a[4].trim().length > 0, `${a[0]} ${a[1]} has no reason`)
-    const c = L.checkAccepted(accepted, ledger)
-    assert.deepStrictEqual(c.lines, [])
-    assert.strictEqual(c.accepted, accepted.length)
+  test('another reading sweeps into its own folder and is held to its own pair', () => {
+    const o = W.options(argv('--reading', 'spec'))
+    assert.strictEqual(o.reading, 'spec')
+    assert.strictEqual(o.out, join(ROOT, '.corpus', 'run-spec'))
+    assert.deepStrictEqual(W.committed('spec'), {
+      ledger: join(CORPUS, 'ledger-spec.tsv'),
+      baseline: join(CORPUS, 'baseline-spec.json'),
+    })
+    assert.strictEqual(W.options(argv('--reading', 'spec', '--out', join(ROOT, 'x'))).out, join(ROOT, 'x'))
   })
 
-  test('the baseline parses, and its ledger counts agree with the two files', () => {
-    const baseline = JSON.parse(readFileSync(join(CORPUS, 'baseline.json'), 'utf8'))
-    const c = L.checkAccepted(L.parseAccepted(acceptedText), ledger)
-    assert.deepStrictEqual(baseline.ledger, { accepted: c.accepted, open: c.open, rows: ledger.length })
+  test('a reading the package does not have is refused', () => {
+    assert.throws(() => W.options(argv('--reading', 'core')), /--reading must be one of base, spec, not core/)
+    assert.throws(() => W.options(argv('--reading')), /--reading needs a value/)
   })
 })
+
+for (const reading of ['base', 'spec']) {
+  describe(`corpus tool: the committed ledger, accepted rows and baseline (reading ${reading})`, () => {
+    const files = W.committed(reading)
+    const ledgerText = readFileSync(files.ledger, 'utf8')
+    const ledger = L.parseLedger(ledgerText)
+    const acceptedText = readFileSync(join(CORPUS, 'accepted.tsv'), 'utf8')
+    const baseline = JSON.parse(readFileSync(files.baseline, 'utf8'))
+
+    test('the ledger reads back byte for byte, sorted, with known outcomes only', () => {
+      assert.strictEqual(L.formatLedger(ledger), ledgerText)
+      const unknown = ledger.filter((r) => !L.OUTCOMES.includes(r[2]))
+      assert.deepStrictEqual(unknown, [])
+      assert.ok(ledger.length > 0)
+    })
+
+    test('every accepted entry equals a ledger row, once, with a reason', () => {
+      const accepted = L.parseAccepted(acceptedText) // refuses an empty reason and a repeat
+      assert.ok(accepted.length > 0)
+      for (const a of accepted) assert.ok(a[4].trim().length > 0, `${a[0]} ${a[1]} has no reason`)
+      const c = L.checkAccepted(accepted, ledger)
+      assert.deepStrictEqual(c.lines, [])
+      assert.strictEqual(c.accepted, accepted.length)
+    })
+
+    test('the baseline parses, and its ledger counts agree with the two files', () => {
+      const c = L.checkAccepted(L.parseAccepted(acceptedText), ledger)
+      assert.deepStrictEqual(baseline.ledger, { accepted: c.accepted, open: c.open, rows: ledger.length })
+    })
+
+    test('the baseline was made under the reading it is the record of', () => {
+      assert.strictEqual(baseline.environment.options.reading, reading)
+    })
+  })
+}

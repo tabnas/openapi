@@ -28,17 +28,25 @@
 // written: an entry that matches no row of the run is named, and ends
 // the sweep non-zero; --write then writes nothing.
 //
+// --reading spec sweeps under `reading: 'spec'`, the specification's
+// reading, where the default is the base grammars'. That run has its own
+// folder and its own committed pair, test/corpus/ledger-spec.tsv and
+// test/corpus/baseline-spec.json, and is held to the same accepted.tsv.
+//
 // Run from anywhere, under the Node version `engines` in ts/package.json
 // names, after `npm run build` in ts/. The whole corpus takes about 22
 // minutes at three jobs:
 //
-//   node tools/corpus/sweep.cjs [--fetch] [--fresh] [--out <dir>] [--jobs 3]
+//   node tools/corpus/sweep.cjs [--fetch] [--fresh] [--reading base|spec]
+//     [--out <dir>] [--jobs 3]
 //     [--phase-ms 120000] [--doc-ms 900000] [--heap-mb 4096]
 //     [--only <regex on source/path>] [--nofast] [--retry-failed]
 //     [--write] [--no-compare]
 //
 // --fresh      discard the run already in --out, and sweep again
-// --out        where the manifest, run.json and results.jsonl go (default .corpus/run)
+// --reading    the `reading` every parse is given (default base)
+// --out        where the manifest, run.json and results.jsonl go
+//              (default .corpus/run, or .corpus/run-spec under --reading spec)
 // --only       sweep only the documents whose `source/path` matches; no comparison
 // --nofast     send JSON text to the grammar too (`fast: false` on every parse)
 // --retry-failed  run again each document whose last record did not finish
@@ -57,9 +65,17 @@ const L = require('./ledger.cjs')
 const A = require('./analyze.cjs')
 
 const ROOT = S.ROOT
-const LEDGER = Path.join(ROOT, 'test', 'corpus', 'ledger.tsv')
-const BASELINE = Path.join(ROOT, 'test', 'corpus', 'baseline.json')
 const ACCEPTED = Path.join(ROOT, 'test', 'corpus', 'accepted.tsv')
+const READINGS = ['base', 'spec']
+// The committed record of a reading: the base reading's has the plain
+// names, as it had them before there was a second.
+const committed = (reading) => {
+  const tag = 'base' === reading ? '' : '-' + reading
+  return {
+    ledger: Path.join(ROOT, 'test', 'corpus', `ledger${tag}.tsv`),
+    baseline: Path.join(ROOT, 'test', 'corpus', `baseline${tag}.json`),
+  }
+}
 const WORKER = Path.join(__dirname, 'worker.cjs')
 const PROGRESS_MS = 15000
 const BIG = 4 * 1024 * 1024
@@ -68,18 +84,21 @@ const RUN_FILES = ['manifest.jsonl', 'results.jsonl', 'run.json']
 
 function options(argv) {
   const args = argv.slice(2)
-  const known = new Set(['--fetch', '--fresh', '--out', '--jobs', '--phase-ms', '--doc-ms', '--heap-mb', '--only', '--nofast', '--retry-failed', '--write', '--no-compare', '--help'])
-  const takes = new Set(['--out', '--jobs', '--phase-ms', '--doc-ms', '--heap-mb', '--only'])
+  const known = new Set(['--fetch', '--fresh', '--reading', '--out', '--jobs', '--phase-ms', '--doc-ms', '--heap-mb', '--only', '--nofast', '--retry-failed', '--write', '--no-compare', '--help'])
+  const takes = new Set(['--reading', '--out', '--jobs', '--phase-ms', '--doc-ms', '--heap-mb', '--only'])
   for (let i = 0; i < args.length; i++) {
     if (!known.has(args[i])) throw new Error(`unknown argument ${args[i]}; see the header of ${__filename}`)
     if (takes.has(args[i])) { if (undefined === args[i + 1]) throw new Error(`${args[i]} needs a value`); i++ }
   }
   const opt = (name, dflt) => { const i = args.indexOf(name); return -1 === i ? dflt : args[i + 1] }
+  const reading = opt('--reading', 'base')
+  if (!READINGS.includes(reading)) throw new Error(`--reading must be one of ${READINGS.join(', ')}, not ${reading}`)
   const o = {
     help: args.includes('--help'),
     fetch: args.includes('--fetch'),
     fresh: args.includes('--fresh'),
-    out: Path.resolve(opt('--out', Path.join(ROOT, '.corpus', 'run'))),
+    reading,
+    out: Path.resolve(opt('--out', Path.join(ROOT, '.corpus', 'base' === reading ? 'run' : 'run-' + reading))),
     jobs: Number(opt('--jobs', 3)),
     phaseMs: Number(opt('--phase-ms', 120000)),
     docMs: Number(opt('--doc-ms', 900000)),
@@ -129,7 +148,7 @@ function environmentOf(o, sub = subject()) {
     package: { name: sub.pkg.name, version: sub.pkg.version },
     dependencies: deps,
     reference: { yaml: versionOf(tsReq, 'yaml') },
-    options: { parse: o.nofast ? 'nofast' : 'fast', heapMiB: o.heapMb },
+    options: { parse: o.nofast ? 'nofast' : 'fast', heapMiB: o.heapMb, reading: o.reading },
   }
 }
 
@@ -234,7 +253,7 @@ function runAll(todo, o, resultsFile) {
   const run = (rec) => new Promise((resolve) => {
     const result = { id: rec.id, source: rec.source, path: rec.path, size: rec.size }
     const t0 = Date.now()
-    const child = fork(WORKER, [rec.file, o.nofast ? 'nofast' : 'fast'], { execArgv: [`--max-old-space-size=${o.heapMb}`], stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
+    const child = fork(WORKER, [rec.file, o.nofast ? 'nofast' : 'fast', o.reading], { execArgv: [`--max-old-space-size=${o.heapMb}`], stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
     const a = { rec, phase: 'start', t0 }
     active.set(rec.id, a)
     let stderr = '', oom = false
@@ -281,7 +300,7 @@ function runAll(todo, o, resultsFile) {
   })
 }
 
-function compareWithCommitted(records, baseline) {
+function compareWithCommitted(records, baseline, { ledger: LEDGER, baseline: BASELINE }) {
   const lines = []
   if (!Fs.existsSync(LEDGER) || !Fs.existsSync(BASELINE)) {
     console.log(`sweep: there is no committed ledger or baseline (${Path.relative(ROOT, LEDGER)}, ${Path.relative(ROOT, BASELINE)}); run with --write to make them`)
@@ -346,6 +365,7 @@ async function main() {
     console.log(`sweep: wrote nothing: ${acc.stranded.length} entries of ${Path.relative(ROOT, ACCEPTED)} match no row, and the baseline would count them wrongly; correct that file, then run --write again`)
     return 1
   }
+  const { ledger: LEDGER, baseline: BASELINE } = committed(o.reading)
   if (o.write) {
     Fs.mkdirSync(Path.dirname(LEDGER), { recursive: true })
     Fs.writeFileSync(LEDGER, L.formatLedger(rows))
@@ -354,11 +374,11 @@ async function main() {
     return 0
   }
   if (!o.compare) return acc.stranded.length ? 1 : 0
-  return compareWithCommitted(records, baseline) && !acc.stranded.length ? 0 : 1
+  return compareWithCommitted(records, baseline, committed(o.reading)) && !acc.stranded.length ? 0 : 1
 }
 
 // For ts/test/corpus-tool.test.ts: what a run folder is held to.
-module.exports = { options, subject, environmentOf, buildOf, runDiffers }
+module.exports = { options, subject, environmentOf, buildOf, runDiffers, committed }
 
 if (require.main === module) {
   main().then((code) => { process.exitCode = code }, (e) => { console.error('sweep: ' + e.message); process.exitCode = 2 })

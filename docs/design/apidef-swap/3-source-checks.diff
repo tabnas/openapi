@@ -1,0 +1,480 @@
+diff --git a/go/yamlalias.go b/go/yamlalias.go
+index 7e1672c..fd2d06d 100644
+--- a/go/yamlalias.go
++++ b/go/yamlalias.go
+@@ -2,8 +2,9 @@ package apidef
+ 
+ // The YAML parser copies an anchor's node in full for every alias, so nested
+ // aliases grow geometrically. This reads, from the text and before anything is
+-// parsed, the size the source reaches once every alias is copied in. It mirrors
+-// ts/src/yamlalias.ts byte for byte.
++// parsed, the size the source reaches once every alias is copied in. It gives
++// what aliasedSize of @tabnas/openapi gives, which the TypeScript suite holds to
++// the same table.
+ 
+ import "math"
+ 
+diff --git a/ts/src/parse.ts b/ts/src/parse.ts
+index fcb7d6f..8ebb989 100644
+--- a/ts/src/parse.ts
++++ b/ts/src/parse.ts
+@@ -1,10 +1,12 @@
+ /* Copyright (c) 2024-2025 Voxgig, MIT License */
+ 
+-import { Jsonic } from '@tabnas/jsonic'
+-import { parse as readOpenAPI, resolve as resolveOpenAPI } from '@tabnas/openapi'
++import {
++  parse as readOpenAPI,
++  resolve as resolveOpenAPI,
++  wellFormed,
++} from '@tabnas/openapi'
+ 
+ import { relativizePath } from './utility'
+-import { yamlAliasedSize, yamlAliasLimit } from './yamlalias'
+ 
+ import { parseGraphQL } from './parse/graphql'
+ 
+@@ -17,9 +19,6 @@ const RE_HAS_CONTENT = /^\s*[^#\s]/m
+ async function parse(kind: string, source: any, meta: { file: string }) {
+   if ('OpenAPI' === kind) {
+ 
+-    validateSource(kind, source, meta)
+-    validateAliases(kind, source, meta)
+-
+     try {
+       const def = await parseOpenAPI(source, meta)
+       return def
+@@ -76,13 +75,29 @@ function isOwnError(err: any): boolean {
+ 
+ 
+ async function parseOpenAPI(source: any, _meta?: any) {
++  if ('string' !== typeof source) {
++    throw new Error(`@voxgig/apidef: parse: OpenAPI: source must be a string`)
++  }
++
+   let parsed: any
+ 
+   try {
+-    parsed = readOpenAPI(source, { duplicates: 'merge' })
++    // The reader's size limit is for a process of unknown memory; this one
++    // has always read whatever it was given.
++    parsed = readOpenAPI(source, { duplicates: 'merge', maxBytes: Infinity })
+   }
+   catch (err: any) {
+-    if ('openapi_root' === err?.code || 'openapi_stream' === err?.code) {
++    const code = err?.code
++    if ('openapi_root' === code && 'empty' === err.details?.kind) {
++      throw new Error(`@voxgig/apidef: parse: OpenAPI: source is empty`)
++    }
++    if ('openapi_alias_budget' === code) {
++      throw new Error(
++        `@voxgig/apidef: parse: OpenAPI: YAML aliases would expand the source to` +
++        ` about ${err.details.size} bytes, past the limit of ${err.details.budget}`
++      )
++    }
++    if ('openapi_root' === code || 'openapi_stream' === code) {
+       throw new Error(
+         `@voxgig/apidef: parse: JSON/YAML source must be an object`
+       )
+@@ -97,9 +112,10 @@ async function parseOpenAPI(source: any, _meta?: any) {
+     )
+   }
+ 
+-  if (SURROGATE_RE.test(source)) {
+-    parsed = wellFormed(parsed, new Map())
+-  }
++  // A lone surrogate is read as U+FFFD, which is what an encoder writes in
++  // its place in UTF-8. Keys that this makes equal are merged, as the
++  // reader merges a repeated key.
++  parsed = wellFormed(parsed, { duplicates: 'merge' })
+ 
+   if (null == parsed.components) {
+     parsed.components = {}
+@@ -154,44 +170,6 @@ function dropIgnoredHeaders(parsed: any) {
+ }
+ 
+ 
+-// A surrogate escape, or a raw lone surrogate unit.
+-const SURROGATE_RE =
+-  /\\(?:u\{?|U)0*[dD][89a-fA-F][0-9a-fA-F]{2}|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+-
+-const LONE_SURROGATE_RE =
+-  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g
+-
+-
+-function wellFormedString(s: string): string {
+-  return s.replace(LONE_SURROGATE_RE, '�')
+-}
+-
+-
+-// The Go parser reads a lone surrogate as U+FFFD, and so does every UTF-8
+-// writer. Keys it makes equal merge as the parser merges a repeated key.
+-function wellFormed(node: any, done: Map<any, any>): any {
+-  if ('string' === typeof node) return wellFormedString(node)
+-  if (null == node || 'object' !== typeof node) return node
+-  if (done.has(node)) return done.get(node)
+-
+-  if (Array.isArray(node)) {
+-    done.set(node, node)
+-    for (let i = 0; i < node.length; i++) node[i] = wellFormed(node[i], done)
+-    return node
+-  }
+-
+-  const out = Object.create(Object.getPrototypeOf(node))
+-  done.set(node, out)
+-  for (const key of Object.keys(node)) {
+-    const wkey = wellFormedString(key)
+-    const val = wellFormed(node[key], done)
+-    const prev = Object.prototype.hasOwnProperty.call(out, wkey) ? out[wkey] : undefined
+-    out[wkey] = null == prev ? val : Jsonic.util.deep(prev, val)
+-  }
+-  return out
+-}
+-
+-
+ function renameKeys(obj: any, keys: string[]): any {
+   const out = Object.create(Object.getPrototypeOf(obj))
+   Object.keys(obj).forEach((key, i) => { out[keys[i]] = obj[key] })
+@@ -212,7 +190,7 @@ function unquotePathKey(key: string): string {
+   if ('"' !== key[0]) return key
+   try {
+     const decoded = JSON.parse(key)
+-    if ('string' === typeof decoded) return wellFormedString(decoded)
++    if ('string' === typeof decoded) return wellFormed(decoded)
+   }
+   catch (_e: any) {
+     // Not a JSON string: an escape only YAML knows, so strip the quotes alone.
+@@ -299,19 +277,6 @@ function isRecord(node: any): boolean {
+ }
+ 
+ 
+-function validateAliases(kind: string, source: string, meta: { file: string }) {
+-  const size = yamlAliasedSize(source)
+-  const limit = yamlAliasLimit(source)
+-  if (limit < size) {
+-    throw new Error(
+-      `@voxgig/apidef: parse: ${kind}: YAML aliases would expand the source to` +
+-      ` about ${size} bytes, past the limit of ${limit}` +
+-      ` (${relativizePath(meta.file)})`
+-    )
+-  }
+-}
+-
+-
+ function validateSource(kind: string, source: any, meta: { file: string }) {
+   if (typeof source !== 'string') {
+     throw new Error(
+diff --git a/ts/src/yamlalias.ts b/ts/src/yamlalias.ts
+deleted file mode 100644
+index e0a73ff..0000000
+--- a/ts/src/yamlalias.ts
++++ /dev/null
+@@ -1,295 +0,0 @@
+-/* Copyright (c) 2026 Voxgig Ltd, MIT License */
+-
+-// The YAML parser copies an anchor's node in full for every alias, so nested
+-// aliases grow geometrically. This reads, from the text and before anything is
+-// parsed, the size the source reaches once every alias is copied in.
+-
+-const YAML_ALIAS_FACTOR = 10
+-const YAML_ALIAS_FLOOR = 1_000_000
+-
+-type Anchor = { name: string, start: number, end: number }
+-type Alias = { name: string, at: number, target?: Anchor }
+-
+-const SP = 0x20, TAB = 0x09, LF = 0x0a, CR = 0x0d
+-const HASH = 0x23, DQ = 0x22, SQ = 0x27, BSL = 0x5c, COLON = 0x3a, COMMA = 0x2c
+-const DASH = 0x2d, QMARK = 0x3f, AMP = 0x26, STAR = 0x2a, BANG = 0x21
+-const LSQ = 0x5b, RSQ = 0x5d, LCB = 0x7b, RCB = 0x7d, PIPE = 0x7c, GT = 0x3e
+-
+-const isSpace = (c: number) => SP === c || TAB === c
+-const isBreak = (c: number) => LF === c || CR === c
+-const isGap = (c: number | undefined) => undefined === c || isSpace(c) || isBreak(c)
+-
+-
+-function yamlAliasLimit(src: string): number {
+-  return Math.max(YAML_ALIAS_FLOOR, YAML_ALIAS_FACTOR * utf8(src).length)
+-}
+-
+-
+-// In bytes of UTF-8, which the Go port counts too.
+-function yamlAliasedSize(src: string): number {
+-  const b = utf8(src)
+-  if (!b.includes(AMP) || !b.includes(STAR)) return b.length
+-
+-  const { anchors, aliases } = scanYamlNodes(b)
+-  if (0 === aliases.length) return b.length
+-
+-  // An alias names the last anchor of its name before it.
+-  const latest = new Map<string, Anchor>()
+-  let ai = 0
+-  for (const alias of aliases) {
+-    while (ai < anchors.length && anchors[ai].start < alias.at) {
+-      latest.set(anchors[ai].name, anchors[ai])
+-      ai++
+-    }
+-    alias.target = latest.get(alias.name)
+-  }
+-
+-  const sizes = new Map<Anchor, number>()
+-  const open = new Set<Anchor>()
+-  const size = (a: Anchor): number => {
+-    const known = sizes.get(a)
+-    if (undefined !== known) return known
+-    if (open.has(a)) return 0
+-    open.add(a)
+-    let n = a.end - a.start
+-    for (let x = firstAt(aliases, a.start); x < aliases.length && aliases[x].at < a.end; x++) {
+-      const t = aliases[x].target
+-      if (undefined !== t) n += size(t)
+-    }
+-    open.delete(a)
+-    sizes.set(a, n)
+-    return n
+-  }
+-
+-  let total = b.length
+-  for (const alias of aliases) {
+-    if (undefined !== alias.target) total += size(alias.target)
+-  }
+-  return total
+-}
+-
+-
+-function utf8(src: string): Uint8Array {
+-  return new TextEncoder().encode(src)
+-}
+-
+-
+-// Index of the first alias at or after a byte offset.
+-function firstAt(aliases: Alias[], at: number): number {
+-  let lo = 0, hi = aliases.length
+-  while (lo < hi) {
+-    const mid = (lo + hi) >> 1
+-    if (aliases[mid].at < at) lo = mid + 1
+-    else hi = mid
+-  }
+-  return lo
+-}
+-
+-
+-// Anchors with the byte range of the node each labels, and aliases with where
+-// they stand. Comments, quoted strings and block scalars are skipped.
+-function scanYamlNodes(b: Uint8Array): { anchors: Anchor[], aliases: Alias[] } {
+-  const anchors: Anchor[] = []
+-  const aliases: Alias[] = []
+-
+-  // A block node's anchor ends where a later line returns to its indent;
+-  // others end with their bracket or their line.
+-  const blockAnchors: { anchor: Anchor, indent: number, afterKey: boolean }[] = []
+-  const bracketAnchors: { anchor: Anchor, depth: number }[] = []
+-
+-  let flow = 0
+-  let blockIndent = -1
+-  let lineIndent = 0
+-  let lineBegin = 0
+-  let scalarCol = 0
+-  let keyCol = 0
+-  let lineStart = true
+-  let nodeStart = true
+-  let afterKey = false
+-  let i = 0
+-
+-  while (i < b.length) {
+-    if (lineStart) {
+-      lineStart = false
+-      lineBegin = i
+-      const j = indentEnd(b, i)
+-      const blank = j >= b.length || isBreak(b[j]) || HASH === b[j]
+-      if (0 <= blockIndent && (blank || j - i > blockIndent)) {
+-        i = endOfLine(b, i)
+-        continue
+-      }
+-      blockIndent = -1
+-      lineIndent = j - i
+-      if (0 === flow) {
+-        nodeStart = true
+-        afterKey = false
+-      }
+-      i = j
+-      continue
+-    }
+-
+-    const c = b[i]
+-    if (LF === c) {
+-      lineStart = true
+-      i++
+-    }
+-    else if (CR === c || isSpace(c)) {
+-      i++
+-    }
+-    else if (HASH === c && isGap(b[i - 1])) {
+-      i = endOfLine(b, i)
+-    }
+-    else if (nodeStart && (DQ === c || SQ === c)) {
+-      scalarCol = i - lineBegin
+-      i = endOfQuoted(b, i)
+-      nodeStart = false
+-    }
+-    else if (nodeStart && STAR === c) {
+-      const end = endOfName(b, i + 1)
+-      aliases.push({ name: decode(b, i + 1, end), at: i })
+-      nodeStart = false
+-      i = end
+-    }
+-    else if (nodeStart && AMP === c) {
+-      const end = endOfName(b, i + 1)
+-      const anchor: Anchor = { name: decode(b, i + 1, end), start: i, end: b.length }
+-      anchors.push(anchor)
+-      let k = end
+-      while (k < b.length && isSpace(b[k])) k++
+-      if (k >= b.length || isBreak(b[k]) || HASH === b[k]) {
+-        blockAnchors.push({ anchor, indent: afterKey ? keyCol : lineIndent, afterKey })
+-      }
+-      else if (LSQ === b[k] || LCB === b[k]) {
+-        bracketAnchors.push({ anchor, depth: flow + 1 })
+-      }
+-      else {
+-        anchor.end = 0 < flow ? endOfFlowScalar(b, k) : endOfLine(b, k)
+-      }
+-      i = end
+-    }
+-    else if (nodeStart && BANG === c) {
+-      i = endOfName(b, i + 1)
+-    }
+-    else if (nodeStart && 0 === flow && (PIPE === c || GT === c)) {
+-      blockIndent = lineIndent
+-      i = endOfLine(b, i)
+-    }
+-    else if (LSQ === c || LCB === c) {
+-      flow++
+-      nodeStart = true
+-      i++
+-    }
+-    else if (RSQ === c || RCB === c) {
+-      for (let x = bracketAnchors.length - 1; 0 <= x; x--) {
+-        if (bracketAnchors[x].depth === flow) {
+-          bracketAnchors[x].anchor.end = i + 1
+-          bracketAnchors.splice(x, 1)
+-        }
+-      }
+-      flow = Math.max(0, flow - 1)
+-      nodeStart = false
+-      i++
+-    }
+-    else if (COMMA === c && 0 < flow) {
+-      nodeStart = true
+-      i++
+-    }
+-    else if (nodeStart && 0 === flow && (DASH === c || QMARK === c) && isGap(b[i + 1])) {
+-      i++
+-    }
+-    else if (COLON === c && (0 < flow || isGap(b[i + 1]))) {
+-      nodeStart = true
+-      afterKey = 0 === flow
+-      keyCol = scalarCol
+-      i++
+-    }
+-    else {
+-      if (nodeStart) scalarCol = i - lineBegin
+-      nodeStart = false
+-      i++
+-    }
+-  }
+-
+-  for (const { anchor, indent, afterKey: keyed } of blockAnchors) {
+-    anchor.end = blockEnd(b, endOfLine(b, anchor.start), indent, keyed)
+-  }
+-
+-  return { anchors, aliases }
+-}
+-
+-
+-// The first line after `from` that returns to `indent`; a compact sequence
+-// under a key may sit at the key's own indent.
+-function blockEnd(b: Uint8Array, from: number, indent: number, keyed: boolean): number {
+-  let s = from
+-  while (s < b.length) {
+-    s = LF === b[s] ? s + 1 : endOfLine(b, s) + 1
+-    if (s >= b.length) break
+-    const j = indentEnd(b, s)
+-    if (j >= b.length || isBreak(b[j]) || HASH === b[j]) continue
+-    const d = j - s
+-    const entry = DASH === b[j] && isGap(b[j + 1])
+-    if (d < indent || (d === indent && !(keyed && entry))) return s
+-  }
+-  return b.length
+-}
+-
+-
+-function indentEnd(b: Uint8Array, i: number): number {
+-  while (i < b.length && SP === b[i]) i++
+-  return i
+-}
+-
+-
+-function endOfLine(b: Uint8Array, i: number): number {
+-  while (i < b.length && LF !== b[i]) i++
+-  return i
+-}
+-
+-
+-function endOfQuoted(b: Uint8Array, i: number): number {
+-  const q = b[i]
+-  i++
+-  while (i < b.length) {
+-    if (DQ === q && BSL === b[i]) {
+-      i += 2
+-    }
+-    else if (q === b[i] && SQ === q && SQ === b[i + 1]) {
+-      i += 2
+-    }
+-    else if (q === b[i]) {
+-      return i + 1
+-    }
+-    else {
+-      i++
+-    }
+-  }
+-  return i
+-}
+-
+-
+-function endOfName(b: Uint8Array, i: number): number {
+-  while (i < b.length && !isGap(b[i]) && COMMA !== b[i] && LSQ !== b[i] &&
+-    RSQ !== b[i] && LCB !== b[i] && RCB !== b[i] &&
+-    !(COLON === b[i] && isGap(b[i + 1]))) {
+-    i++
+-  }
+-  return i
+-}
+-
+-
+-function endOfFlowScalar(b: Uint8Array, i: number): number {
+-  while (i < b.length && !isBreak(b[i]) && COMMA !== b[i] && RSQ !== b[i] && RCB !== b[i]) i++
+-  return i
+-}
+-
+-
+-function decode(b: Uint8Array, start: number, end: number): string {
+-  return new TextDecoder().decode(b.subarray(start, end))
+-}
+-
+-
+-export {
+-  yamlAliasedSize,
+-  yamlAliasLimit,
+-}
+diff --git a/ts/test/tsv.test.ts b/ts/test/tsv.test.ts
+index 3c47047..4716068 100644
+--- a/ts/test/tsv.test.ts
++++ b/ts/test/tsv.test.ts
+@@ -104,7 +104,7 @@ import {
+   colonPathKeys,
+ } from '../dist/parse'
+ 
+-import { yamlAliasedSize } from '../dist/yamlalias'
++import { aliasedSize as yamlAliasedSize } from '@tabnas/openapi'
+ 
+ import {
+   countRefs,

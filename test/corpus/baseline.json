@@ -94,7 +94,8 @@
     "node": 24,
     "options": {
       "heapMiB": 4096,
-      "parse": "fast"
+      "parse": "fast",
+      "reading": "base"
     },
     "package": {
       "name": "@tabnas/openapi",
@@ -147,25 +148,24 @@
   },
   "parse": {
     "all": {
-      "died": 1,
-      "parsed": 8965,
-      "refused": 20
+      "died": 0,
+      "parsed": 8964,
+      "refused": 22
     },
     "descriptions": {
-      "died": 1,
-      "parsed": 5162,
-      "refused": 19
+      "died": 0,
+      "parsed": 5161,
+      "refused": 21
     },
-    "diedHow": {
-      "out-of-memory after ref": 1
-    },
+    "diedHow": {},
     "referenceRefuses": 0,
     "refusedByCode": {
       "openapi_root": 1,
+      "openapi_size": 2,
       "unexpected": 8,
       "unterminated_comment": 11
     },
-    "refusedValid": 20
+    "refusedValid": 22
   },
   "resolve": {
     "checks": {
@@ -179,7 +179,7 @@
         "notFound": 1
       },
       "mapping": {
-        "count": 5024,
+        "count": 3863,
         "notFound": 47
       },
       "operationId": {
@@ -195,7 +195,7 @@
         "notFound": 1
       },
       "tag": {
-        "count": 129653,
+        "count": 119714,
         "notFound": 57744
       },
       "tagParent": {
@@ -203,28 +203,28 @@
         "notFound": 0
       }
     },
-    "cuts": 1972,
+    "cuts": 1913,
     "dataSlots": 53937,
     "documentsByUnresolved": {
       "external": 789,
       "not-found": 1
     },
-    "documentsWithCuts": 601,
+    "documentsWithCuts": 600,
     "documentsWithDataSlots": 893,
     "kinds": {
       "pathItem": 13,
-      "reference": 470687,
-      "schema": 720299
+      "reference": 433540,
+      "schema": 704837
     },
     "notRun": 0,
-    "resolved": 5162,
-    "sites": 1190999,
+    "resolved": 5161,
+    "sites": 1138390,
     "skipped": {
       "no-version": 3803
     },
     "status": {
-      "cut": 1972,
-      "resolved": 1159428,
+      "cut": 1913,
+      "resolved": 1106878,
       "unresolved": 29599
     },
     "threwByCode": {},
@@ -248,8 +248,8 @@
         "values": 13
       },
       "type:string->boolean:yaml11-bool-word:PLAIN": {
-        "documents": 166,
-        "values": 1036
+        "documents": 165,
+        "values": 1012
       },
       "type:string->null:comment-syntax:PLAIN": {
         "documents": 32,
@@ -289,13 +289,13 @@
         "values": 233
       },
       "yaml11-word": {
-        "documents": 166,
-        "documentsWithNothingElse": 143,
-        "values": 1036
+        "documents": 165,
+        "documentsWithNothingElse": 142,
+        "values": 1012
       }
     },
-    "compared": 8965,
-    "differ": 233
+    "compared": 8964,
+    "differ": 232
   },
   "yamlFeatures": {
     "aliases": 58,
