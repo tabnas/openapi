@@ -6,14 +6,25 @@ the [reference](reference.md) has the details each recipe skips.
 
 ## Read a description from a file
 
-Read the file as text and parse it. The format does not matter: `parse`
-reads YAML and JSON.
+Read the file and parse it. The format does not matter: `parse` reads
+YAML and JSON.
 
 ```js
 const Fs = require('node:fs')
 const { parse } = require('@tabnas/openapi')
 
-const doc = parse(Fs.readFileSync('openapi.yaml', 'utf8'))
+const doc = parse(Fs.readFileSync('openapi.yaml'))
+```
+
+`parse` takes the file's bytes as they are, and reads them by their
+byte-order mark. It reads UTF-8 with or without one, and UTF-16 and
+UTF-32 with one. It takes a string too.
+
+```js
+const { parse } = require('@tabnas/openapi')
+
+const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('openapi: 3.1.0\n', 'utf16le')])
+parse(utf16) // => { openapi: '3.1.0' }
 ```
 
 ## Accept strict JSON only
@@ -97,6 +108,35 @@ const { parse } = require('@tabnas/openapi')
 
 parse('{"openapi":"3.1.0"}', { fast: false }) // => { openapi: '3.1.0' }
 ```
+
+## Read YAML as the specification does
+
+The grammars beneath this package read more than YAML does. `//` starts
+a comment, as in JSON with comments, and `1_000` is a number. A
+description written for a YAML reader can lose a value that way: a
+server URL with no scheme reads as nothing at all. Pass
+`reading: 'spec'` to read a comment as YAML does and a number as its
+core schema does:
+
+```js
+const { parse } = require('@tabnas/openapi')
+
+const text = `
+openapi: 3.0.0
+servers:
+  - url: //api.example.com/v1
+x-batch: 1_000
+`
+
+parse(text).servers[0].url // => null
+parse(text)['x-batch'] // => 1000
+parse(text, { reading: 'spec' }).servers[0].url // => '//api.example.com/v1'
+parse(text, { reading: 'spec' })['x-batch'] // => '1_000'
+```
+
+It also passes over an empty document after the description, which the
+default reading refuses as a second document. The
+[reference](reference.md#reading) lists what each reading takes.
 
 ## Merge a member name written twice
 
@@ -313,6 +353,99 @@ components:
 resolve(raw, { compat: 'apidef' }).tree.components.schemas.A // => { $ref: '#tee', 'x-ref': '#tee' }
 resolve(raw, { compat: 'apidef', refs: 'uri' }).tree.components.schemas.A // => { '$anchor': 'tee', type: 'string', 'x-ref': '#tee' }
 ```
+
+## Refuse a text that would exhaust memory
+
+A YAML alias is read as a copy of the node its anchor labels. Aliases
+inside anchored nodes multiply, so a short text can ask for more memory
+than the process has. `parse` measures that on the text and refuses it
+before it builds anything:
+
+```js
+const { parse, aliasedSize } = require('@tabnas/openapi')
+
+let text = 'openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\n'
+for (let i = 1; i <= 7; i++) {
+  text += `l${i}: &l${i} [${Array(10).fill('*l' + (i - 1)).join(', ')}]\n`
+}
+
+let code
+try {
+  parse(text)
+} catch (err) {
+  code = err.code
+}
+text.length // => 467
+aliasedSize(text) // => 444444447
+code // => 'openapi_alias_budget'
+```
+
+The budget is the larger of 1,000,000 bytes and ten times the text.
+Pass `aliasBudget` to set your own.
+
+A large text is refused the same way, as `openapi_size`. Reading YAML
+takes about a hundred bytes of memory for each byte of the text, so
+`parse` gives the grammar at most 16 MiB unless `maxBytes` says
+otherwise. JSON text that `JSON.parse` reads is not limited.
+
+```js
+const { parse } = require('@tabnas/openapi')
+
+let code
+try {
+  parse('openapi: 3.1.0\ninfo: {}\n', { maxBytes: 16 })
+} catch (err) {
+  code = err.code
+}
+code // => 'openapi_size'
+parse('{"openapi":"3.1.0","info":{}}', { maxBytes: 16 }) // => { openapi: '3.1.0', info: {} }
+```
+
+## Find the numbers that lost precision
+
+A JavaScript number holds an integer exactly up to 2^53. A description
+can write a larger one, such as the largest 64-bit integer, and the tree
+then holds the nearest number a double can. Give `parse` a `report` and
+it lists each such number, with the text as written and where it is:
+
+```js
+const { parse } = require('@tabnas/openapi')
+
+const report = {}
+const doc = parse('openapi: 3.1.0\nmax: 9223372036854775807\n', { report })
+
+doc.max // => 9223372036854775807
+doc.max === 9223372036854775808 // => true
+report.lossy.length // => 1
+report.lossy[0].text // => '9223372036854775807'
+report.lossy[0].at // => '/max'
+report.lossy[0].row // => 2
+BigInt(report.lossy[0].text) // => 9223372036854775807n
+```
+
+The tree is the same with a report as without. To keep the exact value,
+read it from `text`.
+
+## Make a tree safe to write as UTF-8
+
+An escape can spell half of a surrogate pair, and a JavaScript string
+holds it. UTF-8 cannot: an encoder writes `U+FFFD` in its place. A tree
+that is written to a file, hashed, or compared with one read from bytes
+then differs from the one in memory. `wellFormed` reads every lone
+surrogate as `U+FFFD`, in strings and in member names:
+
+```js
+const { parse, wellFormed } = require('@tabnas/openapi')
+
+const raw = parse('{"openapi":"3.1.0","info":{"title":"a\\ud800b"}}')
+
+raw.info.title === 'a\ud800b' // => true
+wellFormed(raw).info.title === 'a\ufffdb' // => true
+raw.info.title === 'a\ud800b' // => true
+```
+
+It returns a new tree and leaves the one it was given alone. A tree
+with nothing to repair comes back as it is.
 
 ## Tell parse errors apart
 

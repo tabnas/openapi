@@ -1,0 +1,52 @@
+input	expected	opts
+# The limits `parse` holds a text to before the grammar builds any of it.
+# Only the TypeScript package has them yet, so these rows are here and
+# not in ../spec/ (see ../AGENTS.md, "Where a new fixture goes").
+#
+# An alias is read as a copy of the node its anchor labels. The text of
+# the next rows is 24 bytes, and comes to 33 once its one alias is
+# copied in.
+base: &b {x: 1}\nuse: *b\n	{"base":{"x":1},"use":{"x":1}}	
+base: &b {x: 1}\nuse: *b\n	{"base":{"x":1},"use":{"x":1}}	{"aliasBudget":33}
+base: &b {x: 1}\nuse: *b\n	ERROR:openapi_alias_budget	{"aliasBudget":32}
+base: &b {x: 1}\nuse: *b\n	ERROR:openapi_alias_budget	{"aliasBudget":0}
+# With no budget given it is the larger of 1,000,000 bytes and ten times
+# the text. Ten aliases to a list of ten, seven deep, are 467 bytes that
+# come to 444,444,447.
+openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\nl1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\nl2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\nl3: &l3 [*l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2]\nl4: &l4 [*l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3]\nl5: &l5 [*l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4]\nl6: &l6 [*l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5]\nl7: &l7 [*l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6]\n	ERROR:openapi_alias_budget	
+openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\nl1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\nl2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\nl3: &l3 [*l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2]\nl4: &l4 [*l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3]\nl5: &l5 [*l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4]\nl6: &l6 [*l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5]\nl7: &l7 [*l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6]\n	ERROR:openapi_alias_budget	{"reading":"spec"}
+openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\nl1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\nl2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\nl3: &l3 [*l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2]\nl4: &l4 [*l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3]\nl5: &l5 [*l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4]\nl6: &l6 [*l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5]\nl7: &l7 [*l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6]\n	ERROR:openapi_alias_budget	{"fast":false}
+# Aliases inside anchored nodes multiply: 85 bytes that come to 1,801.
+a: &a [x, x, x, x]\nb: &b [*a, *a, *a, *a]\nc: &c [*b, *b, *b, *b]\nd: [*c, *c, *c, *c]\n	ERROR:openapi_alias_budget	{"aliasBudget":1800}
+# The refusal comes before a syntax error further on, and under either
+# reading.
+base: &b {x: 1}\nuse: *b\nbad: [\n	ERROR:openapi_alias_budget	{"aliasBudget":10}
+base: &b {x: 1}\nuse: *b\n	ERROR:openapi_alias_budget	{"aliasBudget":10,"reading":"spec"}
+# Only what the aliases add is refused. An ampersand and a star that are
+# no anchor and no alias add nothing: inside a quoted scalar, inside a
+# plain one, in a comment, in a block scalar. Nor does an anchor that no
+# alias names.
+a: "x *y &z"\nb: x*y &z\n# *c &d\ne: |\n  *f &g\n	{"a":"x *y &z","b":"x*y &z","e":"*f &g\n"}	{"aliasBudget":0}
+a: &never {x: 1}\nb: 2 * 3\n	{"a":{"x":1},"b":"2 * 3"}	{"aliasBudget":0}
+# An alias to an anchor that is not there copies nothing, and the
+# grammar refuses it.
+a: *nowhere\n	ERROR:yaml_undefined_alias	{"aliasBudget":0}
+a: &here 1\nb: *nowhere\n	ERROR:yaml_undefined_alias	{"aliasBudget":0}
+# Strict JSON has no alias, and is not measured.
+{"openapi":"3.1.0","a":"&x *x"}	{"openapi":"3.1.0","a":"&x *x"}	{"strict":true,"aliasBudget":0}
+#
+# The grammar is given at most maxBytes of text, in bytes of UTF-8.
+openapi: 3.1.0\ninfo: {}\n	{"openapi":"3.1.0","info":{}}	{"maxBytes":24}
+openapi: 3.1.0\ninfo: {}\n	ERROR:openapi_size	{"maxBytes":23}
+a: é\n	{"a":"é"}	{"maxBytes":6}
+a: é\n	ERROR:openapi_size	{"maxBytes":5}
+# JSON text that JSON.parse reads is not limited. Sent to the grammar it
+# is: by `fast`, by `strict`, or by a merge of repeated names.
+{"openapi":"3.1.0","info":{}}	{"openapi":"3.1.0","info":{}}	{"maxBytes":1}
+{"openapi":"3.1.0","info":{}}	ERROR:openapi_size	{"maxBytes":1,"fast":false}
+{"openapi":"3.1.0","info":{}}	ERROR:openapi_size	{"maxBytes":1,"strict":true}
+{"openapi":"3.1.0","info":{}}	ERROR:openapi_size	{"maxBytes":1,"duplicates":"merge"}
+# JSON text that JSON.parse refuses goes to the grammar, and is limited.
+{"openapi":"3.1.0",}	ERROR:openapi_size	{"maxBytes":1}
+# The size is refused before the aliases are measured.
+base: &b {x: 1}\nuse: *b\n	ERROR:openapi_size	{"maxBytes":1,"aliasBudget":1}

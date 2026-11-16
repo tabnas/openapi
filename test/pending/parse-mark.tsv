@@ -1,0 +1,28 @@
+input	expected	opts
+# A byte-order mark, U+FEFF, at the start of the text is not part of the
+# text: `parse` passes over it, under `strict` too, which RFC 8259 leaves
+# to the reader. Only the TypeScript package does so under `strict` yet,
+# so these rows are here and not in ../spec/ (see ../AGENTS.md, "Where a
+# new fixture goes"). ../spec/raw-fast.tsv pins it for the default reader.
+#
+# Every input below opens with the mark, which is invisible.
+﻿{"openapi":"3.1.0"}	{"openapi":"3.1.0"}	{"strict":true}
+﻿{"swagger":"2.0","a":[1,2]}	{"swagger":"2.0","a":[1,2]}	{"strict":true}
+# The checks of strict mode see the text without it.
+﻿{"a":1}	ERROR:openapi_version	{"strict":true}
+﻿[1]	ERROR:openapi_root	{"strict":true}
+﻿{"openapi":"3.1.0","a":1,"a":2}	ERROR:openapi_duplicate_key	{"strict":true}
+# One mark is passed over. A second is text. To the default reader it
+# starts a plain scalar, so the root of the first row is a string, and
+# the member name of the second opens with the mark.
+﻿﻿{"openapi":"3.1.0"}	ERROR:openapi_root	
+﻿﻿a: 1\n	{"﻿a":1}	
+# Strict JSON refuses a second mark, as it does one anywhere else.
+﻿﻿{"openapi":"3.1.0"}	ERROR:unexpected	{"strict":true}
+﻿{"openapi":"3.1.0",﻿"a":1}	ERROR:unexpected	{"strict":true}
+# A text that is the mark and nothing else has nothing in it.
+﻿	ERROR:unexpected	{"strict":true}
+﻿	ERROR:openapi_root	
+# Under the specification's reading, as under the base one.
+﻿openapi: 3.1.0\ninfo: {}\n	{"openapi":"3.1.0","info":{}}	{"reading":"spec"}
+﻿{"openapi":"3.1.0"}	{"openapi":"3.1.0"}	{"reading":"spec","fast":false}

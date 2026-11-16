@@ -9,19 +9,25 @@
 // the engine's own parse; `parse` adds the checks the engine cannot make
 // (the root, a stream of several documents, and under `strict` the version
 // and repeated member names), the choice of what a repeated member name
-// gives, and a fast path for JSON text. Resolution, a derived tree with
+// gives, the choice of reading (the base grammars' own, or the
+// specification's), and a fast path for JSON text. Resolution, a derived tree with
 // `$ref` resolved, is an OpenAPI vocabulary over @tabnas/expr's fold. The
 // plans are docs/design/implementation-plan.md and, for what remains,
 // docs/design/typescript-plan.md.
 
 import { Tabnas, TabnasError, Plugin } from '@tabnas/parser'
-import type { Context, Rule, RuleDone } from '@tabnas/parser'
+import type { Context, Rule, RuleDone, Token } from '@tabnas/parser'
 import { jsonic } from '@tabnas/jsonic'
 import { Yaml } from '@tabnas/yaml'
 import { json } from '@tabnas/json'
 
 import { version } from './oas-version'
 import type { VersionInfo } from './oas-version'
+import { decode, hasContent, utf8Length } from './text'
+import { pointer } from './uri'
+import { wellFormed } from './well-formed'
+import type { WellFormedOptions } from './well-formed'
+import { aliasedBytes, aliasedSize, defaultAliasBudget } from './yaml-alias'
 
 // Plugin options. There are none: raw mode needs none, and the resolver's
 // options belong to `resolve`, since `use()` deep-copies what it is given.
@@ -39,6 +45,12 @@ const ERRORS: Record<string, string> = {
   openapi_version:
     'the root names no OpenAPI or Swagger version this package reads ({found})',
   openapi_duplicate_key: 'the member name {key} appears twice in one map',
+  openapi_alias_budget:
+    'the YAML aliases of the text would copy it out to about {size} bytes, ' +
+    'past the budget of {budget}',
+  openapi_size:
+    'the text is {size} bytes, and the grammar is given at most {limit}',
+  openapi_encoding: 'the bytes are not well-formed {encoding}',
 }
 
 const HINTS: Record<string, string> = {
@@ -53,6 +65,17 @@ const HINTS: Record<string, string> = {
   openapi_duplicate_key:
     'Remove or rename one of the two members. JSON readers disagree on ' +
     'which of them to keep.',
+  openapi_alias_budget:
+    'An alias is read as a copy of the node its anchor labels, so aliases ' +
+    'inside anchored nodes multiply. Write the repeated part out where ' +
+    'it is used, or raise aliasBudget for a text you trust.',
+  openapi_size:
+    'Reading YAML takes about a hundred bytes of memory for each byte of ' +
+    'the text. Raise maxBytes where the process has that much. JSON text ' +
+    'that JSON.parse reads has no limit.',
+  openapi_encoding:
+    'Save the description as UTF-8, or parse it without strict to have ' +
+    'each ill-formed sequence read as U+FFFD.',
 }
 
 // The per-parse state `parse` hands the plugin through the engine's parse
@@ -62,12 +85,26 @@ type ParseState = {
   strict: boolean
   // What a repeated member name gives in this parse.
   duplicates: Duplicates
-  // The text was empty. The engine returns at once for an empty text and
-  // runs no rule, so `parse` hands it a single line break instead, which
-  // reads to an empty document, and this says what the reader wrote.
+  // How the text is read: see `Reading`.
+  reading: Reading
+  // The text holds nothing but white space and YAML comments. Such a text
+  // reads to an empty document, which the root check reports as empty.
   empty: boolean
   docs: number
+  // A refusal decided from the text before the grammar ran. It is raised
+  // on the first rule pass, where an error can carry its place.
+  refuse?: { code: string; details: Record<string, unknown> }
+  // The numbers the text wrote that the tree does not hold exactly, when
+  // the parse was asked to report them.
+  lossy?: LossyFound[]
+  // The steps left for finding where those numbers are in the tree.
+  placing: number
 }
+
+// A number that lost precision, as the parse finds it: where its text
+// starts, and the members and indexes that lead to it, where the rules it
+// sits under say them.
+type LossyFound = { text: string; value: number; pos: number; path?: string[] }
 
 // The instances the plugin is installed on.
 const INSTALLED = new WeakSet<Tabnas>()
@@ -107,15 +144,53 @@ function check(rule: Rule, ctx: Context, done: RuleDone): void {
     return
   }
 
+  // What `parse` decided from the text alone, before any of it is built.
+  if (null != state.refuse) {
+    const { code, details } = state.refuse
+    state.refuse = undefined
+    throw new TabnasError(code, details, token(rule, ctx), rule, ctx)
+  }
+
+  // A number, as its `val` closes: the token it opened on has the text
+  // the document wrote.
+  if (
+    null != state.lossy &&
+    'val' === rule.name &&
+    'c' === done.state &&
+    'number' === typeof rule.node
+  ) {
+    const found = lossyOf(rule, ctx, state)
+    if (null != found) state.lossy.push(found)
+  }
+
   // Each document of a YAML stream is a `val` the `stream` rule pushes.
-  // The second one is refused where it starts.
+  // The second one is refused where it starts. Under the specification's
+  // reading it is refused only once it is known to hold something.
   if (
     'stream' === rule.name &&
     'o' === done.state &&
     'val' === done.alt?.p
   ) {
     state.docs++
-    if (1 < state.docs) {
+    if (1 < state.docs && 'spec' !== state.reading) {
+      throw new TabnasError('openapi_stream', {}, token(rule, ctx), rule, ctx)
+    }
+    return
+  }
+
+  // A document after the first, under the specification's reading. Its
+  // `val` opens on the first token of what it holds. An empty document
+  // opens on the end of the text, or on the marker that ends it or starts
+  // the next, and is passed over.
+  if (
+    'spec' === state.reading &&
+    1 < state.docs &&
+    'val' === rule.name &&
+    'o' === done.state &&
+    'stream' === rule.parent?.name
+  ) {
+    const first = rule.o0?.name
+    if ('#ZZ' !== first && '#DS' !== first && '#DE' !== first) {
       throw new TabnasError('openapi_stream', {}, token(rule, ctx), rule, ctx)
     }
     return
@@ -149,7 +224,9 @@ function check(rule: Rule, ctx: Context, done: RuleDone): void {
     (null == done.alt || ('' === done.alt.p && '' === done.alt.r && null == done.alt.err))
   ) {
     const root = ctx.root()
-    const value = root.node
+    // A stream of several documents comes back as their list. It gets
+    // this far only where every document after the first is empty.
+    const value = 1 < state.docs && Array.isArray(root.node) ? root.node[0] : root.node
     const at = root.o0 && '#ZZ' !== root.o0.name ? root.o0 : token(rule, ctx)
     if (!isMap(value)) {
       throw new TabnasError(
@@ -178,6 +255,77 @@ function check(rule: Rule, ctx: Context, done: RuleDone): void {
       }
     }
   }
+}
+
+// An integer the document wrote out in full, by its base: decimal, and
+// the prefixed forms either reading takes. `_` is the base reading's
+// separator.
+const INTEGER = /^([-+]?)(0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|[0-9][0-9_]*)$/
+// A number written with digits, as against a word for a value that is
+// not finite.
+const WRITTEN = /^[-+]?(?:[0-9]|\.[0-9])/
+
+// The number a closing `val` holds, if the tree does not hold what the
+// document wrote: an integer written out in full that is not the number
+// read, or a number written with digits that is too large to be read at
+// all. An alias opens on the alias, not on a number, and is its anchor's
+// to report.
+function lossyOf(rule: Rule, ctx: Context, state: ParseState): LossyFound | undefined {
+  const tkn = rule.o0
+  const value = rule.node as number
+  if (null == tkn || '#NR' !== tkn.name || 'string' !== typeof tkn.src) return undefined
+  const text = tkn.src
+  if (Number.isFinite(value)) {
+    // The shortest integer that a double cannot hold has sixteen digits.
+    if (text.length < 16) return undefined
+    const m = INTEGER.exec(text)
+    if (null == m || !Number.isInteger(value)) return undefined
+    let exact: bigint
+    try {
+      const body = m[2].replace(/_/g, '')
+      // A leading zero is decimal to both readings, where BigInt reads
+      // nothing special in it either.
+      exact = BigInt(/^0[xXoObB]/.test(body) ? body.toLowerCase() : body)
+    } catch {
+      return undefined
+    }
+    if ('-' === m[1]) exact = -exact
+    if (exact === BigInt(value)) return undefined
+  } else if (!WRITTEN.test(text)) {
+    return undefined
+  }
+
+  // The members and indexes above it. A pair has its name by now, and a
+  // list holds the items before this one, so its length is this one's
+  // index. A rule this does not know how to read leaves the place unsaid.
+  // So does a parse that has spent its steps: a place costs one for each
+  // rule above the number, and a text can be built to make that the
+  // square of its size.
+  let path: string[] | undefined = []
+  for (let r: Rule | undefined = rule.parent; null != r && r !== ctx.NORULE; r = r.parent) {
+    if (--state.placing < 0) {
+      state.placing = 0
+      path = undefined
+      break
+    }
+    if ('pair' === r.name || 'yamlElemPair' === r.name) {
+      if ('string' !== typeof r.u.key) {
+        path = undefined
+        break
+      }
+      path.push(r.u.key)
+    } else if ('elem' === r.name || 'yamlBlockList' === r.name || 'yamlBlockElem' === r.name) {
+      if (!Array.isArray(r.node)) {
+        path = undefined
+        break
+      }
+      path.push(String(r.node.length))
+    }
+  }
+  path?.reverse()
+  // The token's offset into the text is exact. Its row and column are
+  // not, under the yaml grammar, so `located` counts them from the offset.
+  return { text, value, pos: tkn.sI, path }
 }
 
 // Two values given under one member name, merged as the base grammars
@@ -227,11 +375,49 @@ function kindOf(value: unknown): string {
   return 'a ' + typeof value
 }
 
+// How YAML's plain scalars, its comments and its document markers are
+// read.
+//
+// 'base', the default, is the base grammars' own reading: `//` and
+// `/* */` start a comment, as in jsonic; a number is whatever the engine
+// and JavaScript read as one, so `1_000`, `0b11` and `Infinity` are
+// numbers; and a second document is refused, an empty one included.
+//
+// 'spec' is the specification's: a comment starts with `#` and nothing
+// else; a number is one the YAML core schema reads as a number, and any
+// other is the text as written; and an empty document after the
+// description is passed over. The words of YAML 1.1 (`yes`, `no`, `on`,
+// `off`) are read as booleans under both until the yaml grammar offers
+// the choice.
+type Reading = 'base' | 'spec'
+
 // Options for `make`.
 type MakeOptions = {
   // Read strict JSON (RFC 8259) with the json grammar alone, instead of
   // JSON and YAML with jsonic and the yaml grammar.
   strict?: boolean
+
+  // How the text is read. Default 'base'. Strict JSON has one reading, so
+  // under `strict` this changes nothing.
+  reading?: Reading
+}
+
+// What the YAML core schema reads as a number: a decimal integer or
+// float, with an optional sign, and an unsigned `0o` octal or `0x`
+// hexadecimal integer. `.inf` and `.nan` are words to the yaml grammar,
+// not numbers, and it reads them already.
+const CORE_NUMBER =
+  /^(?:[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|0o[0-7]+|0x[0-9a-fA-F]+)$/
+
+// The reading each parser from `make` was built for.
+const READING = new WeakMap<Tabnas, Reading>()
+
+function readingOf(value: unknown, who: string): Reading {
+  const reading = value ?? 'base'
+  if ('base' !== reading && 'spec' !== reading) {
+    throw new TypeError(who + ': reading must be base or spec, not ' + quoted(reading))
+  }
+  return reading
 }
 
 // A parser instance with the plugin installed: jsonic with the yaml
@@ -243,12 +429,38 @@ type MakeOptions = {
 // and actions are not yet verified at the window's edge, and a base that
 // declares the window must not carry it to them. The setting comes last,
 // after everything the base and the plugins set.
+//
+// The specification's reading is this package's own configuration of that
+// parser, and adds no rule. Two engine options end jsonic's comment
+// syntax, one ends `_` inside a number, and a subscriber to the lexer
+// reads as text any number token whose text the core schema does not read
+// as a number, before a rule sees it.
 function make(options: MakeOptions = {}): Tabnas {
-  const tn = true === options.strict
+  const strict = true === options.strict
+  const reading = readingOf(options.reading, 'make')
+  const tn = strict
     ? new Tabnas().use(json)
     : new Tabnas().use(jsonic).use(Yaml)
   tn.use(OpenApi)
+  if ('spec' === reading && !strict) {
+    tn.options({
+      comment: { def: { slash: { lex: false }, multi: { lex: false } } },
+      number: { sep: null },
+    })
+    const NR = tn.token('#NR')
+    const TX = tn.token('#TX')
+    tn.sub({
+      lex: (tkn: Token) => {
+        if (NR === tkn.tin && 'string' === typeof tkn.src && !CORE_NUMBER.test(tkn.src)) {
+          tkn.tin = TX
+          tkn.name = '#TX'
+          tkn.val = tkn.src
+        }
+      },
+    })
+  }
   tn.options({ lex: { window: false } })
+  READING.set(tn, strict ? 'base' : reading)
   return tn
 }
 
@@ -278,49 +490,320 @@ type ParseOptions = {
   // repeated name is refused whatever this says.
   duplicates?: Duplicates
 
+  // How the text is read: 'base', the default, as the base grammars read
+  // it, or 'spec', as the specification does. See `Reading`. With an
+  // `instance` it must be the reading that parser was built for.
+  reading?: Reading
+
+  // The most bytes the text may come to once every YAML alias is copied
+  // in, as `aliasedSize` measures it. Default: the larger of 1,000,000 and
+  // ten times the text. A text its aliases take past it is refused, as
+  // `openapi_alias_budget`, before any of it is built. A text in which no
+  // alias copies anything is never refused for it. Infinity lifts it.
+  aliasBudget?: number
+
+  // The largest text, in bytes of UTF-8, the grammar is given. Default
+  // 16 MiB: reading YAML takes about a hundred bytes of memory for each
+  // byte of the text. A larger text is refused, as `openapi_size`, before
+  // any of it is built, unless JSON.parse reads it. Infinity lifts it.
+  maxBytes?: number
+
+  // A map this parse fills with what it has to say beside the tree. Its
+  // `lossy` is then the list of numbers the tree does not hold exactly.
+  report?: ParseReport
+
   // The parser to use, from `make`. Default: one shared parser per
-  // setting of `strict`.
+  // setting of `strict` and `reading`.
   instance?: Tabnas
 }
 
-const shared: { loose?: Tabnas; strict?: Tabnas } = {}
+// A number the document wrote that the tree does not hold exactly: an
+// integer written out in full that the number read is not equal to, such
+// as one past 2^53, or a number too large to be read at all.
+type Lossy = {
+  // The number as the document wrote it.
+  text: string
+  // The number the tree holds in its place.
+  value: number
+  // Where it is written: the offset into the text, from 0, and the row
+  // and column, from 1, all counted as JavaScript counts a string.
+  pos: number
+  row: number
+  col: number
+  // Where it is in the tree, as an RFC 6901 pointer, when the tree holds
+  // it there.
+  at?: string
+}
+
+// What a parse reports beside the tree.
+type ParseReport = {
+  lossy?: Lossy[]
+}
+
+// The largest text the grammar is given unless the parse says otherwise.
+const MAX_BYTES = 16 * 1024 * 1024
+
+// A shared parser holds the whole of its last parse until its next one
+// starts: about a hundred times the size of the text. Past this many
+// characters it is made to let go.
+const RELEASE_OVER = 65536
+
+// The steps one parse may take finding where its lossy numbers are in the
+// tree. A real description takes a few hundred.
+const PLACING = 2_000_000
+
+// A run of digits long enough to be an integer a double cannot hold, or
+// an exponent large enough to pass the largest double.
+const MAY_BE_LOSSY = /[0-9]{16}|[eE][+]?[0-9]{3}/
+
+const shared: { loose?: Tabnas; spec?: Tabnas; strict?: Tabnas } = {}
 
 // Parse a description and return its raw tree: the document as written,
-// every `$ref` kept as a reference. Raises `openapi_root` when the root is
-// not a map and `openapi_stream` for a stream of several YAML documents;
-// under `strict`, also `openapi_version` and `openapi_duplicate_key`.
-function parse(text: string, options: ParseOptions = {}): any {
-  if ('string' !== typeof text) {
-    throw new TypeError('parse: the text must be a string')
-  }
+// every `$ref` kept as a reference. The text is a string, or its bytes.
+// Raises `openapi_root` when the root is not a map, `openapi_stream` for a
+// stream of several YAML documents, `openapi_alias_budget` for aliases
+// that would copy the text out past the budget and `openapi_size` for a
+// text too large for the grammar; under `strict`, also `openapi_version`,
+// `openapi_duplicate_key` and, for bytes, `openapi_encoding`.
+function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
   const strict = true === options.strict
+  let text: string
+  // The size of the text in bytes of UTF-8, once it is known.
+  let bytes: number | undefined
+  let illFormed: string | undefined
+  // A byte-order mark opened the text, and has been passed over.
+  let marked = false
+  if ('string' === typeof source) {
+    text = source
+  } else if (source instanceof Uint8Array) {
+    const decoded = decode(source)
+    text = decoded.text
+    marked = 0 < decoded.skipped
+    // The bytes given are the text's own size where they are well-formed
+    // UTF-8. Otherwise it is counted from the text as read.
+    if ('utf-8' === decoded.encoding && !decoded.illFormed) bytes = source.length - decoded.skipped
+    if (decoded.illFormed) illFormed = decoded.encoding
+  } else {
+    throw new TypeError('parse: the text must be a string, or its bytes as a Uint8Array')
+  }
+  // A byte-order mark is not part of the text. The default reader passes
+  // over it, and strict JSON may: RFC 8259 leaves that to the reader. One
+  // mark is passed over, and a second is text.
+  if (!marked && 0xfeff === text.charCodeAt(0)) {
+    text = text.slice(1)
+    marked = true
+  }
   const duplicates = options.duplicates ?? 'last'
   if ('last' !== duplicates && 'merge' !== duplicates) {
     throw new TypeError('parse: duplicates must be last or merge, not ' + quoted(duplicates))
+  }
+  const aliasBudget = limitOf(options.aliasBudget, 'aliasBudget')
+  const maxBytes = limitOf(options.maxBytes, 'maxBytes') ?? MAX_BYTES
+  const report = options.report
+  if (undefined !== report && (null == report || 'object' !== typeof report || Array.isArray(report))) {
+    throw new TypeError('parse: report must be a map for the parse to fill, not ' + quoted(report))
+  }
+  // A parser reads one way, the way `make` built it for.
+  const built = null == options.instance ? undefined : (READING.get(options.instance) ?? 'base')
+  const reading = undefined === options.reading && undefined !== built ? built : readingOf(options.reading, 'parse')
+  if (undefined !== built && built !== reading && !strict) {
+    throw new TypeError(
+      `parse: reading is ${reading}, and the instance reads as ${built}; build it with make({ reading: '${reading}' })`,
+    )
   }
   const tn =
     options.instance ??
     (strict
       ? (shared.strict ??= make({ strict: true }))
-      : (shared.loose ??= make()))
+      : 'spec' === reading
+        ? (shared.spec ??= make({ reading: 'spec' }))
+        : (shared.loose ??= make()))
   if (!tn.internal().plugins.includes(OpenApi)) {
     throw new Error('parse: the instance has no OpenApi plugin; build it with make()')
   }
 
+  // Strict JSON refuses a text with nothing in it itself, as `unexpected`.
+  const empty = !strict && !hasContent(text)
+  const state: ParseState = { strict, duplicates, reading, empty, docs: 0, placing: PLACING }
+
+  // Bytes that were not what their encoding allows. They were read with
+  // U+FFFD in place of each ill-formed sequence, which strict JSON does
+  // not accept.
+  if (strict && undefined !== illFormed) {
+    state.refuse = { code: 'openapi_encoding', details: { encoding: illFormed } }
+  }
+
   // JSON.parse keeps the last value of a repeated name, so it cannot stand
-  // in for a parse that merges them.
+  // in for a parse that merges them, and it tells nothing of a number it
+  // could not hold, so it cannot stand in for a parse that reports them
+  // where the text may have one.
   const fast = options.fast ?? 'auto'
-  if (!strict && 'merge' !== duplicates && false !== fast && (true === fast || OPENS_WITH_BRACE.test(text))) {
+  if (
+    !strict &&
+    'merge' !== duplicates &&
+    false !== fast &&
+    (true === fast || OPENS_WITH_BRACE.test(text)) &&
+    (undefined === report || !MAY_BE_LOSSY.test(text))
+  ) {
     const value = fastParse(text)
     if (undefined !== value) {
+      if (undefined !== report) report.lossy = []
       return value
     }
   }
 
-  // Strict JSON refuses an empty text itself, as `unexpected`.
-  const empty = '' === text && !strict
-  const state: ParseState = { strict, duplicates, empty, docs: 0 }
-  return tn.parse(empty ? '\n' : text, { openapi: state })
+  // What the text alone decides, before the grammar builds any of it.
+  if (null == state.refuse) {
+    // The text is at most three bytes for each of its characters.
+    if (maxBytes < 3 * text.length) {
+      bytes ??= utf8Length(text)
+      if (maxBytes < bytes) {
+        state.refuse = { code: 'openapi_size', details: { size: bytes, limit: maxBytes } }
+      }
+    }
+  }
+  if (null == state.refuse && !strict && text.includes('&') && text.includes('*')) {
+    const encoded = new TextEncoder().encode(text)
+    const size = aliasedBytes(encoded)
+    const budget = aliasBudget ?? defaultAliasBudget(encoded.length)
+    // Only what the aliases add is refused: a text in which no alias
+    // copies anything is its own size, and `maxBytes` is its limit.
+    if (encoded.length < size && budget < size) {
+      state.refuse = { code: 'openapi_alias_budget', details: { size, budget } }
+    }
+  }
+  if (undefined !== report) state.lossy = []
+
+  // The text the grammar is given. The engine returns at once for an
+  // empty text and runs no rule, so it is handed a single line break
+  // instead, which reads to an empty document. The yaml grammar passes
+  // over one byte-order mark of its own accord, so where the one mark has
+  // gone and a second follows, which is text, the first is put back for
+  // the grammar to pass over.
+  let given = text
+  if (!strict) {
+    if ('' === text) given = '\n'
+    else if (marked && 0xfeff === text.charCodeAt(0)) given = '\ufeff' + text
+  }
+
+  // A text that is refused is not handed to the grammar. Handing a text
+  // over takes time and memory in step with its size before the first
+  // rule runs, three times the text and more, which is what a refusal is
+  // there to spare.
+  if (null != state.refuse) refuseAt(tn, state, opening(given))
+
+  let value: any
+  try {
+    value = tn.parse(given, { openapi: state })
+  } finally {
+    if (null == options.instance && RELEASE_OVER < text.length) release(tn)
+  }
+  // Several documents come back as their list. The root check let them
+  // by only because each after the first is empty.
+  if (1 < state.docs && Array.isArray(value)) value = value[0]
+  if (undefined !== report) report.lossy = located(state.lossy!, value, given)
+  return value
+}
+
+// The opening of a text: its first three lines, and 240 characters at
+// most. It is what an error placed at the start of the text shows.
+function opening(text: string): string {
+  let shown = text.slice(0, 240)
+  let end = 0
+  for (let line = 0; line < 3; line++) {
+    const next = shown.indexOf('\n', end)
+    if (-1 === next) return whole(shown)
+    end = next + 1
+  }
+  return shown.slice(0, end)
+}
+
+// A piece of text that does not end on half of a surrogate pair.
+function whole(piece: string): string {
+  const last = piece.charCodeAt(piece.length - 1)
+  return 0xd800 <= last && last < 0xdc00 ? piece.slice(0, -1) : piece
+}
+
+// A text every grammar here opens on. It stands in for the opening of a
+// refused text where that opening does not start a parse by itself, as
+// when it ends inside the text's first token.
+const OPENS_ANY = '{}'
+
+// Raise the refusal `parse` decided from the text. An error needs a
+// token and a context to carry its place, so the opening of the text is
+// parsed, and `check` raises the refusal on its first rule pass.
+function refuseAt(tn: Tabnas, state: ParseState, shown: string): never {
+  const refuse = state.refuse!
+  for (const stand of [shown, OPENS_ANY]) {
+    state.refuse = refuse
+    try {
+      tn.parse(stand, { openapi: state })
+    } catch (err: any) {
+      if (refuse.code === err?.code) throw err
+    }
+  }
+  // Not reached: `check` raises the refusal on the first rule pass.
+  throw new Error('parse: ' + refuse.code)
+}
+
+// A limit given as an option: a number that is not negative, Infinity
+// included, or nothing.
+function limitOf(value: unknown, name: string): number | undefined {
+  if (undefined === value) return undefined
+  if ('number' !== typeof value || Number.isNaN(value) || value < 0) {
+    throw new TypeError(`parse: ${name} must be a number of bytes, not ${quoted(value)}`)
+  }
+  return value
+}
+
+// Make a shared parser let go of its last parse: its next one, of
+// anything, starts by dropping it.
+function release(tn: Tabnas): void {
+  try {
+    tn.parse('0')
+  } catch {
+    // Nothing is held by a parse that failed either.
+  }
+}
+
+// The numbers a parse found lossy, each with its place in the tree where
+// the tree holds it there. A place the rules gave is said only when the
+// finished tree has that very number at it: a repeated member name keeps
+// one of its values, and the other is in no place.
+function located(found: LossyFound[], tree: any, text: string): Lossy[] {
+  // Rows and columns, counted once along the text. The numbers come in
+  // the order they were read, which is the order they are written in.
+  let at = 0
+  let row = 1
+  let lineStart = 0
+  const place = (pos: number) => {
+    if (pos < at) {
+      at = 0
+      row = 1
+      lineStart = 0
+    }
+    for (; at < pos; at++) {
+      const c = text.charCodeAt(at)
+      // A line ends at a line feed, or at a carriage return with none after it.
+      if (0x0a === c || (0x0d === c && 0x0a !== text.charCodeAt(at + 1))) {
+        row++
+        lineStart = at + 1
+      }
+    }
+    return { row, col: pos - lineStart + 1 }
+  }
+  return found.map(({ path, ...rest }) => {
+    const entry: Lossy = { ...rest, ...place(rest.pos) }
+    if (undefined === path) return entry
+    let node = tree
+    for (const part of path) {
+      if (null == node || 'object' !== typeof node || !Object.prototype.hasOwnProperty.call(node, part)) {
+        return entry
+      }
+      node = node[part]
+    }
+    return Object.is(node, entry.value) ? { ...entry, at: pointer(path) } : entry
+  })
 }
 
 const OPENS_WITH_BRACE = /^[ \t\n\r]*\{/
@@ -384,7 +867,7 @@ function nullPrototypes(root: any): any {
 // `VERSION` in rs/src/lib.rs.
 const VERSION = '0.1.0'
 
-export { OpenApi, make, parse, version, VERSION }
+export { OpenApi, aliasedSize, make, parse, version, wellFormed, VERSION }
 
 export { resolve, ResolveError } from './resolve'
 export type {
@@ -401,4 +884,14 @@ export type {
 } from './resolve'
 export type { Connection, ConnectionKind } from './connections'
 
-export type { Duplicates, OpenApiOptions, MakeOptions, ParseOptions, VersionInfo }
+export type {
+  Duplicates,
+  Lossy,
+  MakeOptions,
+  OpenApiOptions,
+  ParseOptions,
+  ParseReport,
+  Reading,
+  VersionInfo,
+  WellFormedOptions,
+}
