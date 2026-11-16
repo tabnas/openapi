@@ -108,7 +108,8 @@ default that a shared row pins changes until porting starts.
 | 2 | the resolver over `fold` | TypeScript done within one document: the object model, `resolve` with every option and output shape, the connections report, and the apidef preset. Porting it is deferred |
 | T0 | gates: the corpus sweep and its ledger, the apidef gate, the fixture homes | done |
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
-| T2 to T6 | reading, the site index, several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
+| T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the size limit, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
+| T2b, T3 to T6 | reading that only `@tabnas/yaml` can repair, the site index, several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
 `ts/test/debug-model.test.ts` and `rs/tests/debug_model_test.rs` hold
@@ -136,6 +137,78 @@ empty source. JSON text opening with `{` goes to the runtime's JSON
 decoder first (`JSON.parse`, `encoding/json` into `*tabnas.OrderedMap`,
 `serde_json`), rebuilt into the grammar's own tree family, and to the
 grammar on any refusal, so every error comes from the grammar.
+
+### What T2 added to the TypeScript `parse`
+
+All of it is in `ts/src/openapi.ts`, `ts/src/text.ts`,
+`ts/src/yaml-alias.ts` and `ts/src/well-formed.ts`, and none of it is
+ported, so its fixtures are in `test/pending/` and its other tests in
+`ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
+
+- **What runs on a text before the grammar is one pass, or counted.**
+  `parse` reads text from outside a system, so a check there must not
+  cost more than the text's size allows. Three did, as first written,
+  and `ts/test/hostile.test.ts` holds each shape to a bound. The test
+  for an empty text was apidef's pattern, `^\s*[^#\s]` under `m`, which
+  takes the square of a run of blank lines: `hasContent` in
+  `ts/src/text.ts` is the same test in one pass. The alias measure reads
+  on from each anchor and sums over the aliases inside each, which is
+  the square of anchors nested by the thousand: it counts that work and
+  gives `Infinity` past `WORK_PER_BYTE`. The `lossy` report's places
+  cost a step for each rule above a number: `PLACING` is what one parse
+  may spend. Put a new check through the same question before it lands:
+  what is the worst text for it, and what does that text cost.
+
+- **`reading: 'spec'`** is the same parser with other settings, made in
+  `make`: `comment.def.slash` and `comment.def.multi` off,
+  `number.sep` unset, and a subscriber to the lexer that turns a number
+  token into a text token where `CORE_NUMBER` does not match its source.
+  It adds no token, rule or alternate, and
+  `ts/test/debug-model.test.ts` holds that. A parser reads one way:
+  `READING` records what `make` built each for, and `parse` refuses the
+  other reading on a given `instance`. The YAML 1.1 words stay booleans
+  under both, because the yaml grammar matches them in its own code,
+  out of reach of an option.
+- **A refusal decided from the text** (`openapi_size`,
+  `openapi_alias_budget`, `openapi_encoding`) is put in the parse state
+  as `refuse`, and `refuseAt` raises it. An error needs a token and a
+  context to carry its place, so `refuseAt` parses the opening of the
+  text, three lines and 240 characters at most, and `check` raises the
+  refusal on the first rule pass. The text itself is never handed to
+  the grammar. Handing a 400 MB text over took 5.6 seconds and 1.8 GB
+  before the first rule ran, and refusing it this way takes 1.7 seconds
+  and the text's own size. Where the opening does not start a parse by
+  itself, `{}` stands in for it.
+- **One byte-order mark is passed over, and `parse` does it.** The yaml
+  grammar passes over one mark of its own accord and the json grammar
+  none. `parse` takes the mark off before any path, which gives JSON
+  text behind a mark the fast path and strict JSON the leniency. Where a
+  second mark follows, which is text, `parse` puts the first back for
+  the yaml grammar to pass over, or that grammar would take the second.
+- **`aliasBudget` holds only what aliases add.** A text in which no
+  alias copies anything is its own size, and is never refused for it,
+  whatever budget the caller gives: `maxBytes` is the limit on a text's
+  own size.
+- **`aliasedSize`** is a scan of the text, not a parse, and it is
+  apidef's measure exactly wherever it measures to the end, which is
+  every document of the corpus: `docs/design/apidef-swap/` has apidef's
+  suite run its own table against it. Change it only with that table.
+- **The `lossy` report** is gathered in `check`, as a number's `val`
+  closes, from the token the rule opened on. That token's offset, `sI`,
+  is exact, and `located` counts the row and column from it. Its own
+  `rI` and `cI` are not exact under the yaml grammar, which is a defect
+  there (section 7 of the plan). The place in the tree is read off the
+  rule stack (`pair` and `yamlElemPair` have the member name, `elem`,
+  `yamlBlockList` and `yamlBlockElem` the list so far), and is said
+  only when the finished tree has that number there.
+- **`release`**: a parser holds the whole of its last parse until its
+  next one starts, about a hundred bytes for each byte of the text.
+  After a parse of more than 65,536 characters `parse` runs a parse of
+  `0` on its shared parser to let that go. A caller's `instance` is not
+  touched.
+- **`openapi_root` says `empty`** for a text with no line that holds
+  anything but white space and a `#` comment, which is apidef's own
+  test for an empty source.
 
 ### The resolver
 
@@ -285,13 +358,13 @@ keeps cycles.
 
 | Path | What it is |
 |---|---|
-| [`ts/`](ts/) | **Canonical** TypeScript implementation, the `@tabnas/openapi` package. Source in `src/openapi.ts`: `parse(text, options)`, `version(tree)`, the `OpenApi` plugin, `make(options)`, `VERSION`. Tests in `test/`, compiled to `dist-test/`. |
+| [`ts/`](ts/) | **Canonical** TypeScript implementation, the `@tabnas/openapi` package. Source in `src/openapi.ts`: `parse(text, options)`, `version(tree)`, the `OpenApi` plugin, `make(options)`, `VERSION`; with `aliasedSize(text)` from `src/yaml-alias.ts`, `wellFormed(tree)` from `src/well-formed.ts`, and what `parse` does to a text before the grammar in `src/text.ts`. Tests in `test/`, compiled to `dist-test/`. |
 | [`go/`](go/) | Go port, module `github.com/tabnas/openapi/go`, package `tabnasopenapi`. Source in `openapi.go`: `Parse(ParseOptions)`, `Fast`, `Version`, `OpenApi`, `Defaults`, `Make(MakeOptions)`, `VERSION`. `example_test.go` runs the examples the Go docs show. |
 | [`rs/`](rs/) | Rust port, crate `tabnas-openapi`, library `tabnas_openapi`: `parse(&ParseOptions)`, `Fast`, `version`, `openapi` / `plugin()`, `make` / `make_with(&MakeOptions)`, `OpenApiOptions`, `VERSION`, `OpenApiError`. `rs/AGENTS.md` has the crate's own notes, including how raw mode works around the engine's Rust API. The README's examples run as doctests. |
 | [`test/spec/`](test/spec/) | Shared `.tsv` fixtures. All three runners discover and run every file, so a row added here covers TypeScript, Go and Rust together. See [`test/AGENTS.md`](test/AGENTS.md). |
 | [`test/petstore/`](test/petstore/) | One OpenAPI 3.1 description in YAML and the same in JSON. Every runtime's suite reads both and holds them to `JSON.parse` of the JSON form. |
 | [`test/resolve/`](test/resolve/), [`test/model/`](test/model/), [`test/pending/`](test/pending/) | Fixtures only the TypeScript suite runs: the resolver's, the object model's, and parse fixtures for what only the TypeScript `parse` gives yet. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
-| [`test/corpus/`](test/corpus/) | The corpus sweep's record over real documents: `ledger.tsv`, one row per way a document fails, and `baseline.json`, the headline figures, both written by the sweep and never by hand; and `accepted.tsv`, written by hand, the ledger rows that are not this package's defect, each with its reason. |
+| [`test/corpus/`](test/corpus/) | The corpus sweep's record over real documents: `ledger.tsv`, one row per way a document fails, and `baseline.json`, the headline figures, both written by the sweep and never by hand; `ledger-spec.tsv` and `baseline-spec.json`, the same under `reading: 'spec'`; and `accepted.tsv`, written by hand, the ledger rows that are not this package's defect, each with its reason. |
 | [`docs/design/`](docs/design/) | The design notes, the plan, the prototypes, and [`apidef-swap/`](docs/design/apidef-swap/README.md): apidef's side of T1, as two diffs. Working documents, outside the prose gate. |
 | [`ts/doc/`](ts/doc/), [`go/doc/`](go/doc/) | Per-runtime Diátaxis docs: `tutorial.md`, `guide.md`, `reference.md`, `concepts.md`. Gated, with the READMEs, by [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). |
 | [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions; [`corpus/`](tools/corpus/README.md), the corpus sweep; `apidef-gate.cjs`, the apidef gate, with its helpers in `apidef-gate/`; `apidef-preset.cjs`, the preset comparison, with its helpers in `apidef-preset/`. The last three are gates run by hand: see "Verify your work". |
@@ -422,6 +495,17 @@ file. CI does the linked model with the siblings `ci.yml` names.
   the base declares. `go/window_test.go`, `rs/tests/window_test.rs` and
   `ts/test/window.test.ts` hold it, and the Go and Rust tests give the
   constructor's steps a base that declares the window.
+- **A token's row and column are not exact under the yaml grammar.** A
+  value after `key: ` reports a column one or more too far, and a row is
+  not counted inside a quoted scalar that runs over a line. The offset,
+  `sI`, is right. So anything here that reports a place counts it from
+  the offset, as `located` does for the `lossy` report. An error's
+  `lineNumber` and `columnNumber`, and the `row` and `col` of
+  `provenance`, are the grammar's own and carry the same fault.
+- **A multi-line plain scalar that starts with a number is refused.**
+  `a: 12` with `more` on the next line, indented, is the string
+  `12 more` in YAML and `unexpected` here, under both readings. It is
+  the yaml grammar's.
 - **The plugin installs once per instance.** A second `use` changes
   nothing (a WeakSet in TypeScript, the `openapi-installed` decoration in
   Go and Rust): a second subscriber would count every YAML document
@@ -511,7 +595,8 @@ names in `ts/package.json`:
 
 ```bash
 node tools/corpus/sweep.cjs --fetch    # needs the network, 1.1 GB of disk and about half an hour
-node tools/apidef-gate.cjs ../apidef --patch docs/design/apidef-swap/1-error-wrapping.diff --patch docs/design/apidef-swap/2-swap.diff
+node tools/corpus/sweep.cjs --reading spec    # the same documents under the other reading, as long again
+node tools/apidef-gate.cjs ../apidef --patch docs/design/apidef-swap/1-error-wrapping.diff --patch docs/design/apidef-swap/2-swap.diff --patch docs/design/apidef-swap/3-source-checks.diff
 node tools/apidef-preset.cjs ../apidef --ref 3b24341 --corpus .corpus/src --rows test/resolve/apidef.tsv test/resolve/apidef-extra.tsv
 ```
 
@@ -529,7 +614,10 @@ node tools/apidef-preset.cjs ../apidef --ref 3b24341 --corpus .corpus/src --rows
   listed, with its reason, in `test/corpus/accepted.tsv`; the rows left
   are the open ones, and the plan's G1 is their reaching none.
   [`tools/corpus/README.md`](tools/corpus/README.md) has the options and
-  how to read a change.
+  how to read a change. `--reading spec` sweeps under the
+  specification's reading, into a run folder of its own, and is held to
+  its own pair, `ledger-spec.tsv` and `baseline-spec.json`, and to the
+  same `accepted.tsv`. A change to `parse` is swept under both.
 - **The apidef gate** runs `voxgig/apidef`'s own TypeScript suite on
   this checkout's build, and compares apidef's guide and model, for its
   test definitions and `test/petstore/`, with those of apidef as it was.
@@ -540,7 +628,7 @@ node tools/apidef-preset.cjs ../apidef --ref 3b24341 --corpus .corpus/src --rows
   it could not run, and 3 when apidef at that commit does not import
   this package, so that the run proved nothing about it. Until a branch
   of apidef imports this package, the gate applies apidef's side of T1
-  with `--patch`, once for each diff of
+  and T2 with `--patch`, once for each diff of
   [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), and
   nothing is allowed to fail. At apidef 3b24341 that is 2,477 of 2,478
   tests passing, none failing, one skipped as on apidef's `main`, and
@@ -680,9 +768,19 @@ The plugin declares four codes, with a message and a hint each, in
 | `openapi_version` | under strict, the root names no version this package reads (`{found}`) |
 | `openapi_duplicate_key` | under strict, a map holds one member name twice (`{key}`) |
 
-Every code is pinned by `ERROR:<code>` rows in `test/spec/raw-errors.tsv`
-and `raw-versions.tsv`, which also pin the engine's codes the reference
-pages name. A member name in a message is document content: it is
+Three more are the TypeScript package's alone until porting starts,
+pinned in `test/pending/parse-limits.tsv` and `ts/test/openapi.test.ts`.
+The first two are raised by default, with no option given:
+
+| Code | Raised by `parse` when |
+| --- | --- |
+| `openapi_alias_budget` | the YAML aliases of the text would copy it out past `aliasBudget` (`{size}`, `{budget}`) |
+| `openapi_size` | the text is past `maxBytes` and has to be read by the grammar (`{size}`, `{limit}`) |
+| `openapi_encoding` | under strict, the bytes are not well-formed in their encoding (`{encoding}`) |
+
+Each of the first four is pinned by `ERROR:<code>` rows in
+`test/spec/raw-errors.tsv` and `raw-versions.tsv`, which also pin the
+engine's codes the reference pages name. A member name in a message is document content: it is
 JSON-quoted and cut to 57 characters and `...` past 60. The descriptor
 lists the codes once admin regenerates it. **The code is the contract**,
 not the message: two runtimes that refuse the same text with different

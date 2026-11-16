@@ -32,8 +32,12 @@ a parse.
 
 `pending/` holds parse fixtures in the format of `spec/`, for what only
 the TypeScript package's `parse` gives yet: `parse-duplicates.tsv`, the
-`duplicates` option. They run in `ts/test/pending.test.ts`, under the
-same runner as `spec/`. "Where a new fixture goes", below, says why they
+`duplicates` option; `parse-reading.tsv`, what `reading: 'spec'` gives
+where it parts from the base reading; `parse-limits.tsv`, the alias
+budget and the size limit; and `parse-mark.tsv`, a byte-order mark under
+`strict`. A row there with no options pins a default that only the
+TypeScript package has yet. They run in `ts/test/pending.test.ts`, under
+the same runner as `spec/`. "Where a new fixture goes", below, says why they
 are not in `spec/`, and when they move there.
 
 `petstore/` holds one OpenAPI 3.1 description twice: `petstore.yaml` as
@@ -47,7 +51,9 @@ plain scalars free of commas: the comparison is the point of the pair.
 sweep found over real documents: `ledger.tsv`, one row per way a document
 fails, and `baseline.json`, the sweep's headline figures.
 `node tools/corpus/sweep.cjs --write` writes both from a finished run, so
-never edit either by hand. `accepted.tsv` is the one file there a person
+never edit either by hand. `ledger-spec.tsv` and `baseline-spec.json`
+are the same record under `reading: 'spec'`, written by the sweep with
+`--reading spec`. `accepted.tsv` is the one file there a person
 writes: the ledger rows that are not this package's defect, each with its
 reason. The documents themselves are fetched, not committed, and the
 sweep is run by hand. `npm test` runs `ts/test/corpus-tool.test.ts`,
@@ -67,7 +73,7 @@ section 5 of
 | The fixture pins | Where it goes | What runs it |
 |---|---|---|
 | a parse that every suite gives today | `spec/` | every runner |
-| a parse only the TypeScript package gives: a new option, a new code | `pending/`, in the format of `spec/` | `ts/test/pending.test.ts` |
+| a parse only the TypeScript package gives: a new option, a new code, a default no `spec/` row pins | `pending/`, in the format of `spec/` | `ts/test/pending.test.ts` |
 | what `resolve` gives | `resolve/` | `ts/test/resolve-spec.test.ts` |
 | the object model | `model/` | `ts/test/model.test.ts` |
 | a description in several files | `docs/<case>/` | a TypeScript runner |

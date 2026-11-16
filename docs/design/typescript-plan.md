@@ -243,7 +243,8 @@ and a byte-order mark under `strict`.
 
 One cost is this repository's to remove: `parse` keeps one parser for
 every call, and after a grammar parse of the GitHub description that
-parser holds about 840 MB until it is dropped.
+parser holds about 840 MB until it is dropped. T2 removed it
+(section 11).
 
 **Found in T1: W10.** A reference that reaches its own container while
 it is being folded is left in the tree as the raw map, and reported as
@@ -258,6 +259,24 @@ corpus: under the default options, 180 references in 23 documents, all
 versions of one Azure description. `ts/test/resolve.test.ts` pins it, so
 that its repair in `expr` shows here. `cycles: 'keep'` no longer meets
 it (section 11).
+
+**Found in T2: W11 and W12.** Both are the yaml grammar's. Neither
+changes a tree the corpus reads: W11 is about where a token is said to
+be, and no document of the corpus has the shape of W12.
+
+- W11. A token's row and column are not exact. After each `: ` on a line
+  the column is one too far, a line break inside a quoted scalar is not
+  counted as a row, and the token after a block scalar has column 0. The
+  offset into the text is right. So the line and column of an error, and
+  the `row` and `col` of this package's provenance, can be off, while
+  the tree is not affected. The `lossy` report of T2 counts its rows and
+  columns from the offset for that reason.
+- W12. A plain scalar that starts as a number and runs on to the next
+  line is not read as one scalar. `a: 12` with `more` indented on the
+  next line is the string `12 more` in YAML. In a block it is refused,
+  as `unexpected`. In a flow map, `{a: 12` then `more}`, it is read
+  silently as two members, `a` and `more`. A scalar that starts as a
+  word reads correctly.
 
 ### 2.4 What apidef needs (E9)
 
@@ -478,6 +497,9 @@ T5.
 4. CR-only line breaks; JSON text after a blank first line; a recursive
    alias; tab indentation refused.
 5. Memory per byte of YAML, with the engine.
+6. W11 and W12 of section 2.3, found in T2: a token's row and column,
+   and a plain scalar that starts as a number and runs on to the next
+   line.
 
 Acceptance: in the sweep, no valid description refused and no tree
 difference outside the two kinds section 1 allows.
@@ -660,8 +682,10 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 | yaml | an indented root mapping; a digit-led key with colons and a block value; `.5 x` | T2b; 7 documents | S to M each |
 | yaml | an explicit key with a lone-surrogate escape keeps its quotes | T2b; apidef's last workaround | S |
 | yaml | CR-only line breaks; JSON text after a blank first line; a recursive alias; tab indentation refused | T2b | S each |
+| yaml | W11: a token's row and column, counted as its offset is | T2b; every error's place | S |
+| yaml | W12: a plain scalar that starts as a number and runs on to the next line | T2b | S |
 | yaml, parser | memory per byte of YAML | T2b | M, after measurement |
-| apidef | the change of T1, which grows as T2 and T5 land. Until Decision 20 is taken it is the two diffs of `docs/design/apidef-swap/` | G2 | M |
+| apidef | the change of T1, which grows as T2 and T5 land. Until Decision 20 is taken it is the three diffs of `docs/design/apidef-swap/` | G2 | M |
 | aontu | at the release: pins that let `@tabnas/expr` 0.5.20 reach apidef, or apidef overrides them | T6 | S |
 | admin | at the release: the workflows and the descriptor restamped | T6 | S |
 
@@ -709,6 +733,86 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, while T2 was built:
+
+- T2 is built on the default the plan takes for each of Decisions 21 to
+  25. The maintainer has taken none of them yet, and section 6 still
+  shows them open. Each default is an option or a new function, apart
+  from the four below, so another decision changes little.
+- `reading` takes `'base'`, the default, and `'spec'`. The
+  specification's reading is the same parser with three engine options
+  changed and one subscriber to the lexer, which reads as text a number
+  token the YAML core schema does not read as a number, such as `0b11`,
+  `0X1F` and `Infinity`. It adds no token, rule or alternate, and a
+  parser reads one way, the way `make` built it. Against the reference
+  parser it is right for every plain scalar tried but the YAML 1.1
+  words, which wait for T2b.
+- The sweep runs under either reading, and each has a committed ledger
+  and baseline of its own, held to the one list of accepted rows.
+  Under `'base'` the record moved in one way: both Microsoft Graph
+  descriptions are refused for their size, where one had parsed under
+  the sweep's 4 GB and the other had run out of memory. That leaves 22
+  documents refused, 232 trees that differ, and none that dies. Under
+  `'spec'`, 10 are refused and 180 trees differ: the 12 refusals the
+  comment syntax caused are gone, no difference of the comment or
+  number kinds is left, and nothing new appears. What is left is T2b's:
+  seven refusals and 15 trees by the yaml grammar's defects and the
+  reference parser's own, and the YAML 1.1 words in 165 documents. That
+  is T2's acceptance.
+- The alias budget is apidef's scan, ported. The two agree on apidef's
+  own table of 13 texts, on 200,000 generated texts and on every
+  document of the corpus, where 58 have an alias that copies something
+  and none is past the budget. The 467-byte document is refused in 2
+  milliseconds. The budget holds only what aliases add: a text in which
+  no alias copies anything is never refused for it.
+- The size limit is 16 MiB by default, and `maxBytes` sets it. Where it
+  was measured, Node gave a process a heap of 2,240 MB by default. A
+  description of 15.5 MiB, made from two of the corpus, took 1.4 GB of
+  process memory there, and both Microsoft Graph descriptions exhausted
+  it. JSON text that `JSON.parse` reads has no limit.
+- A shared parser held 942 MB after GitHub's YAML description. It holds
+  30 MB now.
+- The `lossy` report is gathered as the grammar closes each number, from
+  the token the number opened on, so the tree is the same with a report
+  as without. In the corpus, 34 documents write 516 numbers the tree
+  does not hold exactly, under either reading: identifiers and amounts
+  in examples, and the limits of a 64-bit integer.
+- Of the five leniencies of Decision 25, T2 takes the two that are about
+  reading a text: an empty document after the description, under
+  `reading: 'spec'`, and a byte-order mark under `strict`. The other
+  three are about the object model, and are T3's.
+- Four defaults moved, for a caller who passes no new option. A text
+  whose aliases would copy it out past the budget is refused, where it
+  was copied in full. A text of more than 16 MiB that the grammar has to
+  read is refused, where it was read if memory allowed. A byte-order
+  mark is passed over under `strict`, where it was refused. The
+  `details.kind` of `openapi_root` is `empty` for a text of white space
+  and `#` comments alone, where it was `null`. No row of `test/spec/`
+  pins any of them, and each is pinned in `test/pending/` or in the
+  package's own tests. The build before T2 and this one were held to
+  each other on 468 parses, and differ in those ways and no other.
+- What `parse` does to a text before the grammar is one pass over it,
+  or a counted amount of work. That was not in the plan, and three of
+  T2's own checks broke it as first written. apidef's pattern for an
+  empty source takes the square of a run of blank lines, 17 seconds for
+  160,000 line breaks, so the test is made in one pass. The alias scan
+  takes the square of anchors nested by the thousand, so its repeated
+  work is counted, and a text past 32 steps for each byte is refused.
+  No document of the corpus takes one step for each byte. A refused
+  text is not handed to the grammar, which takes three times a text's
+  size in memory before its first rule runs. apidef's check still has
+  the pattern on `main`, for OpenAPI and GraphQL sources alike.
+- apidef's side grew by a third diff. apidef's check for an empty
+  source, its alias limit, its scan and its repair of lone surrogates
+  go, and this package's stand in. `validateSource` is no longer called
+  for an OpenAPI source. The function stays, because apidef's GraphQL
+  reader calls it. Two sources with nothing in them now read `source is
+  empty` where they read `must be an object`. The gate passes with the
+  three diffs and nothing allowed to fail: 2,477 of 2,478 tests, one
+  skipped as on `main`, and all 57 definitions byte-identical.
+- W11 and W12 are new (section 2.3). Both are the yaml grammar's, and
+  T2b lists them.
 
 **Since acceptance**, while T1 was built:
 
