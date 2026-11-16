@@ -645,16 +645,24 @@ describe('the text', () => {
   })
 
   test('wellFormed merges trees, and keeps the later of two values that are not both trees', () => {
-    // Two names the repair makes one, the later with a cycle in it. A
-    // merge of it has no end, so the later value is kept, cycle and all.
+    // A map with two names that the repair makes one. The first ends in
+    // half of a surrogate pair and the second in U+FFFD, which is what
+    // the repair reads that half as. The half is made at run time: a tool
+    // that reads this file as text takes the two names for one already.
+    const half = String.fromCharCode(0xd800)
+    const colliding = (first: unknown, second: unknown) => ({ ['k' + half]: first, ['k\ufffd']: second })
+    assert.deepEqual(Object.keys(colliding(1, 2)), ['k\ud800', 'k\ufffd'])
+
+    // The later value has a cycle in it. A merge of it has no end, so the
+    // later value is kept, cycle and all.
     const loop: any = { x: 1 }
     loop.self = loop
-    const cyclic: any = wellFormed({ ['k\ud800']: { y: 2 }, ['k\ufffd']: loop }, { duplicates: 'merge' })
+    const cyclic: any = wellFormed(colliding({ y: 2 }, loop), { duplicates: 'merge' })
     assert.deepEqual(Object.keys(cyclic), ['k\ufffd'])
     assert.deepEqual(Object.keys(cyclic['k\ufffd']), ['x', 'self'])
     assert.equal(cyclic['k\ufffd'].self, cyclic['k\ufffd'])
     // The earlier value with the cycle, and the later a tree: the same.
-    const other: any = wellFormed({ ['k\ud800']: loop, ['k\ufffd']: { y: 2 } }, { duplicates: 'merge' })
+    const other: any = wellFormed(colliding(loop, { y: 2 }), { duplicates: 'merge' })
     assert.deepEqual(C(other), { 'k\ufffd': { y: 2 } })
 
     // A value that shares a part is not a tree either. Thirty levels,
@@ -663,7 +671,7 @@ describe('the text', () => {
     let shared: any = { leaf: '\ud800' }
     for (let i = 0; i < 30; i++) shared = { l: shared, r: shared }
     const started = Date.now()
-    const out: any = wellFormed({ ['k\ud800']: { y: 2 }, ['k\ufffd']: shared }, { duplicates: 'merge' })
+    const out: any = wellFormed(colliding({ y: 2 }, shared), { duplicates: 'merge' })
     assert.ok(Date.now() - started < 5000)
     assert.equal(out['k\ufffd'].l, out['k\ufffd'].r)
     let node = out['k\ufffd']
@@ -671,14 +679,10 @@ describe('the text', () => {
     assert.deepEqual(C(node), { leaf: '\ufffd' })
 
     // Two trees merge, to any depth, as `parse` merges a repeated name.
-    const trees = wellFormed({ ['k\ud800']: { a: { b: 1 }, l: [1, 2] }, ['k\ufffd']: { a: { c: 2 }, l: [9] } }, { duplicates: 'merge' })
+    const trees = wellFormed(colliding({ a: { b: 1 }, l: [1, 2] }, { a: { c: 2 }, l: [9] }), { duplicates: 'merge' })
     assert.deepEqual(C(trees), { 'k\ufffd': { a: { b: 1, c: 2 }, l: [9, 2] } })
-    assert.deepEqual(
-      C(trees),
-      C(parse('{"k":{"a":{"b":1},"l":[1,2]},"k":{"a":{"c":2},"l":[9]}}', { duplicates: 'merge' })).k
-        ? { 'k\ufffd': C(parse('{"k":{"a":{"b":1},"l":[1,2]},"k":{"a":{"c":2},"l":[9]}}', { duplicates: 'merge' })).k }
-        : {},
-    )
+    const twice = parse('{"k":{"a":{"b":1},"l":[1,2]},"k":{"a":{"c":2},"l":[9]}}', { duplicates: 'merge' })
+    assert.deepEqual(C(trees), { 'k\ufffd': C(twice).k })
   })
 
   test('a deep tree does not exhaust the stack in wellFormed', () => {
