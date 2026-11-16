@@ -1,0 +1,39 @@
+input	expected	opts
+# What a repeated member name gives under `duplicates`. Only the
+# TypeScript package has this option yet, so these rows are here and
+# not in ../spec/ (see ../AGENTS.md, "Where a new fixture goes").
+#
+# 'merge' is the base grammars' own merge: two maps, member by member.
+a:\n  x: 1\na:\n  y: 2\n	{"a":{"x":1,"y":2}}	{"duplicates":"merge"}
+{"a":{"x":1},"a":{"y":2}}	{"a":{"x":1,"y":2}}	{"duplicates":"merge"}
+{a: {x: 1}, a: {y: 2}}	{"a":{"x":1,"y":2}}	{"duplicates":"merge"}
+# It goes all the way down, and a third value merges into the first two.
+a:\n  m:\n    x: 1\na:\n  m:\n    y: 2\n	{"a":{"m":{"x":1,"y":2}}}	{"duplicates":"merge"}
+a: {x: 1}\na: {y: 2}\na: {x: 3}\n	{"a":{"x":3,"y":2}}	{"duplicates":"merge"}
+# The case the option exists for: the operations of one path, written twice.
+openapi: 3.0.0\npaths:\n  /a:\n    get: {responses: {}}\n  /a:\n    put: {responses: {}}\n	{"openapi":"3.0.0","paths":{"/a":{"get":{"responses":{}},"put":{"responses":{}}}}}	{"duplicates":"merge"}
+# Two lists merge index by index.
+a: [1, 2, 3]\na: [9]\n	{"a":[9,2,3]}	{"duplicates":"merge"}
+a: [{x: 1}, {y: 2}]\na: [{z: 3}]\n	{"a":[{"x":1,"z":3},{"y":2}]}	{"duplicates":"merge"}
+# Where the two are not both maps or both lists, the later value wins,
+# a null included.
+a: 1\na:\n  y: 2\n	{"a":{"y":2}}	{"duplicates":"merge"}
+a:\n  y: 2\na: 1\n	{"a":1}	{"duplicates":"merge"}
+a:\n  y: 2\na:\n	{"a":null}	{"duplicates":"merge"}
+a:\na:\n  y: 2\n	{"a":{"y":2}}	{"duplicates":"merge"}
+a: [1]\na: {y: 2}\n	{"a":{"y":2}}	{"duplicates":"merge"}
+a: 1\na: 2\n	{"a":2}	{"duplicates":"merge"}
+# The engine's merge leaves three names out of what it merges in:
+# __proto__, constructor and prototype. A member so named in the first
+# value stays.
+{"a":{"x":1},"a":{"constructor":2,"prototype":3,"__proto__":{"p":1},"k":4}}	{"a":{"x":1,"k":4}}	{"duplicates":"merge"}
+{"a":{"constructor":2,"__proto__":{"p":1}},"a":{"k":4}}	{"a":{"constructor":2,"__proto__":{"p":1},"k":4}}	{"duplicates":"merge"}
+# JSON text is read by the grammar under 'merge', whatever `fast` says:
+# JSON.parse would keep the last value.
+{"a":{"x":1},"a":{"y":2}}	{"a":{"x":1,"y":2}}	{"duplicates":"merge","fast":true}
+# 'last' is the default, spelled out: the last value, whole, on both paths.
+a:\n  x: 1\na:\n  y: 2\n	{"a":{"y":2}}	{"duplicates":"last"}
+{"a":{"x":1},"a":{"y":2}}	{"a":{"y":2}}	{"duplicates":"last"}
+{"a":{"x":1},"a":{"y":2}}	{"a":{"y":2}}	{"duplicates":"last","fast":false}
+# Under strict a repeated name is refused, whatever `duplicates` says.
+{"openapi":"3.1.0","a":{"x":1},"a":{"y":2}}	ERROR:openapi_duplicate_key	{"duplicates":"merge","strict":true}

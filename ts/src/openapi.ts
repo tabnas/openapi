@@ -8,9 +8,11 @@
 // strict json grammar alone. Raw mode, the document exactly as written, is
 // the engine's own parse; `parse` adds the checks the engine cannot make
 // (the root, a stream of several documents, and under `strict` the version
-// and repeated member names) and a fast path for JSON text. Resolution, a
-// derived tree with `$ref` resolved, is an OpenAPI vocabulary over
-// @tabnas/expr's fold. The plan is docs/design/implementation-plan.md.
+// and repeated member names), the choice of what a repeated member name
+// gives, and a fast path for JSON text. Resolution, a derived tree with
+// `$ref` resolved, is an OpenAPI vocabulary over @tabnas/expr's fold. The
+// plans are docs/design/implementation-plan.md and, for what remains,
+// docs/design/typescript-plan.md.
 
 import { Tabnas, TabnasError, Plugin } from '@tabnas/parser'
 import type { Context, Rule, RuleDone } from '@tabnas/parser'
@@ -58,6 +60,8 @@ const HINTS: Record<string, string> = {
 // the plugin raises nothing in it.
 type ParseState = {
   strict: boolean
+  // What a repeated member name gives in this parse.
+  duplicates: Duplicates
   // The text was empty. The engine returns at once for an empty text and
   // runs no rule, so `parse` hands it a single line break instead, which
   // reads to an empty document, and this says what the reader wrote.
@@ -69,9 +73,10 @@ type ParseState = {
 const INSTALLED = new WeakSet<Tabnas>()
 
 // The plugin. It installs after the base grammar, adds no rule, and
-// records nothing on the parsed tree. It declares its error codes, makes
-// a repeated member name keep its last value, as JSON.parse does, and
-// subscribes to rule completion for the checks `parse` asks for.
+// records nothing on the parsed tree. It declares its error codes, decides
+// what a repeated member name gives (its last value, as JSON.parse does,
+// unless the parse asks for the base grammars' merge), and subscribes to
+// rule completion for the checks `parse` asks for.
 const OpenApi: Plugin = function OpenApi(tn: Tabnas, _options: OpenApiOptions) {
   // Once per instance: a second subscriber would count every YAML
   // document twice and refuse a single document as a stream.
@@ -84,8 +89,10 @@ const OpenApi: Plugin = function OpenApi(tn: Tabnas, _options: OpenApiOptions) {
     hint: HINTS,
     map: {
       // The last value of a repeated name wins, whole: the base grammars
-      // would otherwise merge two maps given under one name.
-      merge: (_prev: any, curr: any) => curr,
+      // would otherwise merge two maps given under one name. A parse that
+      // asks for that merge gets it, as the grammars themselves make it.
+      merge: (prev: any, curr: any, _rule: Rule, ctx: Context) =>
+        'merge' === ctx?.meta?.openapi?.duplicates ? mergeValues(prev, curr) : curr,
     },
   })
   tn.sub({ ruleDone: check })
@@ -173,6 +180,21 @@ function check(rule: Rule, ctx: Context, done: RuleDone): void {
   }
 }
 
+// Two values given under one member name, merged as the base grammars
+// merge them when no plugin says otherwise: the engine's `deep`, which
+// jsonic's `map.extend` applies. Two maps merge member by member and two
+// lists index by index, the later value winning wherever the two are not
+// both maps or both lists. The engine builds what it merges in as plain
+// objects, so every map of the result is rebuilt without a prototype, as
+// every other map of a raw tree is.
+function mergeValues(prev: any, curr: any): any {
+  const out = Tabnas.util.deep(prev, curr)
+  if (Array.isArray(out)) {
+    return nullPrototypes({ list: out }).list
+  }
+  return isMap(out) ? nullPrototypes(out) : out
+}
+
 // The token to place an error at: the one the rule opened on, else the
 // one in hand.
 function token(rule: Rule, ctx: Context) {
@@ -230,6 +252,9 @@ function make(options: MakeOptions = {}): Tabnas {
   return tn
 }
 
+// What a member name given twice in one map gives.
+type Duplicates = 'last' | 'merge'
+
 // Options for `parse`.
 type ParseOptions = {
   // Read strict JSON alone, and refuse an unknown version and a repeated
@@ -241,8 +266,17 @@ type ParseOptions = {
   // map, so every error still comes from the grammar. 'auto', the
   // default, takes the fast path when the text opens with `{`; true takes
   // it whatever the text opens with; false never takes it. Under `strict`
-  // the grammar always runs.
+  // and under `duplicates: 'merge'` the grammar always runs.
   fast?: boolean | 'auto'
+
+  // What a repeated member name gives. 'last', the default, keeps the
+  // last value, whole, as JSON.parse does. 'merge' merges the values as
+  // the base grammars do when left to themselves: two maps member by
+  // member, two lists index by index, and otherwise the later value. A
+  // later member named `__proto__`, `constructor` or `prototype` is not
+  // merged in: the engine's merge leaves those names out. Under `strict` a
+  // repeated name is refused whatever this says.
+  duplicates?: Duplicates
 
   // The parser to use, from `make`. Default: one shared parser per
   // setting of `strict`.
@@ -260,6 +294,10 @@ function parse(text: string, options: ParseOptions = {}): any {
     throw new TypeError('parse: the text must be a string')
   }
   const strict = true === options.strict
+  const duplicates = options.duplicates ?? 'last'
+  if ('last' !== duplicates && 'merge' !== duplicates) {
+    throw new TypeError('parse: duplicates must be last or merge, not ' + quoted(duplicates))
+  }
   const tn =
     options.instance ??
     (strict
@@ -269,8 +307,10 @@ function parse(text: string, options: ParseOptions = {}): any {
     throw new Error('parse: the instance has no OpenApi plugin; build it with make()')
   }
 
+  // JSON.parse keeps the last value of a repeated name, so it cannot stand
+  // in for a parse that merges them.
   const fast = options.fast ?? 'auto'
-  if (!strict && false !== fast && (true === fast || OPENS_WITH_BRACE.test(text))) {
+  if (!strict && 'merge' !== duplicates && false !== fast && (true === fast || OPENS_WITH_BRACE.test(text))) {
     const value = fastParse(text)
     if (undefined !== value) {
       return value
@@ -279,7 +319,7 @@ function parse(text: string, options: ParseOptions = {}): any {
 
   // Strict JSON refuses an empty text itself, as `unexpected`.
   const empty = '' === text && !strict
-  const state: ParseState = { strict, empty, docs: 0 }
+  const state: ParseState = { strict, duplicates, empty, docs: 0 }
   return tn.parse(empty ? '\n' : text, { openapi: state })
 }
 
@@ -361,4 +401,4 @@ export type {
 } from './resolve'
 export type { Connection, ConnectionKind } from './connections'
 
-export type { OpenApiOptions, MakeOptions, ParseOptions, VersionInfo }
+export type { Duplicates, OpenApiOptions, MakeOptions, ParseOptions, VersionInfo }

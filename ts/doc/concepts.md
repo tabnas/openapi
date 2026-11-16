@@ -79,6 +79,12 @@ whole, at the place where the name first appeared. Under `strict` a
 repeated name is an error, since a description meant for other tools
 should not depend on which one reads it.
 
+The merge is still there for a caller that asks for it. A tool whose
+descriptions were written for the merging reader passes
+`duplicates: 'merge'`, and gets the merge the grammars make by
+themselves. That is a choice made for one parse. The default stays the
+last value.
+
 ## Resolution is a separate pass
 
 Resolving a reference means replacing it with what it names. That cannot
@@ -159,10 +165,13 @@ who may call the operation.
 
 `@voxgig/apidef` resolves references with one rule for every site: the
 target's members with the site's own laid over them, and `x-ref` beside
-them, in every position, data included. `compat: 'apidef'` is that rule
-as a set of options. A tool that moves from one resolver to the other can
-keep its output as it was, then turn the options back to the
-specification's reading one at a time, measuring each step.
+them, in every position, data included. It reads a reference one way
+too, as a pointer from the root of the document, so an anchor or a URI
+names nothing. `compat: 'apidef'` is that resolver as a set of options,
+and it gives the same tree, member for member, with the same objects
+shared. A tool that moves from one resolver to the other can keep its
+output as it was, then turn the options back to the specification's
+reading one at a time, measuring each step.
 
 ## YAML decides types
 

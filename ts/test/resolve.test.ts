@@ -173,6 +173,271 @@ describe('resolve', () => {
     assert.equal(node['x-ref'], undefined)
   })
 
+  // What test/resolve/apidef-extra.tsv cannot say: a fixture compares
+  // without member order and through JSON, which a graph does not survive.
+  // tools/apidef-preset.cjs holds the same shapes, and thousands more, to
+  // apidef's own resolver.
+  const S = '#/components/schemas/'
+  const schemasOf = (schemas: Record<string, unknown>, options: object = { compat: 'apidef' }) => {
+    const src = JSON.stringify({ openapi: '3.0.0', info: { title: 't', version: '1' }, paths: {}, components: { schemas } })
+    return resolve(parse(src), options).tree.components.schemas
+  }
+
+  test('compat apidef orders a site\'s members as resolving in place leaves them', () => {
+    // X names a site written before it, which has been resolved by then
+    // and carries its own x-ref: the new x-ref takes that place.
+    const before = schemasOf({ A: { $ref: S + 'C', description: 'a' }, C: { type: 'string' }, X: { $ref: S + 'A', title: 't' } })
+    assert.equal(JSON.stringify(before.X), '{"type":"string","description":"a","x-ref":"#/components/schemas/A","title":"t"}')
+    // X names a site written after it, which is read through to what it
+    // names and carries no x-ref yet: the x-ref comes last.
+    const after = schemasOf({ X: { $ref: S + 'A', title: 't' }, A: { $ref: S + 'C', description: 'a' }, C: { type: 'string' } })
+    assert.equal(JSON.stringify(after.X), '{"type":"string","description":"a","title":"t","x-ref":"#/components/schemas/A"}')
+    // The target's members come first, the site's own winning in place,
+    // then the ones the target lacks; an x-ref the document wrote keeps its
+    // place and takes the reference.
+    const laid = schemasOf({
+      T: { type: 'string', description: 'theirs', 'x-ref': 'written', z: 1 },
+      A: { description: 'mine', $ref: S + 'T', a: 0 },
+    })
+    assert.equal(JSON.stringify(laid.A), '{"type":"string","description":"mine","x-ref":"#/components/schemas/T","z":1,"a":0}')
+  })
+
+  test('compat apidef resolves a reference that closes a cycle where it stands, whatever names it first', () => {
+    // A is written first and names the reference q, which closes a cycle
+    // through its own container.
+    const raw = { A: { $ref: S + 'C/properties/q' }, C: { properties: { q: { $ref: S + 'C' } } } }
+    const { A, C: c } = schemasOf(raw)
+    const q = c.properties.q
+    assert.equal(q['x-ref'], S + 'C')
+    assert.equal(q.properties, c.properties)
+    assert.equal(q.properties.q, q)
+    assert.equal(A.properties, c.properties)
+    assert.equal(A['x-ref'], S + 'C/properties/q')
+    // The same with C written first.
+    const turned = schemasOf({ C: raw.C, A: raw.A })
+    assert.equal(turned.C.properties.q.properties.q, turned.C.properties.q)
+    assert.equal(turned.A.properties, turned.C.properties)
+  })
+
+  test('cycles keep never changes the raw tree, and leaves no reference as written inside a cycle', () => {
+    // X is written first and names a container inside P, which holds a
+    // reference back to P.
+    const src = JSON.stringify({
+      openapi: '3.0.0',
+      components: { schemas: { X: { $ref: S + 'P/properties/t' }, P: { properties: { t: { properties: { up: { $ref: S + 'P' } } } } } } },
+    })
+    for (const options of [{ cycles: 'keep' as const }, { compat: 'apidef' as const }]) {
+      const raw = parse(src)
+      const out = resolve(raw, options)
+      assert.equal(JSON.stringify(raw), src)
+      const { X, P } = out.tree.components.schemas
+      const up = P.properties.t.properties.up
+      assert.equal(up.$ref, undefined)
+      assert.equal(up.properties, P.properties)
+      assert.equal(X.properties.up, up)
+      assert.deepEqual(out.unresolved, [])
+      assert.deepEqual(out.cuts, [])
+      assert.deepEqual(out.provenance.map((p) => p.status), ['resolved', 'resolved'])
+    }
+  })
+
+  test('cycles cut: a reference that reaches its own container is left as the raw map (the fold\'s defect, W10)', () => {
+    // This pins a defect of @tabnas/expr's fold, not a reading. A is
+    // written first and names the reference q. The fold follows q to its
+    // container C, which holds q, and q is still being folded: the fold
+    // gives C the map as written for it. So q stays in the tree as the
+    // raw map, though it is reported resolved and nothing is cut. With C
+    // written first, q is cut and A with it, which is the right answer
+    // for both orders. A repair in expr turns this test red: then make
+    // both orders expect the second.
+    const A = { $ref: S + 'C/properties/q' }
+    const C_ = { properties: { q: { $ref: S + 'C' } } }
+    const run = (schemas: object) => {
+      const raw = parse(JSON.stringify({ openapi: '3.0.0', components: { schemas } }))
+      return { raw, out: resolve(raw) }
+    }
+    const first = run({ A, C: C_ })
+    assert.equal(first.out.tree.components.schemas.C.properties.q, first.raw.components.schemas.C.properties.q)
+    assert.deepEqual(first.out.provenance.map((p) => p.status), ['resolved', 'resolved'])
+    assert.deepEqual(first.out.cuts, [])
+
+    const second = run({ C: C_, A })
+    assert.deepEqual(second.out.cuts.map((c) => c.at.slice(S.length - 1)), ['C/properties/q', 'A'])
+    assert.notEqual(second.out.tree.components.schemas.C.properties.q, second.raw.components.schemas.C.properties.q)
+  })
+
+  test('cycles keep reports a site inside members that its own site dropped', () => {
+    // In 3.0 the members beside a schema's $ref are ignored, so the
+    // reference inside them is in no value of the tree. It is a site all
+    // the same, and is reported as what it is.
+    const src = JSON.stringify({
+      openapi: '3.0.0',
+      components: { schemas: { P: { $ref: S + 'T', properties: { x: { $ref: S + 'Missing' } } }, T: { type: 'string' } } },
+    })
+    for (const cycles of ['cut', 'keep'] as const) {
+      const out = resolve(parse(src), { cycles })
+      assert.deepEqual(C(out.tree.components.schemas.P), { type: 'string' })
+      assert.deepEqual(
+        out.provenance.map((p) => [p.at.slice(S.length - 1), p.status]),
+        [['P', 'resolved'], ['P/properties/x', 'unresolved']],
+      )
+      assert.deepEqual(out.unresolved.map((u) => u.why), ['not-found'])
+    }
+  })
+
+  test('cycles keep starts every pointer at the root as written, a root that is a site included', () => {
+    // Under slots all a $ref in the root makes the root a site. A pointer
+    // is still read from the root's own map, as under cycles cut.
+    const src = JSON.stringify({
+      openapi: '3.0.0',
+      paths: {},
+      components: { schemas: { A: { $ref: S + 'B' }, B: { type: 'string' } } },
+      $ref: S + 'Nope',
+    })
+    for (const cycles of ['cut', 'keep'] as const) {
+      const out = resolve(parse(src), { slots: 'all', cycles })
+      assert.deepEqual(C(out.tree.components.schemas.A), { type: 'string' })
+      assert.deepEqual(out.unresolved.map((u) => [u.at, u.why]), [['', 'not-found']])
+      assert.deepEqual(out.cuts, [])
+    }
+    // And a root that names something inside itself holds it.
+    const named = src.replace('Nope', 'B')
+    for (const cycles of ['cut', 'keep'] as const) {
+      const out = resolve(parse(named), { slots: 'all', cycles })
+      assert.deepEqual(C(out.tree), { type: 'string' })
+      assert.deepEqual(out.provenance.map((p) => p.status), ['resolved', 'resolved'])
+    }
+  })
+
+  test('cycles keep reads on past a cut reference only to say that nothing is there', () => {
+    // A and B name each other. The first pointer goes through A to a
+    // member A has as written, and is cut with it. The second goes
+    // through A to nothing.
+    const src = JSON.stringify({
+      openapi: '3.0.0',
+      components: {
+        schemas: {
+          A: { $ref: S + 'B', properties: { x: { type: 'integer' } } },
+          B: { $ref: S + 'A' },
+          there: { $ref: S + 'A/properties/x' },
+          gone: { $ref: S + 'A/properties/y' },
+        },
+      },
+    })
+    const out = resolve(parse(src), { cycles: 'keep' })
+    assert.deepEqual(out.cuts.map((c) => c.at.slice(S.length - 1)), ['A', 'B', 'there'])
+    assert.deepEqual(out.unresolved.map((u) => [u.at.slice(S.length - 1), u.why]), [['gone', 'not-found']])
+  })
+
+  test('cycles keep lists its reports in document order', () => {
+    // Under 'cut' a target is entered at its first reference, so B comes
+    // before the site written between A and it. Under 'keep' no target is
+    // entered early.
+    const src = JSON.stringify({
+      openapi: '3.0.0',
+      components: { schemas: { A: { $ref: S + 'B' }, M: { $ref: S + 'Nope' }, B: { $ref: S + 'Gone' } } },
+    })
+    const at = (options: object) => resolve(parse(src), options).unresolved.map((u) => u.at.slice(S.length - 1))
+    assert.deepEqual(at({}), ['A', 'B', 'M'])
+    assert.deepEqual(at({ cycles: 'keep' }), ['A', 'M', 'B'])
+  })
+
+  test('cycles keep follows a chain of references as deep as maxDepth allows', () => {
+    const chain = (n: number) => {
+      const schemas: Record<string, unknown> = { ['k' + n]: { type: 'string' } }
+      for (let i = 0; i < n; i++) schemas['k' + i] = { $ref: S + 'k' + (i + 1) }
+      return JSON.stringify({ openapi: '3.0.0', components: { schemas } })
+    }
+    const out = resolve(parse(chain(300)), { cycles: 'keep' })
+    assert.deepEqual(C(out.tree.components.schemas.k0), { type: 'string' })
+    assert.throws(
+      () => resolve(parse(chain(300)), { cycles: 'keep', maxDepth: 100 }),
+      (e: any) => 'FoldError' === e.name && 'fold_depth' === e.code && '/components/schemas/k100' === e.at,
+    )
+  })
+
+  test('refs pointer reads a reference as a pointer into the document and nothing else', () => {
+    const schemas = {
+      T: { $anchor: 'tee', type: 'string' },
+      byAnchor: { $ref: '#tee' },
+      byPointer: { $ref: S + 'T' },
+      encoded: { $ref: S + 'a%20b' },
+      'a b': { type: 'number' },
+    }
+    const src = JSON.stringify({ openapi: '3.1.0', components: { schemas } })
+    const uri = resolve(parse(src))
+    assert.deepEqual(C(uri.tree.components.schemas.byAnchor), { $anchor: 'tee', type: 'string' })
+    assert.deepEqual(C(uri.tree.components.schemas.encoded), { type: 'number' })
+    const pointer = resolve(parse(src), { refs: 'pointer' })
+    assert.deepEqual(C(pointer.tree.components.schemas.byPointer), { $anchor: 'tee', type: 'string' })
+    assert.deepEqual(
+      pointer.unresolved.map((u) => [u.at.slice(S.length - 1), u.why]),
+      [['byAnchor', 'bad-fragment'], ['encoded', 'not-found']],
+    )
+    assert.throws(() => resolve(parse(src), { refs: 'fragment' as any }), TypeError)
+  })
+
+  test('refs pointer ends a walk at a reference left as written, where refs uri reads on', () => {
+    const src = JSON.stringify({
+      openapi: '3.0.0',
+      components: {
+        schemas: {
+          // M names another document, and has a member of its own.
+          M: { $ref: 'other.yaml#/M', properties: { x: { type: 'integer' } } },
+          viaM: { $ref: S + 'M/properties/x' },
+          // A and B name each other, and A has a member of its own.
+          A: { $ref: S + 'B', properties: { x: { type: 'integer' } } },
+          B: { $ref: S + 'A' },
+          viaA: { $ref: S + 'A/properties/x' },
+        },
+      },
+    })
+    const short = (rows: { at: string }[]) => rows.map((r) => r.at.slice(S.length - 1))
+    for (const cycles of ['cut', 'keep'] as const) {
+      // A reference left as written for a reason is read through as
+      // written under 'uri', and ends the walk under 'pointer'.
+      const uri = resolve(parse(src), { cycles })
+      assert.deepEqual(C(uri.tree.components.schemas.viaM), { type: 'integer' })
+      assert.deepEqual(uri.unresolved.map((u) => [u.at.slice(S.length - 1), u.why]), [['M', 'external']])
+      const pointer = resolve(parse(src), { refs: 'pointer', cycles })
+      assert.deepEqual(C(pointer.tree.components.schemas.viaM), { $ref: S + 'M/properties/x' })
+      assert.deepEqual(
+        pointer.unresolved.map((u) => [u.at.slice(S.length - 1), u.why]),
+        [['M', 'external'], ['viaM', 'not-found']],
+      )
+      // A walk through a reference that was cut is cut with it, under both.
+      for (const out of [uri, pointer]) {
+        assert.deepEqual(short(out.cuts), ['A', 'B', 'viaA'])
+        assert.deepEqual(C(out.tree.components.schemas.viaA), { $ref: S + 'A/properties/x' })
+      }
+    }
+  })
+
+  test('refs pointer ends a walk at a reference reached through another reference\'s value', () => {
+    // viaA goes through A, which resolves to E, to the member p of E,
+    // which names another document, and on to a member p has as written.
+    const src = JSON.stringify({
+      openapi: '3.0.0',
+      components: {
+        schemas: {
+          A: { $ref: S + 'E' },
+          E: { properties: { p: { $ref: 'other.yaml#/x', properties: { z: { type: 'integer' } } } } },
+          viaA: { $ref: S + 'A/properties/p/properties/z' },
+        },
+      },
+    })
+    for (const cycles of ['cut', 'keep'] as const) {
+      const uri = resolve(parse(src), { cycles })
+      assert.deepEqual(C(uri.tree.components.schemas.viaA), { type: 'integer' })
+      const pointer = resolve(parse(src), { refs: 'pointer', cycles })
+      assert.deepEqual(C(pointer.tree.components.schemas.viaA), { $ref: S + 'A/properties/p/properties/z' })
+      assert.deepEqual(
+        pointer.unresolved.map((u) => [u.at.slice(S.length - 1), u.why]),
+        [['E/properties/p', 'external'], ['viaA', 'not-found']],
+      )
+    }
+  })
+
   test('options outside their choices are refused', () => {
     assert.throws(() => resolve({}, { sharing: 'all' as any }), TypeError)
     assert.throws(() => resolve({}, { compat: 'nope' as any }), TypeError)

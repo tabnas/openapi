@@ -186,6 +186,46 @@ describe('raw mode', () => {
     assert.deepEqual(C(parse('a: 1', { instance: tn, fast: false })), { a: 1 })
   })
 
+  // What test/pending/parse-duplicates.tsv cannot say: a fixture compares
+  // after a JSON round trip, which hides a prototype.
+  test('a merged tree has no prototype anywhere, and pollutes none', () => {
+    const merge = { duplicates: 'merge' as const }
+    const bare = (v: any): boolean =>
+      null == v || 'object' !== typeof v
+        ? true
+        : Array.isArray(v)
+          ? v.every(bare)
+          : null === Object.getPrototypeOf(v) && Object.values(v).every(bare)
+    for (const text of [
+      'a:\n  x: {p: 1}\na:\n  y: {q: 2}\n',
+      '{"a":{"x":{"p":1}},"a":{"y":{"q":[{"r":2}]}}}',
+      'a: 1\na:\n  y: {q: 2}\n',
+      'a: [{x: 1}]\na: [{y: 2}, {z: 3}]\n',
+    ]) {
+      assert.ok(bare(parse(text, merge)), 'a map with a prototype in ' + JSON.stringify(text))
+    }
+    const tree = parse('{"a":{"x":1},"a":{"__proto__":{"polluted":true},"constructor":{"polluted":true}}}', merge)
+    assert.deepEqual(C(tree), { a: { x: 1 } })
+    assert.equal(({} as any).polluted, undefined)
+  })
+
+  test('duplicates takes last or merge, and a parse of the engine alone keeps the last', () => {
+    assert.throws(() => parse('a: 1', { duplicates: 'first' as any }), /duplicates must be last or merge, not "first"/)
+    assert.deepEqual(C(parse('a: {x: 1}\na: {y: 2}', { duplicates: undefined })), { a: { y: 2 } })
+    // The option is `parse`'s: the engine's own parse of the same instance
+    // is not given it, and keeps the last value.
+    assert.deepEqual(C(make().parse('a: {x: 1}\na: {y: 2}')), { a: { y: 2 } })
+  })
+
+  test('a given instance merges when the parse asks, and one parse does not reach the next', () => {
+    const tn = make()
+    const text = 'a: {x: 1}\na: {y: 2}'
+    assert.deepEqual(C(parse(text, { instance: tn, duplicates: 'merge' })), { a: { x: 1, y: 2 } })
+    assert.deepEqual(C(parse(text, { instance: tn })), { a: { y: 2 } })
+    assert.deepEqual(C(parse(text, { duplicates: 'merge' })), { a: { x: 1, y: 2 } })
+    assert.deepEqual(C(parse(text)), { a: { y: 2 } })
+  })
+
   test('version reads openapi and swagger leniently', () => {
     const cases: [string, string, string | null][] = [
       ['openapi: 3.1.0', '3.1', 'openapi'],
