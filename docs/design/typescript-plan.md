@@ -496,7 +496,9 @@ T5.
    apidef drops `normalizePathKeys`.
 4. CR-only line breaks; JSON text after a blank first line; a recursive
    alias; tab indentation refused.
-5. Memory per byte of YAML, with the engine.
+5. Memory per byte of YAML, with the engine. The engine's
+   `rule.history` option, set on this package's parser, is the first
+   thing to measure (section 11, while T2 was built).
 6. W11 and W12 of section 2.3, found in T2: a token's row and column,
    and a plain scalar that starts as a number and runs on to the next
    line.
@@ -782,16 +784,19 @@ what the code does.
   reading a text: an empty document after the description, under
   `reading: 'spec'`, and a byte-order mark under `strict`. The other
   three are about the object model, and are T3's.
-- Four defaults moved, for a caller who passes no new option. A text
+- Five defaults moved, for a caller who passes no new option. A text
   whose aliases would copy it out past the budget is refused, where it
   was copied in full. A text of more than 16 MiB that the grammar has to
-  read is refused, where it was read if memory allowed. A byte-order
-  mark is passed over under `strict`, where it was refused. The
-  `details.kind` of `openapi_root` is `empty` for a text of white space
-  and `#` comments alone, where it was `null`. No row of `test/spec/`
-  pins any of them, and each is pinned in `test/pending/` or in the
-  package's own tests. The build before T2 and this one were held to
-  each other on 468 parses, and differ in those ways and no other.
+  read is refused, where it was read if memory allowed. A text that
+  takes more work than a description of that size is stopped, where it
+  was read until memory ran out. A byte-order mark is passed over under
+  `strict`, where it was refused. The `details.kind` of `openapi_root`
+  is `empty` for a text of white space and `#` comments alone, where it
+  was `null`. No row of `test/spec/` pins any of them, and each is
+  pinned in `test/pending/` or in the package's own tests. The build
+  before T2 and this one were held to each other on 475 parses. They
+  differ in the first, fourth and fifth of those ways and in no other:
+  no text among them is past the size limit or the work it allows.
 - What `parse` does to a text before the grammar is one pass over it,
   or a counted amount of work. That was not in the plan, and three of
   T2's own checks broke it as first written. apidef's pattern for an
@@ -803,6 +808,46 @@ what the code does.
   text is not handed to the grammar, which takes three times a text's
   size in memory before its first rule runs. apidef's check still has
   the pattern on `main`, for OpenAPI and GraphQL sources alike.
+- The alias budget is held twice. A scan of the text cannot be made to
+  agree with the grammar everywhere: the review of T2 found that a
+  `/* */` comment of the base reading can hide an alias chain from the
+  scan behind what it takes for a block scalar, and that a tag between
+  an anchor and its collection ended the anchor at its line. apidef's
+  own guard has both gaps on its `main`, where 322 bytes read into a
+  tree of 380,301 characters unrefused. So `parse` also counts each copy
+  the grammar makes, from below, and refuses at the one that passes the
+  budget: the hidden chain of seven levels in a tenth of a second. The
+  scan reads the tag rightly now, which is the one place it parts from
+  apidef's.
+- A report is read off JSON text by a pass of its own on the fast path,
+  so that asking for one never sends to the grammar a text that
+  `JSON.parse` reads. The two paths give one report on 1,500 generated
+  texts.
+- `wellFormed` merges two values only where each is a tree, as every
+  value `parse` gives is. The engine's merge follows every path, and
+  does not end on a cycle.
+- The budget's default costs little where it is used in full: Stripe's
+  description, 13.8 MiB, anchored whole and copied nine times, took
+  1.4 GB where it takes 1.3 GB by itself.
+- The size limit alone did not bound what a text costs, which the plan
+  had not seen. The engine keeps about 900 bytes for each rule pass
+  until a parse ends. The largest descriptions take a pass for each 8 to
+  11 bytes. A text of very many small values takes one or two for each
+  byte: a megabyte and a half of one-letter items in a flow list took
+  all of a 2.2 GB heap, a tenth of the way to the size limit. So
+  `maxBytes` bounds the work as well: the grammar is given a pass for
+  each ten bytes of the limit, 1,677,721 by default, and a text that
+  takes more is stopped as `openapi_work`. Every dense shape tried at
+  the size limit is refused in about four seconds, inside the heap. No
+  document of the corpus is stopped by it.
+- T2b's fifth item has a lever in this package's own configuration,
+  which the plan had put in other repositories. The engine's
+  `rule.history` option bounds what a parse keeps of its rules, and
+  TypeScript leaves it unbounded by default. With a bound of 3 on this
+  package's parser, all 215 fixture rows read the same, and a megabyte
+  of dense text takes 140 MB where it takes 1.5 GB, at three to four
+  times the time. It is not turned on here: it wants the corpus swept
+  under it, and a decision on the time it costs.
 - apidef's side grew by a third diff. apidef's check for an empty
   source, its alias limit, its scan and its repair of lone surrogates
   go, and this package's stand in. `validateSource` is no longer called

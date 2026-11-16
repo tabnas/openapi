@@ -14,6 +14,8 @@
 
 import { describe, test } from 'node:test'
 import assert from 'node:assert'
+import { spawnSync } from 'node:child_process'
+import { join } from 'node:path'
 
 import { aliasedSize, make, parse } from '../dist/openapi'
 import type { ParseReport } from '../dist/openapi'
@@ -152,28 +154,204 @@ describe('hostile: the alias measure', () => {
   })
 })
 
+describe('hostile: a text of very many small values', () => {
+  // The grammar keeps about a kilobyte for each rule pass until it is
+  // done. A description takes a pass for each ten bytes. A text of small
+  // values takes one or two for each byte, so a megabyte and a half of
+  // them took more memory than a process has by default, far under the
+  // size limit. The limit also bounds the passes, and these are stopped.
+  const dense: Record<string, (bytes: number) => string> = {
+    'items in a flow list': (bytes) => 'a: [' + 'x,'.repeat(bytes / 2) + 'x]\n',
+    'empty items': (bytes) => 'l:\n' + '-\n'.repeat(bytes / 2),
+    'small maps': (bytes) => 'base:\n' + '  - {a: x}\n'.repeat(bytes / 11),
+    'members': (bytes) => Array.from({ length: bytes / 9 }, (_, i) => `k${i}: v\n`).join(''),
+    'JSON items': (bytes) => '{"a":[' + '1,'.repeat(bytes / 2) + '1]}',
+  }
+
+  test('each shape is stopped by the work it takes, under the size limit', () => {
+    const limit = 1048576
+    for (const [shape, text] of Object.entries(dense)) {
+      const source = text(600000)
+      assert.ok(Buffer.byteLength(source) < limit, shape)
+      for (const options of 'JSON items' === shape ? [{ fast: false }, { strict: true }] : [{}, { reading: 'spec' as const }]) {
+        const r = timed(() => parse(source, { ...options, maxBytes: limit }))
+        assert.equal(r.error?.code, 'openapi_work', shape)
+        assert.deepEqual(r.error.details, { steps: 104857, limit }, shape)
+        assert.ok(r.ms < 10 * SECONDS, `${shape}: ${Math.round(r.ms)} ms`)
+      }
+    }
+    // JSON that JSON.parse reads takes no work of the grammar's.
+    assert.equal(parse(dense['JSON items'](600000), { maxBytes: limit }).a.length, 300001)
+    // A description of the same size, most of whose bytes are the words
+    // of its descriptions, takes a fraction of the steps, and is read.
+    const words = 'Lists the pets of one owner, newest first, a page at a time. '.repeat(6)
+    let description = 'openapi: 3.1.0\npaths:\n'
+    for (let i = 0; description.length < 600000; i++) {
+      description += `  /pets/${i}:\n    get:\n      description: ${words}\n      responses:\n        '200': {description: ${words}}\n`
+    }
+    assert.ok(600 < Object.keys(parse(description, { maxBytes: limit }).paths).length)
+    // A small limit still gives a small text a hundred thousand steps.
+    assert.equal(parse(dense['small maps'](55000), { maxBytes: 200000 }).base.length, 5000)
+    assert.deepEqual(timed(() => parse(dense['small maps'](190000), { maxBytes: 200000 })).error?.details, { steps: 100000, limit: 200000 })
+    // And no limit, no bound on the work.
+    assert.equal(parse(dense['small maps'](190000), { maxBytes: Infinity }).base.length, 17272)
+  })
+
+  test('at the default limit, a text that exhausted memory is refused in a process of its own', () => {
+    // Six megabytes of small items, a third of the size limit. Before the
+    // work was bounded this ended the process. It runs in a child so that
+    // an end of that kind fails the test and not the run.
+    const script = `
+      const { parse } = require(${JSON.stringify(join(__dirname, '..', 'dist', 'openapi.js'))})
+      let out
+      try { parse('a: [' + 'x,'.repeat(3000000) + 'x]\\n'); out = 'parsed' } catch (e) { out = e.code + ' ' + JSON.stringify(e.details) }
+      console.log(out)
+    `
+    const child = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 120 * SECONDS })
+    assert.equal(child.status, 0, child.stderr.split('\n').slice(0, 3).join(' | '))
+    assert.equal(child.stdout.trim(), 'openapi_work {"steps":1677721,"limit":16777216}')
+  })
+})
+
+describe('hostile: aliases the measure does not see', () => {
+  // Ten references to a list of ten, as many levels deep as asked for.
+  const chain = (levels: number, pad: string) => {
+    let text = `${pad}l0: &l0 [x, x, x, x, x, x, x, x, x, x]\n`
+    for (let i = 1; i <= levels; i++) text += `${pad}l${i}: &l${i} [${Array(10).fill('*l' + (i - 1)).join(', ')}]\n`
+    return text
+  }
+
+  // The measure reads a text as YAML. The base reading also has the
+  // comments of JSON with comments, and a `|` inside one of those is to
+  // the measure the start of a block scalar, which hides every line
+  // indented past it. The grammar reads the lines and copies.
+  const hidden = ['components: /*\n|\n  */\n', 'components:\n  a: /*\n|\n  */ 1\n']
+
+  test('copies behind a comment only the base reading has are held to the budget as they are made', () => {
+    for (const head of hidden) {
+      const text = head + chain(7, '  ')
+      // The measure sees no alias at all.
+      assert.equal(aliasedSize(text), Buffer.byteLength(text))
+      const r = timed(() => parse(text))
+      assert.equal(r.error?.code, 'openapi_alias_budget')
+      assert.equal(r.error.details.budget, 1000000)
+      // Stopped at the copy that passed the budget, not ten million items on.
+      assert.ok(1000000 < r.error.details.size && r.error.details.size < 1200000, String(r.error.details.size))
+      // Placed at the alias whose copy passed it.
+      assert.ok(8 < r.error.lineNumber, String(r.error.lineNumber))
+      assert.ok(r.ms < 10 * SECONDS, `${Math.round(r.ms)} ms`)
+      // Under the specification's reading there is no such comment, and
+      // the text is not YAML.
+      assert.equal(timed(() => parse(text, { reading: 'spec' })).error?.code, 'unexpected')
+    }
+  })
+
+  test('the caller\'s own budget holds them too, and no budget lets them by', () => {
+    for (const head of hidden) {
+      const text = head + chain(2, '  ')
+      assert.equal(aliasedSize(text), Buffer.byteLength(text))
+      const whole = parse(text, { aliasBudget: Infinity })
+      assert.equal(whole.components.l2.length, 10)
+      assert.equal(whole.components.l2[9].length, 10)
+      assert.deepEqual(parse(text, { aliasBudget: 100000 }), whole)
+      const r = timed(() => parse(text, { aliasBudget: 500 }))
+      assert.equal(r.error?.code, 'openapi_alias_budget')
+      assert.deepEqual(r.error.details, { size: 501, budget: 500 })
+      // A budget under the size of the text allows no copy at all.
+      assert.equal(timed(() => parse(text, { aliasBudget: 0 })).error?.code, 'openapi_alias_budget')
+    }
+  })
+
+  test('a tag between an anchor and its collection does not hide what the collection holds', () => {
+    const maps = (tag: string, levels: number) => {
+      let text = `l0: &l0 ${tag}{\n  a: x, b: x, c: x, d: x, e: x\n}\n`
+      for (let i = 1; i <= levels; i++) {
+        text += `l${i}: &l${i} ${tag}{\n  ${Array.from({ length: 10 }, (_, k) => `k${k}: *l${i - 1}`).join(', ')}\n}\n`
+      }
+      return text
+    }
+    // Three levels are read, and the measure of each spelling is near the other's.
+    const plain = aliasedSize(maps('', 3))
+    const tagged = aliasedSize(maps('!!map ', 3))
+    assert.ok(50000 < plain && plain < tagged && tagged < 1.2 * plain, `${plain} and ${tagged}`)
+    assert.deepEqual(parse(maps('!!map ', 3), { aliasBudget: Infinity }), parse(maps('', 3), { aliasBudget: Infinity }))
+    // Seven are refused before anything is built.
+    const r = timed(() => parse(maps('!!map ', 7)))
+    assert.equal(r.error?.code, 'openapi_alias_budget')
+    assert.ok(100000000 < r.error.details.size, String(r.error.details.size))
+    assert.deepEqual([r.error.lineNumber, r.error.columnNumber], [1, 1])
+    // A block node behind a tag, and a scalar behind one.
+    assert.equal(aliasedSize('a: &a !!map\n  x: 1\n  y: 2\nb: *a\n'), 32 + 23)
+    assert.equal(aliasedSize('a: &a !!str x\nb: *a\n'), 20 + 10)
+  })
+
+  test('the count of copies never passes the measure of a text the measure reads rightly', () => {
+    // The budget is set to the measure itself, the least that lets the
+    // text by: the copies, counted from below, must fit in it.
+    const random = seeded(23)
+    const pick = <T>(list: T[]): T => list[Math.floor(random() * list.length)]
+    const names = ['a', 'b', 'c', 'd']
+    const node = (depth: number): string =>
+      0 === depth || random() < 0.4
+        ? pick(['x', '12', '"q r"', 'true', "'s'", '~', '""'])
+        : random() < 0.5
+          ? `[${Array.from({ length: 1 + Math.floor(random() * 3) }, () => node(depth - 1)).join(', ')}]`
+          : `{${Array.from({ length: 1 + Math.floor(random() * 3) }, (_, i) => `k${i}: ${node(depth - 1)}`).join(', ')}}`
+    let read = 0
+    for (let n = 0; n < 3000; n++) {
+      let text = ''
+      const anchored: string[] = []
+      const lines = 2 + Math.floor(random() * 6)
+      for (let i = 0; i < lines; i++) {
+        const name = pick(names)
+        if (0 < anchored.length && random() < 0.5) {
+          text += random() < 0.5 ? `m${i}: *${pick(anchored)}\n` : `m${i}: [*${pick(anchored)}, {z: *${pick(anchored)}}]\n`
+        } else if (random() < 0.3) {
+          text += `m${i}: &${name}\n  p: ${node(1)}\n  q:\n    - ${node(1)}\n    - ${0 < anchored.length ? '*' + pick(anchored) : 'y'}\n`
+          anchored.push(name)
+        } else {
+          text += `m${i}: &${name} ${node(2)}\n`
+          anchored.push(name)
+        }
+      }
+      let whole: unknown
+      try {
+        whole = parse(text, { aliasBudget: Infinity })
+      } catch {
+        continue
+      }
+      read++
+      assert.deepEqual(parse(text, { aliasBudget: aliasedSize(text) }), whole, JSON.stringify(text))
+    }
+    assert.ok(2000 < read, `${read} read`)
+  })
+})
+
 describe('hostile: the places of a report', () => {
   test('numbers deep in a tree are all listed, and placed while the steps last', () => {
-    // A place costs a step for each rule above the number. 400 numbers
-    // under 3,000 lists would cost millions of steps, and a list of
-    // paths that long would not fit in memory at ten times the size.
+    // A place costs a step for each level above the number: for each
+    // container on the fast path, and for each rule on the grammar's.
+    // Numbers by the hundred under 3,000 lists would cost millions of
+    // steps, and a list of paths that long would not fit in memory at
+    // ten times the size.
     const depth = 3000
-    const count = 400
-    const text = '{"a":' + '['.repeat(depth) + Array(count).fill('9007199254740993').join(',') + ']'.repeat(depth) + '}'
-    const report: ParseReport = {}
-    const r = timed(() => parse(text, { report }))
-    assert.equal(r.error, undefined)
-    assert.ok(r.ms < 20 * SECONDS, `${Math.round(r.ms)} ms`)
-    const lossy = report.lossy!
-    assert.equal(lossy.length, count)
-    assert.ok(lossy.every((l) => '9007199254740993' === l.text && 9007199254740992 === l.value))
-    assert.equal(lossy[0].at, '/a' + '/0'.repeat(depth))
-    assert.equal(lossy[1].at, '/a' + '/0'.repeat(depth - 1) + '/1')
-    assert.equal(lossy[count - 1].at, undefined)
-    const placed = lossy.filter((l) => undefined !== l.at).length
-    assert.ok(100 < placed && placed < count, `${placed} placed`)
-    // The places come first: none follows a number that has none.
-    assert.equal(lossy.findIndex((l) => undefined === l.at), placed)
+    for (const [options, count] of [[{}, 1000], [{ fast: false }, 400]] as [object, number][]) {
+      const text = '{"a":' + '['.repeat(depth) + Array(count).fill('9007199254740993').join(',') + ']'.repeat(depth) + '}'
+      const report: ParseReport = {}
+      const r = timed(() => parse(text, { ...options, report }))
+      assert.equal(r.error, undefined)
+      assert.ok(r.ms < 20 * SECONDS, `${Math.round(r.ms)} ms`)
+      const lossy = report.lossy!
+      assert.equal(lossy.length, count)
+      assert.ok(lossy.every((l) => '9007199254740993' === l.text && 9007199254740992 === l.value))
+      assert.equal(lossy[0].at, '/a' + '/0'.repeat(depth))
+      assert.equal(lossy[1].at, '/a' + '/0'.repeat(depth - 1) + '/1')
+      assert.equal(lossy[count - 1].at, undefined)
+      const placed = lossy.filter((l) => undefined !== l.at).length
+      assert.ok(100 < placed && placed < count, `${placed} placed`)
+      // The places come first: none follows a number that has none.
+      assert.equal(lossy.findIndex((l) => undefined === l.at), placed)
+    }
   })
 
   test('a real document has every place', () => {

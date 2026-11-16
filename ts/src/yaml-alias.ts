@@ -10,11 +10,18 @@
 //
 // The measure is @voxgig/apidef's (its ts/src/yamlalias.ts, MIT, Voxgig
 // Ltd), which `parse` stands in for there, and this is that scan: the two
-// are held to one table of cases and to each other on real documents. It
-// is a scan and not a parse. It finds each anchor with the bytes of the
-// node it labels, and each alias, passing over comments, quoted scalars
-// and block scalars, and it is right about the documents the grammar
-// reads and approximate about the ones it refuses.
+// are held to one table of cases and to each other on real documents.
+// They part in one place, where apidef's is wrong: a tag between an
+// anchor and its node. It is a scan and not a parse. It finds each anchor
+// with the bytes of the node it labels, and each alias, passing over
+// comments, quoted scalars and block scalars.
+//
+// It reads the text as YAML, and that is its limit. A grammar that reads
+// more than YAML, as the base reading does with its `//` and `/* */`
+// comments, can be given a text in which it finds aliases that this scan
+// passed over, or none where this scan found some. So the scan is the
+// first check and not the only one: `parse` also counts each copy the
+// grammar makes, with `weigh` below, and holds those to the same budget.
 //
 // The scan is one pass over the text, and then some work that a text can
 // be built to multiply: an anchor's node is found by reading on from the
@@ -217,6 +224,14 @@ function scan(b: Uint8Array, work: Work): { anchors: Anchor[]; aliases: Alias[] 
       anchors.push(anchor)
       let k = end
       while (k < b.length && isSpace(b[k])) k++
+      // A tag may stand between an anchor and its node, `&a !!map {`, and
+      // the node is what follows the tag. apidef's scan takes the tag for
+      // the node, a scalar that ends with its line, and so leaves out
+      // every alias of a collection written that way.
+      while (k < b.length && BANG === b[k]) {
+        k = endOfName(b, k + 1)
+        while (k < b.length && isSpace(b[k])) k++
+      }
       if (k >= b.length || isBreak(b[k]) || HASH === b[k]) {
         blockAnchors.push({ anchor, indent: afterKey ? keyCol : lineIndent, afterKey })
       } else if (LSQ === b[k] || LCB === b[k]) {
@@ -343,6 +358,44 @@ function decode(b: Uint8Array, start: number, end: number): string {
   return new TextDecoder().decode(b.subarray(start, end))
 }
 
+// What a copy of a value comes to, counted from below: one for each
+// member, one for each item, and one for each scalar that is not empty.
+// No way of writing the value in YAML takes fewer bytes, since a member
+// needs a mark to set it apart, an item does, and a scalar that is there
+// at all is a character at least. The length of a string is left out on
+// purpose. A copy shares its strings with what it was copied from and
+// does not share its members, so this is what a copy costs; and the
+// measure above takes an anchored scalar by its first line, so a count
+// that took a long string in full could pass it.
+//
+// `parse` weighs each copy the grammar makes at an alias, and holds the
+// text and its copies to the budget. The measure above is of the text,
+// read as YAML: where the grammar reads the text otherwise and copies
+// what the measure passed over, this is what still holds the budget. It
+// refuses nothing that the measure, where it is right, allows. The count
+// stops once it is past `stop`, so that a value is never weighed for
+// longer than the budget it is held to.
+function weigh(value: unknown, stop: number): number {
+  let n = 0
+  const stack: unknown[] = [value]
+  while (0 < stack.length && n <= stop) {
+    const v = stack.pop()
+    if (null == v || '' === v) continue
+    if ('object' !== typeof v) {
+      n += 1
+    } else if (Array.isArray(v)) {
+      n += v.length
+      for (let i = 0; i < v.length; i++) stack.push(v[i])
+    } else {
+      const map = v as Record<string, unknown>
+      const names = Object.keys(map)
+      n += names.length
+      for (let i = 0; i < names.length; i++) stack.push(map[names[i]])
+    }
+  }
+  return n
+}
+
 // The budget `parse` holds a text to when it is given none: the larger of
 // a megabyte and ten times the text.
 const ALIAS_FACTOR = 10
@@ -352,4 +405,4 @@ function defaultAliasBudget(bytes: number): number {
   return Math.max(ALIAS_FLOOR, ALIAS_FACTOR * bytes)
 }
 
-export { aliasedSize, aliasedBytes, defaultAliasBudget, measure }
+export { aliasedSize, aliasedBytes, defaultAliasBudget, measure, weigh }

@@ -75,6 +75,21 @@ this package's:
   the scan it used: `aliasedSize` here is that scan, with the work it
   repeats counted, so that a text built to make the scan itself slow is
   refused as well.
+
+  apidef's own guard lets two shapes of alias bomb through on its
+  `main`, and this diff closes both. Its scan reads the text as YAML,
+  and apidef's reader also takes the comments of JSON with comments:
+  after `components: /*`, a line `|` and a line `*/`, the scan takes
+  what follows for a block scalar and finds no alias, while the reader
+  copies. Ten references to a list of ten, four levels deep, are 322
+  bytes that apidef's `main` measures as 322 and reads into a tree of
+  380,301 characters; seven levels would be a thousand times that. And a
+  tag between an anchor and its collection, `&a !!map {`, ends the
+  anchor at its line for the scan: 500 bytes measured as 940, and read
+  into 530,890 characters. `parse` measures the second shape rightly,
+  and holds every copy the grammar makes to the budget as it is made,
+  which stops the first and any other text the scan and the reader take
+  differently.
 - *The surrogate repair.* apidef's `wellFormed` and `wellFormedString`
   go, with their two patterns. `wellFormed(tree, { duplicates: 'merge' })`
   from this package does the same to the tree, and `wellFormed(string)`

@@ -108,7 +108,7 @@ default that a shared row pins changes until porting starts.
 | 2 | the resolver over `fold` | TypeScript done within one document: the object model, `resolve` with every option and output shape, the connections report, and the apidef preset. Porting it is deferred |
 | T0 | gates: the corpus sweep and its ledger, the apidef gate, the fixture homes | done |
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
-| T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the size limit, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
+| T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
 | T2b, T3 to T6 | reading that only `@tabnas/yaml` can repair, the site index, several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -141,9 +141,9 @@ grammar on any refusal, so every error comes from the grammar.
 ### What T2 added to the TypeScript `parse`
 
 All of it is in `ts/src/openapi.ts`, `ts/src/text.ts`,
-`ts/src/yaml-alias.ts` and `ts/src/well-formed.ts`, and none of it is
-ported, so its fixtures are in `test/pending/` and its other tests in
-`ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
+`ts/src/yaml-alias.ts`, `ts/src/lossy.ts` and `ts/src/well-formed.ts`,
+and none of it is ported, so its fixtures are in `test/pending/` and its
+other tests in `ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
 
 - **What runs on a text before the grammar is one pass, or counted.**
   `parse` reads text from outside a system, so a check there must not
@@ -169,6 +169,19 @@ ported, so its fixtures are in `test/pending/` and its other tests in
   other reading on a given `instance`. The YAML 1.1 words stay booleans
   under both, because the yaml grammar matches them in its own code,
   out of reach of an option.
+- **`maxBytes` bounds the work as well as the size, and the work is
+  what costs.** The engine keeps about 900 bytes for each rule pass
+  until the parse ends: its rule history, which TypeScript does not
+  bound by default. The largest descriptions take a pass for each 8 to
+  11 bytes (GitHub's and Stripe's, 1.4 and 1.5 million passes). A text
+  of small values takes one or two for each byte: a megabyte and a half
+  of `x,` in a flow list took all of a 2.2 GB heap, far under the size
+  limit. So `check` counts its passes and raises `openapi_work` at one
+  for each ten bytes of `maxBytes`, 100,000 at least. The engine's
+  `rule.history` option is the other lever, and is not set: a bound of 3
+  read all 215 fixture rows the same and cut a dense megabyte from
+  1.5 GB to 140 MB, at three to four times the time. It is the plan's
+  T2b item 5, to be measured across the corpus before it is turned on.
 - **A refusal decided from the text** (`openapi_size`,
   `openapi_alias_budget`, `openapi_encoding`) is put in the parse state
   as `refuse`, and `refuseAt` raises it. An error needs a token and a
@@ -190,10 +203,28 @@ ported, so its fixtures are in `test/pending/` and its other tests in
   whatever budget the caller gives: `maxBytes` is the limit on a text's
   own size.
 - **`aliasedSize`** is a scan of the text, not a parse, and it is
-  apidef's measure exactly wherever it measures to the end, which is
-  every document of the corpus: `docs/design/apidef-swap/` has apidef's
-  suite run its own table against it. Change it only with that table.
-- **The `lossy` report** is gathered in `check`, as a number's `val`
+  apidef's measure wherever it measures to the end, which is every
+  document of the corpus: `docs/design/apidef-swap/` has apidef's suite
+  run its own table against it. Change it only with that table. The two
+  part in one place, where apidef's is wrong: a tag between an anchor
+  and its node, `&a !!map {`, which apidef's takes for a scalar.
+- **The alias budget is held twice, and the second time is what makes
+  it hold.** The scan reads the text as YAML, and the grammar under the
+  base reading reads more than YAML. `components: /*`, a line `|`, then
+  `*/` hides an alias chain from the scan behind what it takes for a
+  block scalar, while the grammar reads a comment and copies. No scan
+  can be made to agree with the lexer everywhere, so `check` weighs each
+  copy as its alias's `val` closes (`weigh` in `ts/src/yaml-alias.ts`)
+  and refuses at the copy that passes the budget. `weigh` counts from
+  below, a member, an item and a scalar as one each and no string by its
+  length, so that it never passes the scan where the scan is right:
+  `ts/test/hostile.test.ts` holds that on generated documents. Do not
+  remove the second check because the scan was repaired for one shape.
+- **The `lossy` report has two sources, and one answer.** On the fast
+  path `lossyInJson` in `ts/src/lossy.ts` reads it off the JSON text in
+  one pass, so that asking for a report never sends JSON text to the
+  grammar, which refuses some JSON that `JSON.parse` reads. On the
+  grammar's path it is gathered in `check`, as a number's `val`
   closes, from the token the rule opened on. That token's offset, `sI`,
   is exact, and `located` counts the row and column from it. Its own
   `rI` and `cI` are not exact under the yaml grammar, which is a defect
@@ -768,14 +799,16 @@ The plugin declares four codes, with a message and a hint each, in
 | `openapi_version` | under strict, the root names no version this package reads (`{found}`) |
 | `openapi_duplicate_key` | under strict, a map holds one member name twice (`{key}`) |
 
-Three more are the TypeScript package's alone until porting starts,
-pinned in `test/pending/parse-limits.tsv` and `ts/test/openapi.test.ts`.
-The first two are raised by default, with no option given:
+Four more are the TypeScript package's alone until porting starts,
+pinned in `test/pending/parse-limits.tsv`, `ts/test/openapi.test.ts` and
+`ts/test/hostile.test.ts`. The first three are raised by default, with
+no option given:
 
 | Code | Raised by `parse` when |
 | --- | --- |
 | `openapi_alias_budget` | the YAML aliases of the text would copy it out past `aliasBudget` (`{size}`, `{budget}`) |
 | `openapi_size` | the text is past `maxBytes` and has to be read by the grammar (`{size}`, `{limit}`) |
+| `openapi_work` | the text has taken more rule passes than a description of `maxBytes` takes (`{steps}`, `{limit}`) |
 | `openapi_encoding` | under strict, the bytes are not well-formed in their encoding (`{encoding}`) |
 
 Each of the first four is pinned by `ERROR:<code>` rows in

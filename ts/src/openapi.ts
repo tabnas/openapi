@@ -23,11 +23,12 @@ import { json } from '@tabnas/json'
 
 import { version } from './oas-version'
 import type { VersionInfo } from './oas-version'
+import { isLossy, located, lossyInJson } from './lossy'
+import type { Lossy, LossyFound } from './lossy'
 import { decode, hasContent, utf8Length } from './text'
-import { pointer } from './uri'
 import { wellFormed } from './well-formed'
 import type { WellFormedOptions } from './well-formed'
-import { aliasedBytes, aliasedSize, defaultAliasBudget } from './yaml-alias'
+import { aliasedBytes, aliasedSize, defaultAliasBudget, weigh } from './yaml-alias'
 
 // Plugin options. There are none: raw mode needs none, and the resolver's
 // options belong to `resolve`, since `use()` deep-copies what it is given.
@@ -50,6 +51,9 @@ const ERRORS: Record<string, string> = {
     'past the budget of {budget}',
   openapi_size:
     'the text is {size} bytes, and the grammar is given at most {limit}',
+  openapi_work:
+    'the text takes more than {steps} steps to read, the most the grammar ' +
+    'is given under a limit of {limit} bytes',
   openapi_encoding: 'the bytes are not well-formed {encoding}',
 }
 
@@ -73,6 +77,11 @@ const HINTS: Record<string, string> = {
     'Reading YAML takes about a hundred bytes of memory for each byte of ' +
     'the text. Raise maxBytes where the process has that much. JSON text ' +
     'that JSON.parse reads has no limit.',
+  openapi_work:
+    'The grammar keeps about a kilobyte for each step until it is done, ' +
+    'and a text of very many small values takes a step or two for each ' +
+    'of its bytes, where a description takes one for each ten. Raise ' +
+    'maxBytes where the process has the memory.',
   openapi_encoding:
     'Save the description as UTF-8, or parse it without strict to have ' +
     'each ill-formed sequence read as U+FFFD.',
@@ -99,12 +108,14 @@ type ParseState = {
   lossy?: LossyFound[]
   // The steps left for finding where those numbers are in the tree.
   placing: number
+  // The work the grammar may still do for this text, in rule passes, with
+  // what it was given and the size limit that gave it.
+  work: { left: number; steps: number; limit: number }
+  // The copies the grammar makes at aliases, counted as they are made:
+  // how much they may come to, how much they have, the size of the text,
+  // and the budget that the two together are held to.
+  copies?: { allowed: number; made: number; bytes: number; budget: number }
 }
-
-// A number that lost precision, as the parse finds it: where its text
-// starts, and the members and indexes that lead to it, where the rules it
-// sits under say them.
-type LossyFound = { text: string; value: number; pos: number; path?: string[] }
 
 // The instances the plugin is installed on.
 const INSTALLED = new WeakSet<Tabnas>()
@@ -149,6 +160,47 @@ function check(rule: Rule, ctx: Context, done: RuleDone): void {
     const { code, details } = state.refuse
     state.refuse = undefined
     throw new TabnasError(code, details, token(rule, ctx), rule, ctx)
+  }
+
+  // The work the grammar may do for one text. The size limit alone does
+  // not bound what a text costs: the grammar keeps about a kilobyte for
+  // each rule pass until it is done, and a text of very many small values
+  // takes a pass or two for each byte, where a description takes one for
+  // each ten. So the passes are counted, and a text is stopped once it
+  // has taken as many as a description at the size limit takes.
+  if (--state.work.left < 0) {
+    throw new TabnasError(
+      'openapi_work',
+      { steps: state.work.steps, limit: state.work.limit },
+      token(rule, ctx),
+      rule,
+      ctx,
+    )
+  }
+
+  // An alias, as its `val` closes on the copy the grammar made of its
+  // anchor's node. The measure `parse` took of the text reads it as YAML
+  // and nothing else, and a text can be written so that the grammar
+  // reads copies out of it that the measure did not count: behind a
+  // comment that only the base reading has, for one. So each copy is
+  // counted again here, as it is made, and held to the same budget. The
+  // count is from below (`weigh`), so it refuses nothing that the
+  // measure, where it is right, allows.
+  if (undefined !== state.copies && 'val' === rule.name && 'c' === done.state) {
+    const tkn = rule.o0
+    if (null != tkn && 'string' === typeof tkn.src && 0x2a === tkn.src.charCodeAt(0)) {
+      const copies = state.copies
+      copies.made += weigh(rule.node, copies.allowed - copies.made)
+      if (copies.allowed < copies.made) {
+        throw new TabnasError(
+          'openapi_alias_budget',
+          { size: copies.bytes + copies.made, budget: copies.budget },
+          tkn,
+          rule,
+          ctx,
+        )
+      }
+    }
   }
 
   // A number, as its `val` closes: the token it opened on has the text
@@ -257,14 +309,6 @@ function check(rule: Rule, ctx: Context, done: RuleDone): void {
   }
 }
 
-// An integer the document wrote out in full, by its base: decimal, and
-// the prefixed forms either reading takes. `_` is the base reading's
-// separator.
-const INTEGER = /^([-+]?)(0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|[0-9][0-9_]*)$/
-// A number written with digits, as against a word for a value that is
-// not finite.
-const WRITTEN = /^[-+]?(?:[0-9]|\.[0-9])/
-
 // The number a closing `val` holds, if the tree does not hold what the
 // document wrote: an integer written out in full that is not the number
 // read, or a number written with digits that is too large to be read at
@@ -275,25 +319,7 @@ function lossyOf(rule: Rule, ctx: Context, state: ParseState): LossyFound | unde
   const value = rule.node as number
   if (null == tkn || '#NR' !== tkn.name || 'string' !== typeof tkn.src) return undefined
   const text = tkn.src
-  if (Number.isFinite(value)) {
-    // The shortest integer that a double cannot hold has sixteen digits.
-    if (text.length < 16) return undefined
-    const m = INTEGER.exec(text)
-    if (null == m || !Number.isInteger(value)) return undefined
-    let exact: bigint
-    try {
-      const body = m[2].replace(/_/g, '')
-      // A leading zero is decimal to both readings, where BigInt reads
-      // nothing special in it either.
-      exact = BigInt(/^0[xXoObB]/.test(body) ? body.toLowerCase() : body)
-    } catch {
-      return undefined
-    }
-    if ('-' === m[1]) exact = -exact
-    if (exact === BigInt(value)) return undefined
-  } else if (!WRITTEN.test(text)) {
-    return undefined
-  }
+  if (!isLossy(text, value)) return undefined
 
   // The members and indexes above it. A pair has its name by now, and a
   // list holds the items before this one, so its length is this one's
@@ -504,8 +530,12 @@ type ParseOptions = {
 
   // The largest text, in bytes of UTF-8, the grammar is given. Default
   // 16 MiB: reading YAML takes about a hundred bytes of memory for each
-  // byte of the text. A larger text is refused, as `openapi_size`, before
-  // any of it is built, unless JSON.parse reads it. Infinity lifts it.
+  // byte of a description. A larger text is refused, as `openapi_size`,
+  // before any of it is built, unless JSON.parse reads it. The limit
+  // also bounds the work the grammar does: a text that takes more steps
+  // than a description of this size takes is stopped, as `openapi_work`,
+  // since a text of very many small values costs ten times what a
+  // description of its size does. Infinity lifts both.
   maxBytes?: number
 
   // A map this parse fills with what it has to say beside the tree. Its
@@ -517,24 +547,6 @@ type ParseOptions = {
   instance?: Tabnas
 }
 
-// A number the document wrote that the tree does not hold exactly: an
-// integer written out in full that the number read is not equal to, such
-// as one past 2^53, or a number too large to be read at all.
-type Lossy = {
-  // The number as the document wrote it.
-  text: string
-  // The number the tree holds in its place.
-  value: number
-  // Where it is written: the offset into the text, from 0, and the row
-  // and column, from 1, all counted as JavaScript counts a string.
-  pos: number
-  row: number
-  col: number
-  // Where it is in the tree, as an RFC 6901 pointer, when the tree holds
-  // it there.
-  at?: string
-}
-
 // What a parse reports beside the tree.
 type ParseReport = {
   lossy?: Lossy[]
@@ -542,6 +554,14 @@ type ParseReport = {
 
 // The largest text the grammar is given unless the parse says otherwise.
 const MAX_BYTES = 16 * 1024 * 1024
+
+// The work the grammar is given with it: a rule pass for each ten bytes
+// of the size limit, which is what the largest descriptions take (one for
+// each 8 to 11 bytes, measured on GitHub's and Stripe's), and a hundred
+// thousand passes at least, so that a small limit still reads a small
+// text. At the default limit that is 1,677,721 passes, and about 1.6 GB.
+const BYTES_A_STEP = 10
+const STEPS_FLOOR = 100_000
 
 // A shared parser holds the whole of its last parse until its next one
 // starts: about a hundred times the size of the text. Past this many
@@ -563,7 +583,8 @@ const shared: { loose?: Tabnas; spec?: Tabnas; strict?: Tabnas } = {}
 // Raises `openapi_root` when the root is not a map, `openapi_stream` for a
 // stream of several YAML documents, `openapi_alias_budget` for aliases
 // that would copy the text out past the budget and `openapi_size` for a
-// text too large for the grammar; under `strict`, also `openapi_version`,
+// text too large for the grammar and `openapi_work` for one that takes
+// too much work to read; under `strict`, also `openapi_version`,
 // `openapi_duplicate_key` and, for bytes, `openapi_encoding`.
 function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
   const strict = true === options.strict
@@ -624,7 +645,16 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
 
   // Strict JSON refuses a text with nothing in it itself, as `unexpected`.
   const empty = !strict && !hasContent(text)
-  const state: ParseState = { strict, duplicates, reading, empty, docs: 0, placing: PLACING }
+  const steps = Infinity === maxBytes ? Infinity : Math.max(STEPS_FLOOR, Math.floor(maxBytes / BYTES_A_STEP))
+  const state: ParseState = {
+    strict,
+    duplicates,
+    reading,
+    empty,
+    docs: 0,
+    placing: PLACING,
+    work: { left: steps, steps, limit: maxBytes },
+  }
 
   // Bytes that were not what their encoding allows. They were read with
   // U+FFFD in place of each ill-formed sequence, which strict JSON does
@@ -634,20 +664,16 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
   }
 
   // JSON.parse keeps the last value of a repeated name, so it cannot stand
-  // in for a parse that merges them, and it tells nothing of a number it
-  // could not hold, so it cannot stand in for a parse that reports them
-  // where the text may have one.
+  // in for a parse that merges them. It tells nothing of a number it could
+  // not hold either, so a report is read off the text, by a pass of its
+  // own, and only where the text has a number that could be one.
   const fast = options.fast ?? 'auto'
-  if (
-    !strict &&
-    'merge' !== duplicates &&
-    false !== fast &&
-    (true === fast || OPENS_WITH_BRACE.test(text)) &&
-    (undefined === report || !MAY_BE_LOSSY.test(text))
-  ) {
+  if (!strict && 'merge' !== duplicates && false !== fast && (true === fast || OPENS_WITH_BRACE.test(text))) {
     const value = fastParse(text)
     if (undefined !== value) {
-      if (undefined !== report) report.lossy = []
+      if (undefined !== report) {
+        report.lossy = MAY_BE_LOSSY.test(text) ? located(lossyInJson(text, PLACING), value, text) : []
+      }
       return value
     }
   }
@@ -670,6 +696,10 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
     // copies anything is its own size, and `maxBytes` is its limit.
     if (encoded.length < size && budget < size) {
       state.refuse = { code: 'openapi_alias_budget', details: { size, budget } }
+    } else if (Infinity !== budget) {
+      // The grammar's own copies are held to the budget as well: see
+      // `check`.
+      state.copies = { allowed: budget - encoded.length, made: 0, bytes: encoded.length, budget }
     }
   }
   if (undefined !== report) state.lossy = []
@@ -764,46 +794,6 @@ function release(tn: Tabnas): void {
   } catch {
     // Nothing is held by a parse that failed either.
   }
-}
-
-// The numbers a parse found lossy, each with its place in the tree where
-// the tree holds it there. A place the rules gave is said only when the
-// finished tree has that very number at it: a repeated member name keeps
-// one of its values, and the other is in no place.
-function located(found: LossyFound[], tree: any, text: string): Lossy[] {
-  // Rows and columns, counted once along the text. The numbers come in
-  // the order they were read, which is the order they are written in.
-  let at = 0
-  let row = 1
-  let lineStart = 0
-  const place = (pos: number) => {
-    if (pos < at) {
-      at = 0
-      row = 1
-      lineStart = 0
-    }
-    for (; at < pos; at++) {
-      const c = text.charCodeAt(at)
-      // A line ends at a line feed, or at a carriage return with none after it.
-      if (0x0a === c || (0x0d === c && 0x0a !== text.charCodeAt(at + 1))) {
-        row++
-        lineStart = at + 1
-      }
-    }
-    return { row, col: pos - lineStart + 1 }
-  }
-  return found.map(({ path, ...rest }) => {
-    const entry: Lossy = { ...rest, ...place(rest.pos) }
-    if (undefined === path) return entry
-    let node = tree
-    for (const part of path) {
-      if (null == node || 'object' !== typeof node || !Object.prototype.hasOwnProperty.call(node, part)) {
-        return entry
-      }
-      node = node[part]
-    }
-    return Object.is(node, entry.value) ? { ...entry, at: pointer(path) } : entry
-  })
 }
 
 const OPENS_WITH_BRACE = /^[ \t\n\r]*\{/

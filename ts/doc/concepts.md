@@ -218,12 +218,19 @@ can cost. Three bounds are on by default:
 
 - A YAML alias is a copy, and copies of copies multiply. `parse` works
   out from the text what the aliases come to, and refuses a text past
-  the budget before building any of it.
+  the budget before building any of it. It then holds the copies to the
+  same budget as the grammar makes them, because a text can be written
+  that the measure and the grammar read differently.
 - Reading YAML holds about a hundred bytes for each byte of the text.
   Where this was measured, Node gave a process a heap of 2.2 GB by
   default. A description of 26 MB exhausted it, and one just under
   16 MiB took about 1.4 GB. So the grammar is given 16 MiB at most.
   `JSON.parse` has no such cost, and JSON text it reads has no limit.
+- Size is not the whole cost. The grammar keeps about a kilobyte for
+  each step it takes, and a text of very many small values takes ten
+  times the steps of a description its size. So the steps are counted
+  too, and a text is stopped once it has taken as many as a description
+  at the size limit takes.
 - A parser holds its last parse until the next one starts. `parse`
   makes its own parsers let go when a parse returns.
 

@@ -518,8 +518,8 @@ describe('the text', () => {
     for (const l of lossy(placed)!) assert.equal(placed.substr(l.pos, l.text.length), l.text)
     assert.deepEqual(lossy(placed)!.map((l) => [l.row, l.col, l.at]), [[6, 10, '/c😀/d'], [7, 4, '/e']])
 
-    // JSON text is read by the grammar when it may hold one, and by
-    // JSON.parse when it cannot.
+    // JSON text that JSON.parse reads has its report read off the text,
+    // and it is the report the grammar gives.
     const json = '{"openapi":"3.1.0","a":[1,{"b":9007199254740993}],"c":1e999,"d":"9007199254740993000"}'
     for (const options of [{}, { fast: true }, { fast: false }, { strict: true }, { reading: 'spec' as const }]) {
       assert.deepEqual(lossy(json, options), [
@@ -529,6 +529,57 @@ describe('the text', () => {
     }
     assert.deepEqual(lossy('{"openapi":"3.1.0","a":12}'), [])
     assert.deepEqual(lossy('a: 12\n'), [])
+
+    // A report does not change which text parses. JSON after a blank line
+    // is read by JSON.parse and not by the grammar, with a report as
+    // without, whether the long run of digits is a number or in a string.
+    for (const text of ['\n{"openapi":"3.1.0","maximum":9007199254740993}', '\n\n {"openapi":"3.1.0","id":"1234567890123456"}']) {
+      const report: ParseReport = {}
+      assert.deepEqual(C(parse(text, { report })), C(parse(text)))
+      assert.equal(report.lossy!.length, text.includes('maximum') ? 1 : 0)
+    }
+    assert.deepEqual(lossy('\n{"openapi":"3.1.0","maximum":9007199254740993}'), [
+      { text: '9007199254740993', value: 9007199254740992, pos: 30, row: 2, col: 30, at: '/maximum' },
+    ])
+
+    // The two paths give one report, for JSON of every shape: names with
+    // escapes, a name given twice, numbers in lists and strings, and what
+    // only looks like a number.
+    const random = (() => {
+      let seed = 5
+      return () => {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff
+        return seed / 0x7fffffff
+      }
+    })()
+    const pick = <T>(list: T[]): T => list[Math.floor(random() * list.length)]
+    const numbers = ['9007199254740993', '-9223372036854775808', '1e400', '-1E999', '12', '0.1', '1e3', '123456789012345678', '9007199254740992', '1234567890123456.5', '-0']
+    const namesOf = ['"a"', '"b"', '"a\\u0062"', '"x/y"', '"~z"', '"\\"q\\""', '"😀"', '""', '"9007199254740993"']
+    const value = (depth: number): string => {
+      const kind = 0 === depth ? pick(['n', 's', 'l']) : pick(['n', 'n', 's', 'l', 'list', 'map', 'map'])
+      if ('n' === kind) return pick(numbers)
+      if ('s' === kind) return pick(['"x"', '"9007199254740993"', '"1e400 {[,]}"', '"\\\\"', '"a\\"b"'])
+      if ('l' === kind) return pick(['true', 'false', 'null'])
+      const size = Math.floor(random() * 4)
+      if ('list' === kind) return '[' + Array.from({ length: size }, () => value(depth - 1)).join(pick([',', ', ', ' ,\n'])) + ']'
+      return '{' + Array.from({ length: size }, () => pick(namesOf) + pick([':', ': ']) + value(depth - 1)).join(',') + '}'
+    }
+    let reported = 0
+    for (let n = 0; n < 1500; n++) {
+      const text = '{"openapi":"3.1.0","v":' + value(3) + ',"w":' + value(2) + '}'
+      const fast = lossy(text)!
+      assert.deepEqual(fast, lossy(text, { fast: false }), text)
+      // Strict JSON refuses a name given twice, which these texts have.
+      let strict: typeof fast | undefined
+      try {
+        strict = lossy(text, { strict: true })
+      } catch (e: any) {
+        assert.equal(e.code, 'openapi_duplicate_key', text)
+      }
+      if (undefined !== strict) assert.deepEqual(fast, strict, text)
+      reported += fast.length
+    }
+    assert.ok(400 < reported, `${reported} reported`)
 
     // What each reading takes for a number decides what can be lossy.
     const forms = 'a: 9_007_199_254_740_993\nb: 0b100000000000000000000000000000000000000000000000000001\nc: 012345678901234567890\nd: Infinity\n'
@@ -591,6 +642,43 @@ describe('the text', () => {
     assert.deepEqual(Object.keys(proto), ['__proto__'])
     assert.equal(proto.__proto__.x, '\ufffd')
     assert.throws(() => wellFormed(tree, { duplicates: 'first' as any }), TypeError)
+  })
+
+  test('wellFormed merges trees, and keeps the later of two values that are not both trees', () => {
+    // Two names the repair makes one, the later with a cycle in it. A
+    // merge of it has no end, so the later value is kept, cycle and all.
+    const loop: any = { x: 1 }
+    loop.self = loop
+    const cyclic: any = wellFormed({ ['k\ud800']: { y: 2 }, ['k\ufffd']: loop }, { duplicates: 'merge' })
+    assert.deepEqual(Object.keys(cyclic), ['k\ufffd'])
+    assert.deepEqual(Object.keys(cyclic['k\ufffd']), ['x', 'self'])
+    assert.equal(cyclic['k\ufffd'].self, cyclic['k\ufffd'])
+    // The earlier value with the cycle, and the later a tree: the same.
+    const other: any = wellFormed({ ['k\ud800']: loop, ['k\ufffd']: { y: 2 } }, { duplicates: 'merge' })
+    assert.deepEqual(C(other), { 'k\ufffd': { y: 2 } })
+
+    // A value that shares a part is not a tree either. Thirty levels,
+    // each holding the one below twice, are a billion paths to a merge
+    // that follows each, and thirty maps to this.
+    let shared: any = { leaf: '\ud800' }
+    for (let i = 0; i < 30; i++) shared = { l: shared, r: shared }
+    const started = Date.now()
+    const out: any = wellFormed({ ['k\ud800']: { y: 2 }, ['k\ufffd']: shared }, { duplicates: 'merge' })
+    assert.ok(Date.now() - started < 5000)
+    assert.equal(out['k\ufffd'].l, out['k\ufffd'].r)
+    let node = out['k\ufffd']
+    for (let i = 0; i < 30; i++) node = node.l
+    assert.deepEqual(C(node), { leaf: '\ufffd' })
+
+    // Two trees merge, to any depth, as `parse` merges a repeated name.
+    const trees = wellFormed({ ['k\ud800']: { a: { b: 1 }, l: [1, 2] }, ['k\ufffd']: { a: { c: 2 }, l: [9] } }, { duplicates: 'merge' })
+    assert.deepEqual(C(trees), { 'k\ufffd': { a: { b: 1, c: 2 }, l: [9, 2] } })
+    assert.deepEqual(
+      C(trees),
+      C(parse('{"k":{"a":{"b":1},"l":[1,2]},"k":{"a":{"c":2},"l":[9]}}', { duplicates: 'merge' })).k
+        ? { 'k\ufffd': C(parse('{"k":{"a":{"b":1},"l":[1,2]},"k":{"a":{"c":2},"l":[9]}}', { duplicates: 'merge' })).k }
+        : {},
+    )
   })
 
   test('a deep tree does not exhaust the stack in wellFormed', () => {

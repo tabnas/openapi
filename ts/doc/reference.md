@@ -36,6 +36,7 @@ Reads a description and returns its raw tree. It refuses:
 | `openapi_stream` | the text is a YAML stream of more than one document |
 | `openapi_alias_budget` | the YAML aliases of the text would copy it out past `aliasBudget` |
 | `openapi_size` | the text is past `maxBytes`, and `JSON.parse` does not read it |
+| `openapi_work` | the text takes more work to read than a description of `maxBytes` takes |
 | `openapi_version` | under `strict`, the root names no version this package reads |
 | `openapi_duplicate_key` | under `strict`, a map holds one member name twice |
 | `openapi_encoding` | under `strict`, the bytes are not well-formed in their encoding |
@@ -93,9 +94,9 @@ grammar:
 
 When `JSON.parse` refuses the text, or its root is not a map, the
 grammar reads the text instead, so every error comes from the grammar.
-The grammar always reads it under `strict`, under `duplicates: 'merge'`,
-and where a `report` is asked for and the text may hold a number to
-report. Both paths give the same tree.
+The grammar always reads it under `strict` and under
+`duplicates: 'merge'`. Both paths give the same tree, and the same
+`report`.
 
 #### `duplicates`
 
@@ -115,8 +116,9 @@ refused, whatever `duplicates` says.
 
 #### `aliasBudget` and `maxBytes`
 
-Both are checked on the text, before the grammar builds any of it, and
-both are a number of bytes of UTF-8. `Infinity` lifts either.
+Both are a number of bytes of UTF-8, and `Infinity` lifts either. Each
+is checked on the text, before the grammar builds any of it, and held
+again while the grammar reads.
 
 `aliasBudget` is the most the text may come to once every YAML alias is
 copied in, as [`aliasedSize`](#aliasedsizetext) measures it. The default
@@ -125,17 +127,38 @@ add is held to it: a text in which no alias copies anything is never
 refused for it, whatever the budget. Strict JSON has no alias, and is
 not measured.
 
-`maxBytes` is the largest text the grammar is given. Reading YAML takes
-about a hundred bytes of memory for each byte of the text. A text just
-under the default, 16 MiB, took about 1.4 GB where it was measured,
-inside the 2.2 GB heap Node gave a process by default there. A process
-with a smaller heap needs a smaller limit. JSON text that `JSON.parse`
-reads is not limited.
+The budget is held twice. The measure is taken of the text, before the
+grammar builds anything, and it reads the text as YAML. The base reading
+takes more than YAML, so a text can be written in which the grammar
+finds an alias that the measure passed over. So `parse` also counts each
+copy the grammar makes, as it makes it, and refuses the text at the
+alias whose copy passes the budget. That count is from below: one for
+each member, each item, and each scalar copied.
+
+`maxBytes` is the largest text the grammar is given. Reading a
+description takes about a hundred bytes of memory for each of its bytes.
+One just under the default, 16 MiB, took about 1.4 GB where it was
+measured, inside the 2.2 GB heap Node gave a process by default there. A
+process with a smaller heap needs a smaller limit. JSON text that
+`JSON.parse` reads is not limited.
+
+`maxBytes` bounds the work of the grammar as well as the size of the
+text, because size alone does not say what a text costs. The grammar
+keeps about a kilobyte for each step it takes, until it is done. A
+description takes a step for each ten of its bytes. A text of very many
+small values, such as a list of a million one-letter items, takes one or
+two steps for each byte, and a megabyte and a half of them took all of
+that heap. So the grammar is given a step for each ten bytes of
+`maxBytes`, and a hundred thousand at least, and a text that takes more
+is stopped, as `openapi_work`. The default gives 1,677,721 steps.
 
 Each error carries the figures in `details`: `size` and `budget` for
-`openapi_alias_budget`, `size` and `limit` for `openapi_size`. The
-`size` of `openapi_alias_budget` is `Infinity` for a text that
-[`aliasedSize`](#aliasedsizetext) did not measure to the end.
+`openapi_alias_budget`, `size` and `limit` for `openapi_size`, `steps`
+and `limit` for `openapi_work`. The `size` of `openapi_alias_budget` is
+`Infinity` for a text that [`aliasedSize`](#aliasedsizetext) did not
+measure to the end. Where the grammar's copies passed the budget and
+the measure had not, `size` is what the text and its copies had come to
+when the parse was stopped.
 
 #### `report`
 
@@ -203,7 +226,9 @@ function aliasedSize(text: string): number
 Returns the size, in bytes of UTF-8, that a YAML text comes to once
 every alias is replaced by the node its anchor labels, all the way down.
 A text with no alias is its own size. It reads the text alone and parses
-nothing: comments, quoted scalars and block scalars are passed over.
+nothing: comments, quoted scalars and block scalars are passed over. It
+reads the text as YAML, so an anchor or an alias behind `//` or inside
+`/* */` is counted, though the base reading takes those for comments.
 
 The measure is one pass over the text, and then work that grows with
 how the anchors nest. That work is counted, at 32 steps for each byte of
@@ -225,9 +250,11 @@ not changed: what was shared stays shared, a cycle stays a cycle, and
 each map keeps its prototype.
 
 `duplicates` decides what two member names give when the repair makes
-them one name, as it does for `parse`. The default is `'last'`. A string
-is repaired as a tree of one value, and any other value is returned as
-it is.
+them one name, as it does for `parse`. The default is `'last'`. Under
+`'merge'` two values are merged where each is a tree, as every value
+`parse` gives is. Where one holds a cycle or shares a part with
+another, the later is kept. A string is repaired as a tree of one value,
+and any other value is returned as it is.
 
 ### `resolve(raw, options?)`
 

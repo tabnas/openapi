@@ -384,9 +384,11 @@ The budget is the larger of 1,000,000 bytes and ten times the text.
 Pass `aliasBudget` to set your own.
 
 A large text is refused the same way, as `openapi_size`. Reading YAML
-takes about a hundred bytes of memory for each byte of the text, so
+takes about a hundred bytes of memory for each byte of a description, so
 `parse` gives the grammar at most 16 MiB unless `maxBytes` says
-otherwise. JSON text that `JSON.parse` reads is not limited.
+otherwise. JSON text that `JSON.parse` reads is not limited. A text of
+very many small values costs far more than its size suggests, and is
+stopped by the work it takes, as `openapi_work`, under the same limit.
 
 ```js
 const { parse } = require('@tabnas/openapi')

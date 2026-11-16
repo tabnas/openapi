@@ -15,7 +15,9 @@ import { Tabnas } from '@tabnas/parser'
 type WellFormedOptions = {
   // What two member names give when the repair makes them one name:
   // the later value ('last', the default), or the two merged as `parse`
-  // merges a repeated name under `duplicates: 'merge'`.
+  // merges a repeated name under `duplicates: 'merge'`. Two values are
+  // merged only where each is a tree, as every value `parse` gives is.
+  // Where one holds a cycle or shares a part, the later is kept.
   duplicates?: 'last' | 'merge'
 }
 
@@ -54,10 +56,34 @@ function needsRepair(tree: unknown): boolean {
   return false
 }
 
+// Whether a value is a tree: no map or list of it is reached twice, so it
+// holds no cycle and shares no part. A scalar is one.
+function isTree(value: unknown): boolean {
+  if (null == value || 'object' !== typeof value) return true
+  const seen = new Set<object>([value])
+  const stack: object[] = [value]
+  while (0 < stack.length) {
+    const node: any = stack.pop()
+    const names: (string | number)[] = Array.isArray(node) ? node.map((_: unknown, i: number) => i) : Object.keys(node)
+    for (const name of names) {
+      const child = node[name]
+      if (null == child || 'object' !== typeof child) continue
+      if (seen.has(child)) return false
+      seen.add(child)
+      stack.push(child)
+    }
+  }
+  return true
+}
+
 // Two values under one name, merged as the base grammars merge them: the
 // engine's `deep`, with every map of the result rebuilt without a
-// prototype, as `parse` builds its maps.
+// prototype, as `parse` builds its maps. Only trees are merged. The
+// engine's merge follows every path, so it does not end on a value that
+// holds a cycle, and takes the square of a value that shares its parts;
+// of two such values the later is kept, as it is without a merge.
 function merged(prev: any, curr: any): any {
+  if (!isTree(prev) || !isTree(curr)) return curr
   const out = Tabnas.util.deep(prev, curr)
   const rebuild = (root: any): any => {
     const copy = (map: Record<string, any>) => {
@@ -117,7 +143,8 @@ function wellFormed<T>(tree: T, options: WellFormedOptions = {}): T {
     const key = toWellFormed(name as string)
     if (own(f.copy, key)) {
       // The repair has made two names one. A value still being filled is
-      // an ancestor, which cannot be merged into.
+      // an ancestor, which cannot be merged into, and `merged` keeps the
+      // later of two values that are not both trees.
       const prev = f.copy[key]
       const mergeable = 'merge' === duplicates && null != prev && !open.has(prev) && !open.has(value)
       define(f.copy, key, mergeable ? merged(prev, value) : value)
