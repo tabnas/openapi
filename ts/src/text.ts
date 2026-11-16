@@ -10,21 +10,19 @@
 // with the one pattern `^\s*[^#\s]` under the `m` flag. That pattern
 // takes time that grows with the square of a run of blank lines, since
 // each line start reads the whole run again, so the same test is made
-// here in a single pass.
-const SPACES = /\s*/y
-const TO_LINE_END = /[^\n\r\u2028\u2029]*/y
+// here in a single pass: white space is passed over, then a comment to
+// the end of its line, and the first thing that is neither is content.
+const SPACES = /\s+/y
+const COMMENT = /#[^\n\r\u2028\u2029]*/y
 function hasContent(text: string): boolean {
   let i = 0
   while (i < text.length) {
     SPACES.lastIndex = i
-    SPACES.test(text)
-    i = SPACES.lastIndex
+    if (SPACES.test(text)) i = SPACES.lastIndex
     if (text.length <= i) return false
-    if (0x23 !== text.charCodeAt(i)) return true
-    // A comment, to the end of its line.
-    TO_LINE_END.lastIndex = i
-    TO_LINE_END.test(text)
-    i = TO_LINE_END.lastIndex
+    COMMENT.lastIndex = i
+    if (!COMMENT.test(text)) return true
+    i = COMMENT.lastIndex
   }
   return false
 }
