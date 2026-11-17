@@ -109,7 +109,8 @@ default that a shared row pins changes until porting starts.
 | T0 | gates: the corpus sweep and its ledger, the apidef gate, the fixture homes | done |
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
 | T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
-| T2b, T3 to T6 | reading that only `@tabnas/yaml` can repair, the site index, several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
+| T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and measured from here with that build linked in: under `reading: 'spec'` the corpus ledger falls from 190 rows to 5, with none added. It waits for that pull request's merge and a release. Then `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and both ledgers are rewritten from a sweep. The rule history is measured, and turning it on is Decision 34 |
+| T3 to T6 | the site index, several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
 `ts/test/debug-model.test.ts` and `rs/tests/debug_model_test.rs` hold
@@ -167,8 +168,9 @@ other tests in `ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
   `ts/test/debug-model.test.ts` holds that. A parser reads one way:
   `READING` records what `make` built each for, and `parse` refuses the
   other reading on a given `instance`. The YAML 1.1 words stay booleans
-  under both, because the yaml grammar matches them in its own code,
-  out of reach of an option.
+  under both, because the released yaml grammar matches them in its own
+  code, out of reach of an option. Its `schema: 'core'` option, built as
+  tabnas/yaml#151, changes that once it is released.
 - **`maxBytes` bounds the work as well as the size, and the work is
   what costs.** The engine keeps about 900 bytes for each rule pass
   until the parse ends: its rule history, which TypeScript does not
@@ -181,7 +183,10 @@ other tests in `ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
   `rule.history` option is the other lever, and is not set: a bound of 3
   read all 215 fixture rows the same and cut a dense megabyte from
   1.5 GB to 140 MB, at three to four times the time. It is the plan's
-  T2b item 5, to be measured across the corpus before it is turned on.
+  T2b item 5, and is measured across the corpus: every YAML document
+  reads to the same tree, the largest in a third of the memory and three
+  times the time, and both Microsoft Graph descriptions are read under
+  it. Turning it on is the plan's Decision 34.
 - **A refusal decided from the text** (`openapi_size`,
   `openapi_alias_budget`, `openapi_encoding`) is put in the parse state
   as `refuse`, and `refuseAt` raises it. An error needs a token and a

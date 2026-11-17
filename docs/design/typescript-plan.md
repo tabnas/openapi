@@ -278,6 +278,36 @@ be, and no document of the corpus has the shape of W12.
   silently as two members, `a` and `more`. A scalar that starts as a
   word reads correctly.
 
+**Repaired in T2b**, in tabnas/yaml#151: W9, W11 and W12, with the
+layout defects and the refusals of section 2.1. They are repaired in the
+yaml grammar, so they reach this package with that grammar's release.
+
+**Found in T2b.** Four shapes were read, each wrongly, and are refused
+by that change. No document of the corpus has one. The first three are
+not YAML, and the reference parser refuses them as well. The fourth is
+YAML that a tree cannot hold.
+
+- A tab in a line's indentation before a mapping key or a sequence
+  entry. The key was read as its parent's sibling: `a:` then a tab and
+  `b: 1` gave `{a: null, b: 1}`. It is refused as `yaml_tab_indent`.
+- `key: - a`, a block sequence that starts on its key's line. It read as
+  `{key: [a]}`.
+- A plain scalar continued on a line below a sequence at a lesser
+  indent, which was joined to the sequence's last entry.
+- An alias inside the node its anchor names, the recursive alias of W9.
+  It read as `null`, and is refused as `yaml_recursive_alias`. YAML
+  allows it and means a node that holds itself, which the reference
+  parser builds. This package copies what an alias names (Decision 23),
+  and a copy of a node into itself has no end, so the grammar says so
+  where it said `null`.
+
+Five limits of the grammar were met and left, none of them in the
+corpus: a tagged plain scalar that runs on to the next line is refused;
+a tagged quoted scalar keeps its escapes as written; `!!str x, y` in a
+block is refused; a flow collection left open at the end of the text is
+read as if closed; and a key written as a number in another base, such
+as `0x1`, keeps its text.
+
 ### 2.4 What apidef needs (E9)
 
 With apidef's resolver deleted and the preset in its place, 2,473 of
@@ -506,6 +536,17 @@ T5.
 Acceptance: in the sweep, no valid description refused and no tree
 difference outside the two kinds section 1 allows.
 
+Built, as one pull request in that repository, tabnas/yaml#151, in every
+implementation there. It waits for the maintainer's merge and for a
+release, and until then nothing here can use it. Section 11 has the
+record, measured from this checkout with that build linked in. Items 1,
+2, 4 and 6 are repaired, and the acceptance holds for the grammar: under
+`reading: 'spec'` the only trees that differ are the two the reference
+parser reads wrongly, and the only descriptions refused are the two this
+package refuses for their size. Item 3 is repaired in the grammar, and
+apidef keeps `normalizePathKeys` until both of its implementations can
+drop it. Item 5 is measured, and what is left of it is Decision 34.
+
 ### T3: the site index, and `resolve` on it (L)
 
 1. **Prototype E12 first**, with its recorded result, before any source
@@ -669,6 +710,7 @@ Numbered from 16, after the earlier plan's fifteen.
 | 31 | Loaders | a confined file loader and an allow-listed HTTP loader, both opt-in; nothing loads by default | T4 |
 | 32 | What "handle" covers beyond references | the operation view, the embedded languages and bundling to JSON are in; writing YAML back with its layout is out | T5 |
 | 33 | Peer ranges of this package, as a standing rule | each floor at the first release that has what the package calls: `@tabnas/expr` 0.5.20 for `fold`, and so on | T6 |
+| 34 | The engine's rule history on this package's parser. Bounded at 3 it reads every YAML document of the corpus to the same tree, in a third to a half of the memory and three times the time (section 11) | bounded for a text past the present limit of 16 MiB, and the limit raised to what the bound then allows, measured as T2 measured the present one; unbounded below it, where nothing changes. That reads both Microsoft Graph descriptions, the last two the sweep refuses. The other courses are a bound for every text, or none | T2b item 5 |
 
 ## 7. Work in other repositories
 
@@ -686,7 +728,7 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 | yaml | CR-only line breaks; JSON text after a blank first line; a recursive alias; tab indentation refused | T2b | S each |
 | yaml | W11: a token's row and column, counted as its offset is | T2b; every error's place | S |
 | yaml | W12: a plain scalar that starts as a number and runs on to the next line | T2b | S |
-| yaml, parser | memory per byte of YAML | T2b | M, after measurement |
+| yaml, parser | memory per byte of YAML. Measured: the lever is this package's own setting, Decision 34, and nothing is asked of either repository. The bound's cost in time is the engine's to lower, if it is wanted | T2b | S here, after Decision 34 |
 | apidef | the change of T1, which grows as T2 and T5 land. Until Decision 20 is taken it is the three diffs of `docs/design/apidef-swap/` | G2 | M |
 | aontu | at the release: pins that let `@tabnas/expr` 0.5.20 reach apidef, or apidef overrides them | T6 | S |
 | admin | at the release: the workflows and the descriptor restamped | T6 | S |
@@ -694,6 +736,10 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 Each yaml change passes that repository's own suites, its YAML Test
 Suite census and its ledger of deviations from the core schema, in every
 implementation there. The sizes allow for that.
+
+Every yaml row above but the last is built in tabnas/yaml#151, as one
+change, since the repairs share one scan of a plain scalar and one
+reading of a line break. Section 11 has what it measured.
 
 ## 8. Risks
 
@@ -735,6 +781,89 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, while T2b was built:
+
+- T2b is one pull request in the yaml repository, tabnas/yaml#151, in
+  every implementation there, with 218 fixture rows. Nothing is merged
+  or released, and no file under `ts/` changes here. What follows was
+  measured from this checkout with that build in place of the installed
+  yaml package, and, for the specification's reading, with one line of
+  `make` changed to pass the option.
+- The option is `schema: 'core'` on the yaml plugin. Under it a plain
+  scalar resolves as the YAML 1.2 core schema says and no other way, so
+  `yes`, `no`, `on` and `off` are strings, and so is a number the core
+  schema does not name. Without it the grammar reads as before. The
+  YAML Test Schema's 245 scalars define it, and all read as the core
+  schema says.
+- Under `'spec'`, with the option passed, the sweep refuses 3 documents
+  where it refused 10, and 2 trees differ where 180 did. The ledger
+  falls from 190 rows to 5: 185 removed, none added, none changed. Three
+  of the five are the accepted rows, two documents the reference parser
+  reads wrongly and one that is a list and no description. The other two
+  are the Microsoft Graph descriptions, refused for their size.
+- Under `'base'`, which passes no option, it refuses 15 where it refused
+  22, and 220 trees differ where 232 did. The seven refusals the grammar
+  caused are gone. What is left is that reading's own, with the three
+  accepted rows and the two refusals for size: the comment syntax in 12
+  refusals and 32 trees, the number syntax in 45 trees, and the YAML 1.1
+  words in 166. The ledger falls from 254 rows to 235: 20
+  removed and one added, a description that was refused and now reads,
+  and holds one of those words.
+- Those sweeps ran on the build before the pull request's last change to
+  the grammar. Every document was then read with both builds under both
+  readings, on the grammar path: 17,972 readings, and each gives the
+  same tree or the same refusal. So the figures are the final build's.
+- The apidef gate passes with the three diffs against that build: 2,477
+  of 2,478 tests, one skipped as on `main`, and all 57 definitions
+  byte-identical.
+- Beyond the corpus, the grammar's change was held to the reference
+  parser on 28,975 generated texts aimed at the repaired shapes. No text
+  that the released grammar and the reference read alike reads
+  differently now.
+- A token's row and column are now the ones its offset gives (W11), in
+  the grammar itself. The `lossy` report can read them from the token
+  once the release is in. It still counts them from the offset.
+- Item 3. The grammar no longer leaves the quotes on an explicit key
+  with a lone-surrogate escape. With apidef's call to
+  `normalizePathKeys` dropped as a fourth diff, the gate passes as it
+  does with three. The diff is not added. apidef holds that function to
+  a table both of its implementations run, and its second
+  implementation still calls it, so the call goes from both at once,
+  after the release. A key with an escape that is no escape, such as
+  `"\q"`, still keeps its quoted text, by the grammar's design, and
+  only there does the function still do anything.
+- Item 5. The engine's `rule.history`, bounded at 3 on this package's
+  parser, reads every YAML document of the corpus that is read today to
+  the tree it reads unbounded: the 8,176 up to 2 MB, and the 51 from
+  there to 13.8 MB. Over those 51 it takes three times the time, and
+  less memory the larger the text: 44% in sum, and a third for the
+  largest. Stripe's description takes 443 MB and 12.2 seconds where it
+  took 1,349 MB and 3.9 seconds, GitHub's 390 MB and 10.9 seconds where
+  it took 1,237 MB and 3.4 seconds. The scripts and every row are filed
+  as E13, under [`prototype/`](prototype/).
+- Under that bound, and with the size limit lifted, both Microsoft
+  Graph descriptions are read: 25.8 MB in 30 seconds at a peak of
+  570 MB, where it takes 2.9 GB unbounded, and 58.4 MB in 59 seconds at
+  879 MB, where unbounded it runs out of memory. Each gives the
+  reference parser's tree exactly, in 749,797 and 1,526,519 nodes. They
+  are the last two valid descriptions the sweep refuses, and the last
+  two open rows of the ledger. Turning the bound on is Decision 34, and
+  is not done here.
+- What waits for the yaml release, as one change here: `make` passes
+  `schema: 'core'` to the yaml plugin under `reading: 'spec'`; the row
+  of `test/pending/parse-reading.tsv` that pins the YAML 1.1 words as
+  booleans under that reading turns to strings; the sweep is run on the
+  released package under each reading, and both ledgers and baselines
+  are rewritten from it. The subscriber that turns a number the core
+  schema does not name into text may then have nothing left to do,
+  which that change should measure before it removes it. The package
+  declares no version of the yaml package, so no manifest changes.
+- The plan had this step as separate instructions, S to M each. It came
+  out as one change of size L in the yaml repository: the items share
+  one scan of a plain scalar and one reading of a line break, and exact
+  columns showed four shapes that had been refused, or read, by
+  accident (section 2.3).
 
 **Since acceptance**, while T2 was built:
 

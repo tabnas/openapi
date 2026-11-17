@@ -32,7 +32,8 @@ Five more, taken on 12 November 2026 for
 repository's own build (`ts/dist/openapi.js`, with `@tabnas/parser`
 0.12.20, `@tabnas/yaml` 0.5.32, `@tabnas/jsonic` 0.7.11, `@tabnas/json`
 0.5.20 and `@tabnas/expr` 0.5.21). Each result file is the report of the
-pass, as written.
+pass, as written. A sixth, E13, was taken on 17 November 2026, and its
+result says which yaml build each part of it ran on.
 
 | Folder | Question | Result |
 |---|---|---|
@@ -41,6 +42,7 @@ pass, as written.
 | `e9-apidef-swap/` | Does `voxgig/apidef`'s own suite pass with its parsing and resolution replaced by this package, and what does each remaining hand-written step need? Two diffs against apidef at 3058271, and `preset-shapes.cjs`, the shapes where apidef's reading of a pointer and the preset part. | `e9-apidef-swap.result.md` |
 | `e10-aless-needs/` | What does the `rjrodger/aless` viewer need in order to open a reference in place, and what does the package cost on a 14 MB description? Set aside with that goal until a port exists; kept as a record, and not used by the plan. | `e10-aless-needs.result.md` |
 | `e11-apidef-reads/` | apidef reads through the same base grammars, so are the documents E7 flagged misread by apidef too, and does it show in apidef's output? apidef's own reader over those documents, apidef's models from each document as written against the same document re-read by the reference parser, and what two engine options on this package's own parser repair. | `e11-apidef-reads.result.md` |
+| `e13-rule-history/` | The engine keeps a record of every rule until a parse ends. Bounded at 3, by its `rule.history` option, is every document read to the same tree, and what does the bound cost and save? Taken on 17 November 2026, for step T2b of the plan and its Decision 34. | `e13-rule-history.result.md` |
 
 Two of these became tools in the plan's T0, and the tools are what to
 run from now on. The corpus sweep is
