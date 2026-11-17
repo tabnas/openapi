@@ -184,9 +184,10 @@ other tests in `ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
   read all 215 fixture rows the same and cut a dense megabyte from
   1.5 GB to 140 MB, at three to four times the time. It is the plan's
   T2b item 5, and is measured across the corpus: every YAML document
-  reads to the same tree, the largest in a third of the memory and three
-  times the time, and both Microsoft Graph descriptions are read under
-  it. Turning it on is the plan's Decision 34.
+  that is read at all reads to the same tree, the largest in under a
+  third of the memory and three times the time, and both Microsoft Graph
+  descriptions are read under it. Turning it on is the plan's Decision
+  34.
 - **A refusal decided from the text** (`openapi_size`,
   `openapi_alias_budget`, `openapi_encoding`) is put in the parse state
   as `refuse`, and `refuseAt` raises it. An error needs a token and a

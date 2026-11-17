@@ -710,7 +710,7 @@ Numbered from 16, after the earlier plan's fifteen.
 | 31 | Loaders | a confined file loader and an allow-listed HTTP loader, both opt-in; nothing loads by default | T4 |
 | 32 | What "handle" covers beyond references | the operation view, the embedded languages and bundling to JSON are in; writing YAML back with its layout is out | T5 |
 | 33 | Peer ranges of this package, as a standing rule | each floor at the first release that has what the package calls: `@tabnas/expr` 0.5.20 for `fold`, and so on | T6 |
-| 34 | The engine's rule history on this package's parser. Bounded at 3 it reads every YAML document of the corpus to the same tree, in a third to a half of the memory and three times the time (section 11) | bounded for a text past the present limit of 16 MiB, and the limit raised to what the bound then allows, measured as T2 measured the present one; unbounded below it, where nothing changes. That reads both Microsoft Graph descriptions, the last two the sweep refuses. The other courses are a bound for every text, or none | T2b item 5 |
+| 34 | The engine's rule history on this package's parser. Bounded at 3 it reads every YAML document of the corpus that is read at all to the same tree, in under half the memory, under a third for the largest, and three times the time (section 11) | bounded for a text past the present limit of 16 MiB, and the limit raised to what the bound then allows, measured as T2 measured the present one; unbounded below it, where nothing changes. That reads both Microsoft Graph descriptions, the last two the sweep refuses. The other courses are a bound for every text, or none | T2b item 5 |
 
 ## 7. Work in other repositories
 
@@ -834,19 +834,24 @@ what the code does.
   `"\q"`, still keeps its quoted text, by the grammar's design, and
   only there does the function still do anything.
 - Item 5. The engine's `rule.history`, bounded at 3 on this package's
-  parser, reads every YAML document of the corpus that is read today to
-  the tree it reads unbounded: the 8,176 up to 2 MB, and the 51 from
-  there to 13.8 MB. Over those 51 it takes three times the time, and
-  less memory the larger the text: 44% in sum, and a third for the
-  largest. Stripe's description takes 443 MB and 12.2 seconds where it
-  took 1,349 MB and 3.9 seconds, GitHub's 390 MB and 10.9 seconds where
-  it took 1,237 MB and 3.4 seconds. The scripts and every row are filed
-  as E13, under [`prototype/`](prototype/).
+  parser, reads every YAML document of the corpus that the released
+  package reads to the tree it reads unbounded: 8,169 up to 2 MB, and 50
+  from there to 13.8 MB. Eight more are refused either way, seven of
+  them by the defects tabnas/yaml#151 repairs. Over those 50 it takes
+  3.1 times the time, and less memory the larger the text: 42% in sum,
+  and 29% for the largest. Stripe's description takes 373 MB and 11.3
+  seconds where it took 1,285 MB and 3.7 seconds, GitHub's 334 MB and
+  10.6 seconds where it took 1,203 MB and 3.1 seconds. The time is the
+  parse's alone, and the memory the peak when it ends. The scripts and
+  every row are filed as E13, under [`prototype/`](prototype/).
 - Under that bound, and with the size limit lifted, both Microsoft
-  Graph descriptions are read: 25.8 MB in 30 seconds at a peak of
-  570 MB, where it takes 2.9 GB unbounded, and 58.4 MB in 59 seconds at
-  879 MB, where unbounded it runs out of memory. Each gives the
-  reference parser's tree exactly, in 749,797 and 1,526,519 nodes. They
+  Graph descriptions are read: 25.8 MB in 29 seconds at a peak of
+  450 MB, where it takes 2.8 GB unbounded, and 58.4 MB in 58 seconds at
+  750 MB, where unbounded it runs out of a heap of 4 GB. With the yaml
+  build of tabnas/yaml#151 and its option, each gives the reference
+  parser's tree exactly, in 749,797 and 1,526,519 nodes. With the
+  released grammar they part from it in 24 and 62 values, every one a
+  YAML 1.1 word read as a boolean, such as a parameter named `on`. They
   are the last two valid descriptions the sweep refuses, and the last
   two open rows of the ledger. Turning the bound on is Decision 34, and
   is not done here.
