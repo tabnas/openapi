@@ -188,3 +188,64 @@ that is what an author meant. A few cases matter for OpenAPI:
 The parser follows YAML here rather than second-guessing it. The
 [how-to guide](guide.md#keep-a-value-yaml-would-change) shows the
 quoting that keeps a value as text.
+
+## Two readings
+
+The grammars this package is built on read more than YAML. They take
+`//` and `/* */` for comments, `_` for a separator inside a number, and
+for a number anything JavaScript reads as one. That suits a file a
+person edits by hand. It does not suit a description written for a YAML
+reader, where `url: //api.example.com` is a URL and not a comment. In a
+sweep of 8,986 published documents, 32 lost a value to comment syntax,
+45 had text read as a number, and 12 were refused outright.
+
+So `parse` has two readings. `reading: 'base'`, the default, is the
+grammars' own. Under `reading: 'spec'` a comment is YAML's `#` alone,
+and a number is one the YAML core schema reads as a number. It is the
+same parser: two options of the engine switch the comment syntax off,
+and each number token is checked against the grammar of the core schema
+before it reaches a rule. No rule is added, so everything else reads as
+before.
+
+The default has not moved because the shared fixtures of this
+repository pin it, in every implementation. It moves when they move
+together.
+
+## Limits on what is read
+
+A parser that reads text from outside a system has to bound what a text
+can cost. Three bounds are on by default:
+
+- A YAML alias is a copy, and copies of copies multiply. `parse` works
+  out from the text what the aliases come to, and refuses a text past
+  the budget before building any of it. It then holds the copies to the
+  same budget as the grammar makes them, because a text can be written
+  that the measure and the grammar read differently.
+- Reading YAML holds about a hundred bytes for each byte of the text.
+  Where this was measured, Node gave a process a heap of 2.2 GB by
+  default. A description of 26 MB exhausted it, and one just under
+  16 MiB took about 1.4 GB. So the grammar is given 16 MiB at most.
+  `JSON.parse` has no such cost, and JSON text it reads has no limit.
+- Size is not the whole cost. The grammar keeps about a kilobyte for
+  each step it takes, and a text of very many small values takes ten
+  times the steps of a description its size. So the steps are counted
+  too, and a text is stopped once it has taken as many as a description
+  at the size limit takes.
+- A parser holds its last parse until the next one starts. `parse`
+  makes its own parsers let go when a parse returns.
+
+Each refusal has a code and carries its figures, so a caller that
+trusts its input can raise the limit that stopped it.
+
+The checks are held to the same rule as the text. Each is one pass over
+the text, or work that is counted and stopped at a limit, so that no
+text can make a check cost more than its own size allows.
+
+## What a number cannot hold
+
+JSON and YAML put no bound on a number. JavaScript holds an integer
+exactly only up to 2^53, and `9223372036854775807`, the largest 64-bit
+integer, reads as `9223372036854775808`. The tree keeps the plain
+number: a tree with a big-integer type in it would break every tool
+that reads one. A `report` lists what was lost, each with the text as
+written, so a tool that needs the exact value can take it from there.

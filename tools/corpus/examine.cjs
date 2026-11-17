@@ -311,9 +311,12 @@ const now = () => Number(process.hrtime.bigint()) / 1e6
 
 // One document, every phase. `ext` is the file's extension, which only
 // tells a JSON file that is not JSON from YAML. `fast: false` sends JSON
-// text to the grammar as well.
-function examine(text, { ext = '', fast = true, send = () => {} } = {}) {
+// text to the grammar as well. `reading` is the reading every parse but
+// the strict one is given; 'base', the default, gives none, so that a
+// build from before the option can still be swept.
+function examine(text, { ext = '', fast = true, reading = 'base', send = () => {} } = {}) {
   const { O, YAML } = load()
+  const read = 'base' === reading ? {} : { reading }
   const record = {}
   const emit = (phase, data) => { record[phase] = data; send(phase, data) }
   const meta = { bytes: Buffer.byteLength(text), bom: 0xfeff === text.charCodeAt(0), lines: text.split('\n').length, ext: String(ext).toLowerCase(), rssStartKiB: rss() }
@@ -364,7 +367,7 @@ function examine(text, { ext = '', fast = true, send = () => {} } = {}) {
   // The package, by default.
   let tree, parsed = false
   t = now()
-  try { tree = O.parse(text, fast ? {} : { fast: false }); parsed = true; emit('parse', { ok: true, ms: now() - t, rssKiB: rss(), heapMiB: Math.round(process.memoryUsage().heapUsed / 1048576) }) }
+  try { tree = O.parse(text, fast ? read : { ...read, fast: false }); parsed = true; emit('parse', { ok: true, ms: now() - t, rssKiB: rss(), heapMiB: Math.round(process.memoryUsage().heapUsed / 1048576) }) }
   catch (e) { emit('parse', { ok: false, ms: now() - t, err: errInfo(e), rssKiB: rss() }) }
 
   // The trees.
@@ -389,7 +392,7 @@ function examine(text, { ext = '', fast = true, send = () => {} } = {}) {
   // JSON: the grammar path and strict.
   if (isJson) {
     t = now()
-    try { const g = O.parse(text, { fast: false }); const ms = now() - t; const d = compare(refTree, g); emit('grammar', { ok: true, ms, n: d.length, classes: d.length ? groupDiffs(d, null, text) : undefined, rssKiB: rss() }) }
+    try { const g = O.parse(text, { ...read, fast: false }); const ms = now() - t; const d = compare(refTree, g); emit('grammar', { ok: true, ms, n: d.length, classes: d.length ? groupDiffs(d, null, text) : undefined, rssKiB: rss() }) }
     catch (e) { emit('grammar', { ok: false, ms: now() - t, err: errInfo(e) }) }
     t = now()
     try { O.parse(text, { strict: true }); emit('strict', { ok: true, ms: now() - t }) }

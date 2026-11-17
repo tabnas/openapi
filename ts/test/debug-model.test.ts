@@ -78,6 +78,19 @@ describe('compose: openapi + @tabnas/debug', () => {
     assert.deepStrictEqual(grammar(m), grammar(base))
   })
 
+  test('the specification\'s reading adds no token, rule or alternate', { skip }, () => {
+    // It is options on the same parser, and a subscriber to its lexer:
+    // the grammar is the one jsonic and yaml make, down to the graph.
+    const m = model(make({ reading: 'spec' }))
+    const base = model(new Tabnas().use(jsonic).use(Yaml))
+    const { tokens, rules, graph } = grammar(m)
+    assert.deepStrictEqual({ tokens, rules, graph }, {
+      tokens: grammar(base).tokens,
+      rules: grammar(base).rules,
+      graph: grammar(base).graph,
+    })
+  })
+
   test('the plugin adds no grammar to strict json', { skip }, () => {
     const m = model(make({ strict: true }))
     const base = model(new Tabnas().use(json))

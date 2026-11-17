@@ -168,8 +168,8 @@ apis-guru	APIs/microsoft.com/cognitiveservices-NewsSearch/1.0/swagger.yaml	diffe
 apis-guru	APIs/microsoft.com/cognitiveservices-VideoSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
 apis-guru	APIs/microsoft.com/cognitiveservices-VisualSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/microsoft.com/cognitiveservices-WebSearch/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
-apis-guru	APIs/microsoft.com/graph-beta/1.0.1/openapi.yaml	died	out-of-memory after ref
-apis-guru	APIs/microsoft.com/graph/1.0.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=24
+apis-guru	APIs/microsoft.com/graph-beta/1.0.1/openapi.yaml	refused	openapi_size
+apis-guru	APIs/microsoft.com/graph/1.0.1/openapi.yaml	refused	openapi_size
 apis-guru	APIs/mist.com/0.37.7/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
 apis-guru	APIs/naviplancentral.com/plan/v1/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
 apis-guru	APIs/netatmo.net/1.1.5/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3

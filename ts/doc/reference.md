@@ -7,20 +7,24 @@ behind them.
 ## Exports
 
 ```ts
-import { parse, resolve, version, make, OpenApi, ResolveError, VERSION } from '@tabnas/openapi'
-import type { Connection, ParseOptions, ResolveOptions, ResolveResult, VersionInfo } from '@tabnas/openapi'
+import { parse, resolve, version, make, aliasedSize, wellFormed, OpenApi, ResolveError, VERSION } from '@tabnas/openapi'
+import type { Connection, Lossy, ParseOptions, ParseReport, Reading, ResolveOptions, ResolveResult, VersionInfo } from '@tabnas/openapi'
 ```
 
 ### `parse(text, options?)`
 
 ```ts
-function parse(text: string, options?: ParseOptions): any
+function parse(text: string | Uint8Array, options?: ParseOptions): any
 
 type ParseOptions = {
   strict?: boolean                // default false
+  reading?: 'base' | 'spec'       // default 'base'
   fast?: boolean | 'auto'         // default 'auto'
   duplicates?: 'last' | 'merge'   // default 'last'
-  instance?: Tabnas               // default: a shared parser per `strict`
+  aliasBudget?: number            // bytes; default: the larger of 1,000,000 and ten times the text
+  maxBytes?: number               // bytes; default 16,777,216
+  report?: ParseReport            // a map the parse fills
+  instance?: Tabnas               // default: a shared parser per `strict` and `reading`
 }
 ```
 
@@ -30,10 +34,54 @@ Reads a description and returns its raw tree. It refuses:
 |---|---|
 | `openapi_root` | the root of the document is not a map |
 | `openapi_stream` | the text is a YAML stream of more than one document |
+| `openapi_alias_budget` | the YAML aliases of the text would copy it out past `aliasBudget` |
+| `openapi_size` | the text is past `maxBytes`, and `JSON.parse` does not read it |
+| `openapi_work` | the text takes more work to read than a description of `maxBytes` takes |
 | `openapi_version` | under `strict`, the root names no version this package reads |
 | `openapi_duplicate_key` | under `strict`, a map holds one member name twice |
+| `openapi_encoding` | under `strict`, the bytes are not well-formed in their encoding |
 
-`strict` reads JSON alone, by RFC 8259, and adds the last two checks.
+`strict` reads JSON alone, by RFC 8259, and adds the last three checks.
+
+#### The text
+
+`text` is a string, or the bytes of one as a `Uint8Array`. Bytes are
+read by their byte-order mark:
+
+| The bytes open with | Read as |
+|---|---|
+| `EF BB BF`, or no mark | UTF-8 |
+| `FF FE` | UTF-16, little-endian |
+| `FE FF` | UTF-16, big-endian |
+| `FF FE 00 00` | UTF-32, little-endian |
+| `00 00 FE FF` | UTF-32, big-endian |
+
+A sequence the encoding does not allow is read as `U+FFFD`. Under `strict`
+it is refused, as `openapi_encoding`. A byte-order mark at the start of
+the text is passed over, in a string as in bytes, and under `strict`
+too. One mark is: a second is text, as YAML has it. Rows, columns and
+offsets are counted in the text without the mark. `parse` throws a
+`TypeError` for a text that is neither a string nor a `Uint8Array`.
+
+#### `reading`
+
+`reading` decides what starts a comment, what is a number, and what an
+empty document after the description gives:
+
+| | `'base'` | `'spec'` |
+|---|---|---|
+| A comment starts with | `#`, `//` or `/*` | `#` |
+| A number | whatever the base grammars and JavaScript read as one: `1_000`, `0b11`, `0X1F`, `-0x1F`, `Infinity` | one the YAML core schema reads as a number: a decimal integer or float with an optional sign, `0o17`, `0x1F` |
+| An empty document after the description | refused, as `openapi_stream` | passed over |
+
+Under `'spec'` a plain scalar that is not a core-schema number is the
+text as written, so `1_000` is the string `'1_000'` and `//host/path` is
+the string `'//host/path'`. A second document that holds anything is
+refused under both. `yes`, `no`, `on` and `off` are read as `true` and
+`false` under both. Under `strict` the grammar is JSON's and `reading`
+changes nothing.
+
+#### `fast`
 
 `fast` decides whether JSON text is read with `JSON.parse` before the
 grammar:
@@ -46,8 +94,11 @@ grammar:
 
 When `JSON.parse` refuses the text, or its root is not a map, the
 grammar reads the text instead, so every error comes from the grammar.
-Under `strict`, and under `duplicates: 'merge'`, the grammar always
-reads it. Both paths give the same tree.
+The grammar always reads it under `strict` and under
+`duplicates: 'merge'`. Both paths give the same tree, and the same
+`report`.
+
+#### `duplicates`
 
 `duplicates` decides what a member name given twice in one map gives:
 
@@ -61,12 +112,149 @@ index, to any depth. Where the two values are not both maps or both
 lists, the later one replaces the earlier. A later member named
 `__proto__`, `constructor` or `prototype` is left out, because the
 engine's merge skips those names. Under `strict` a repeated name is
-refused, whatever `duplicates` says. `parse` throws a `TypeError` for
-any other value of `duplicates`.
+refused, whatever `duplicates` says.
+
+#### `aliasBudget` and `maxBytes`
+
+Both are a number of bytes of UTF-8, and `Infinity` lifts either. Each
+is checked on the text, before the grammar builds any of it, and held
+again while the grammar reads.
+
+`aliasBudget` is the most the text may come to once every YAML alias is
+copied in, as [`aliasedSize`](#aliasedsizetext) measures it. The default
+is the larger of 1,000,000 and ten times the text. Only what the aliases
+add is held to it: a text in which no alias copies anything is never
+refused for it, whatever the budget. Strict JSON has no alias, and is
+not measured.
+
+The budget is held twice. The measure is taken of the text, before the
+grammar builds anything, and it reads the text as YAML. The base reading
+takes more than YAML, so a text can be written in which the grammar
+finds an alias that the measure passed over. So `parse` also counts each
+copy the grammar makes, as it makes it, and refuses the text at the
+alias whose copy passes the budget. That count is from below: one for
+each member, each item, and each scalar copied.
+
+`maxBytes` is the largest text the grammar is given. Reading a
+description takes about a hundred bytes of memory for each of its bytes.
+One just under the default, 16 MiB, took about 1.4 GB where it was
+measured, inside the 2.2 GB heap Node gave a process by default there. A
+process with a smaller heap needs a smaller limit. JSON text that
+`JSON.parse` reads is not limited.
+
+`maxBytes` bounds the work of the grammar as well as the size of the
+text, because size alone does not say what a text costs. The grammar
+keeps about a kilobyte for each step it takes, until it is done. A
+description takes a step for each ten of its bytes. A text of very many
+small values, such as a list of a million one-letter items, takes one or
+two steps for each byte, and a megabyte and a half of them took all of
+that heap. So the grammar is given a step for each ten bytes of
+`maxBytes`, and a hundred thousand at least, and a text that takes more
+is stopped, as `openapi_work`. The default gives 1,677,721 steps.
+
+Each error carries the figures in `details`: `size` and `budget` for
+`openapi_alias_budget`, `size` and `limit` for `openapi_size`, `steps`
+and `limit` for `openapi_work`. The `size` of `openapi_alias_budget` is
+`Infinity` for a text that [`aliasedSize`](#aliasedsizetext) did not
+measure to the end. Where the grammar's copies passed the budget and
+the measure had not, `size` is what the text and its copies had come to
+when the parse was stopped.
+
+#### `report`
+
+```ts
+type ParseReport = {
+  lossy?: Lossy[]
+}
+
+type Lossy = {
+  text: string    // the number as written
+  value: number   // the number the tree holds
+  pos: number     // the offset into the text, from 0
+  row: number     // from 1
+  col: number     // from 1
+  at?: string     // an RFC 6901 pointer to it in the tree
+}
+```
+
+Give `report` a map and the parse sets its `lossy` to the numbers the
+tree does not hold exactly, in the order they are written:
+
+- an integer written out in full that the number read does not equal,
+  such as `9007199254740993`, which is past 2^53
+- a number written with digits that is too large to read, such as
+  `1e400`, which reads as `Infinity`
+
+The integers themselves are compared. A JavaScript number prints with
+the fewest digits that tell it from its neighbours, so `value` can print
+as `text` reads and still be another integer: `243670157034784130` is
+read as the number 243670157034784128, which prints as
+`243670157034784130`. `BigInt(value)` is the integer the tree holds.
+
+A float with more digits than a double holds is not listed. `at` is
+there when the tree holds that number at that place. A number under a
+repeated member name that the tree does not keep has no `at`. An alias
+copies its anchor's node, and the number is listed once, at the anchor.
+`pos`, `row` and `col` count as JavaScript counts a string.
+
+Finding a place takes a step for each level between the root and the
+number, and a parse takes two million such steps at most. A description
+uses a few hundred. In a text built to use them up, with numbers by the
+hundred under nesting thousands deep, every number is still listed, and
+the later ones have no `at`.
+
+#### Other options
 
 `instance` must be a parser from `make`, or one with the plugin
-installed; `parse` throws an `Error` otherwise. It throws a `TypeError`
-when `text` is not a string.
+installed; `parse` throws an `Error` otherwise. A parser reads one way,
+so `parse` throws a `TypeError` when `reading` is not the reading the
+parser was made for.
+
+`parse` throws a `TypeError` for an option outside its values.
+
+A parser holds its last parse until its next one starts, at about a
+hundred times the size of the text. `parse` makes its shared parsers
+let go once a parse of more than 65,536 characters has returned. A
+parser given as `instance` is not touched.
+
+### `aliasedSize(text)`
+
+```ts
+function aliasedSize(text: string): number
+```
+
+Returns the size, in bytes of UTF-8, that a YAML text comes to once
+every alias is replaced by the node its anchor labels, all the way down.
+A text with no alias is its own size. It reads the text alone and parses
+nothing: comments, quoted scalars and block scalars are passed over. It
+reads the text as YAML, so an anchor or an alias behind `//` or inside
+`/* */` is counted, though the base reading takes those for comments.
+
+The measure is one pass over the text, and then work that grows with
+how the anchors nest. That work is counted, at 32 steps for each byte of
+the text and a million more. A text built to need more than that, with
+anchors nested by the thousand, is not measured to the end, and its size
+is `Infinity`. The descriptions this was measured on take less than one
+step for each byte.
+
+### `wellFormed(tree, options?)`
+
+```ts
+function wellFormed<T>(tree: T, options?: { duplicates?: 'last' | 'merge' }): T
+```
+
+Returns the tree with every lone surrogate read as `U+FFFD`, in its
+strings and in its member names. A tree with none comes back as it is,
+the same object. Otherwise the result is a new tree and the one given is
+not changed: what was shared stays shared, a cycle stays a cycle, and
+each map keeps its prototype.
+
+`duplicates` decides what two member names give when the repair makes
+them one name, as it does for `parse`. The default is `'last'`. Under
+`'merge'` two values are merged where each is a tree, as every value
+`parse` gives is. Where one holds a cycle or shares a part with
+another, the later is kept. A string is repaired as a tree of one value,
+and any other value is returned as it is.
 
 ### `resolve(raw, options?)`
 
@@ -331,7 +519,8 @@ Reads the version a tree's root names. `openapi` is read before
 function make(options?: MakeOptions): Tabnas
 
 type MakeOptions = {
-  strict?: boolean // default false
+  strict?: boolean              // default false
+  reading?: 'base' | 'spec'     // default 'base'
 }
 ```
 
@@ -341,6 +530,10 @@ Returns a new parser with the plugin installed:
 |---|---|---|
 | `false` | `jsonic`, then `Yaml` | YAML, and JSON text |
 | `true` | `json` | JSON text by RFC 8259 |
+
+`reading: 'spec'` sets the parser to the specification's reading, by
+options of the engine and a subscriber to its lexer. It adds no token
+and no rule. Under `strict` it changes nothing.
 
 Every call builds a new parser. A parser can be reused for any number of
 parses. Its own `parse` method reads the text with the grammar alone and
@@ -357,8 +550,8 @@ type OpenApiOptions = Record<string, never>
 
 The plugin. Install it after the base grammar, with `tn.use(OpenApi)`.
 It takes no options; `OpenApi.defaults` is `{}`. It adds no rule. It
-declares the four error codes `parse` raises, makes a repeated member
-name keep its last value unless `parse` asks for the merge, and runs the
+declares the error codes `parse` raises, makes a repeated member name
+keep its last value unless `parse` asks for the merge, and runs the
 checks when `parse` asks for them.
 
 ### `VERSION`
@@ -389,7 +582,7 @@ first appearance, as `JSON.parse` keeps it. `duplicates: 'merge'` merges
 the two values there instead. These hold for both paths and both base
 grammars, with one exception: only the default parser reads YAML.
 
-YAML rules that decide a value's type:
+YAML rules that decide a value's type, under both readings:
 
 | Written | Read as |
 |---|---|
@@ -402,6 +595,16 @@ YAML rules that decide a value's type:
 | `yes`, `on`, `no`, `off` | `true`, `true`, `false`, `false` |
 | `.inf`, `-.inf`, `.nan` | `Infinity`, `-Infinity`, `NaN` |
 
+And where the readings part:
+
+| Written | Under `'base'` | Under `'spec'` |
+|---|---|---|
+| `url: //host/path` | `null`: `//` starts a comment | the string `'//host/path'` |
+| `path: /*` | refused, as `unterminated_comment` | the string `'/*'` |
+| `1_000` | the number `1000` | the string `'1_000'` |
+| `0b11`, `0X1F`, `-0x1F` | `3`, `31`, `-31` | the strings as written |
+| `Infinity` | `Infinity` | the string `'Infinity'` |
+
 ## What this release does not do
 
 It does not load other documents. A reference into another document is
@@ -410,8 +613,9 @@ reported as `external` and left as written.
 ## Errors
 
 A failed parse throws a `TabnasError`. Its `code` names the failure,
-and its `toJSON()` gives the row and column, counting from 1. The
-plugin's codes are in the table under `parse`. The engine's are these:
+its `details` holds what the message quotes, and its `toJSON()` gives
+the row and column, counting from 1. The plugin's codes are in the
+table under `parse`. The engine's are these:
 
 | Code | Raised when |
 |---|---|
@@ -422,7 +626,9 @@ plugin's codes are in the table under `parse`. The engine's are these:
 
 `openapi_stream` is placed at the start of the second document,
 `openapi_duplicate_key` at the repeated name, and the others at the start
-of the document. A member name a message quotes is JSON-quoted and cut
-short. The default parser is lenient: it reads some text that the strict
+of the document. `openapi_root` says what the root is in
+`details.kind`: `'empty'` for a text of white space and comments alone,
+or `'null'`, `'a list'`, `'a string'`, `'a number'` or `'a Boolean'`. A
+member name a message quotes is JSON-quoted and cut short. The default parser is lenient: it reads some text that the strict
 parser refuses, and raises fewer of the engine's codes. The message is
 for people, and its wording can change between releases. Test the code.

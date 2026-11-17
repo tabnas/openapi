@@ -46,10 +46,13 @@ function compareText(text, sides, { cutBudget = 2e7 } = {}) {
   const options = { compat: 'apidef', ...(sides.options ?? {}) }
   const rec = { bytes: Buffer.byteLength(text) }
   let rawA, rawP, rawX
+  // The size limit of `parse` is lifted: how much memory a document may
+  // take here is this tool's --heap-mb to say.
+  const read = { maxBytes: Infinity }
   try {
-    rawA = O.parse(text)
-    rawP = O.parse(text)
-    rawX = O.parse(text)
+    rawA = O.parse(text, read)
+    rawP = O.parse(text, read)
+    rawX = O.parse(text, read)
   } catch (e) {
     rec.failed = { stage: 'parse', error: (e.code ? e.code + ': ' : '') + firstLine(e) }
     return rec

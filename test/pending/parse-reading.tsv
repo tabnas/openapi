@@ -1,0 +1,64 @@
+input	expected	opts
+# What `reading: 'spec'` gives where it parts from the base grammars'
+# reading. Only the TypeScript package has this option yet, so these rows
+# are here and not in ../spec/ (see ../AGENTS.md, "Where a new fixture
+# goes"). ../spec/raw-yaml-scalars.tsv pins the base reading of the same
+# texts.
+#
+# A comment starts with # and nothing else. // and /* */ are text.
+url: //api.example.com/v1\n	{"url":"//api.example.com/v1"}	{"reading":"spec"}
+a: /* x */ y\n	{"a":"/* x */ y"}	{"reading":"spec"}
+path: /*\n	{"path":"/*"}	{"reading":"spec"}
+a: b // c\n	{"a":"b // c"}	{"reading":"spec"}
+//openapi: 3.0.0\n	{"//openapi":"3.0.0"}	{"reading":"spec"}
+a: [//x, /*y*/]\n	{"a":["//x","/*y*/"]}	{"reading":"spec"}
+# A # after white space still starts one.
+a: 1 # one\n# two\nb: 2\n	{"a":1,"b":2}	{"reading":"spec"}
+a: b#c\n	{"a":"b#c"}	{"reading":"spec"}
+#
+# A number is one the YAML core schema reads as a number: a decimal
+# integer or float with an optional sign, 0o octal and 0x hexadecimal.
+a: 12\nb: -12\nc: +12\nd: 0\ne: 012\n	{"a":12,"b":-12,"c":12,"d":0,"e":12}	{"reading":"spec"}
+a: 1.5\nb: .5\nc: 5.\nd: -.5\ne: 1e3\nf: 1E-3\ng: 1.5e+3\n	{"a":1.5,"b":0.5,"c":5,"d":-0.5,"e":1000,"f":0.001,"g":1500}	{"reading":"spec"}
+a: 0o17\nb: 0x1F\nc: 0xff\n	{"a":15,"b":31,"c":255}	{"reading":"spec"}
+# Anything else is the text as written: an underscore, a binary
+# integer, an upper-case prefix, a sign before a prefix, and the words
+# JavaScript has for the values that are not finite.
+a: 1_000\nb: 01009_01\nc: 1_0.5\n	{"a":"1_000","b":"01009_01","c":"1_0.5"}	{"reading":"spec"}
+a: 0b11\nb: 0B11\nc: 0O17\nd: 0X1F\n	{"a":"0b11","b":"0B11","c":"0O17","d":"0X1F"}	{"reading":"spec"}
+a: -0x1F\nb: +0x1F\nc: -0o17\n	{"a":"-0x1F","b":"+0x1F","c":"-0o17"}	{"reading":"spec"}
+a: Infinity\nb: -Infinity\nc: NaN\n	{"a":"Infinity","b":"-Infinity","c":"NaN"}	{"reading":"spec"}
+a: [1_000, 0b11, 12]\nb: {k: 0b11}\n	{"a":["1_000","0b11",12],"b":{"k":"0b11"}}	{"reading":"spec"}
+a:\n  - 0b11\n  - 0x10\n	{"a":["0b11",16]}	{"reading":"spec"}
+# With text after it, a number was text already.
+a: 12 apples\nb: 0b11 apples\nc: 1,000\nd: 1.2.3\n	{"a":"12 apples","b":"0b11 apples","c":"1,000","d":"1.2.3"}	{"reading":"spec"}
+# A member name is the text as written, under both readings.
+200: ok\n0b11: x\n1_000: y\n	{"200":"ok","0b11":"x","1_000":"y"}	{"reading":"spec"}
+# A quoted scalar is a string, as ever.
+a: "12"\nb: '0x1F'\n	{"a":"12","b":"0x1F"}	{"reading":"spec"}
+#
+# JSON text reads the same on both paths: its numbers are core numbers.
+{"a": 1e3, "b": -0.5, "c": [12, "1_000"]}	{"a":1000,"b":-0.5,"c":[12,"1_000"]}	{"reading":"spec","fast":true}
+{"a": 1e3, "b": -0.5, "c": [12, "1_000"]}	{"a":1000,"b":-0.5,"c":[12,"1_000"]}	{"reading":"spec","fast":false}
+#
+# An empty document after the description is passed over: a marker with
+# nothing after it, with a comment after it, or with a marker after it.
+a: 1\n---\n	{"a":1}	{"reading":"spec"}
+a: 1\n---\n# the end\n	{"a":1}	{"reading":"spec"}
+a: 1\n---\n...\n	{"a":1}	{"reading":"spec"}
+a: 1\n---\n---\n	{"a":1}	{"reading":"spec"}
+---\na: 1\n...\n---\n	{"a":1}	{"reading":"spec"}
+# A second document that holds anything is still refused, null written
+# out included, and so is a description that comes second.
+a: 1\n---\nb: 2\n	ERROR:openapi_stream	{"reading":"spec"}
+a: 1\n---\n~\n	ERROR:openapi_stream	{"reading":"spec"}
+---\n---\na: 1\n	ERROR:openapi_stream	{"reading":"spec"}
+# The root is still checked: a list first and nothing after is a list.
+- 1\n---\n	ERROR:openapi_root	{"reading":"spec"}
+#
+# The words of YAML 1.1 are the yaml grammar's to read, and it reads
+# them as booleans under both readings until it offers the choice. A
+# change there shows here.
+a: yes\nb: No\nc: ON\nd: off\n	{"a":true,"b":false,"c":true,"d":false}	{"reading":"spec"}
+# The core schema's own words are unchanged.
+a: true\nb: False\nc: NULL\nd: ~\n	{"a":true,"b":false,"c":null,"d":null}	{"reading":"spec"}
