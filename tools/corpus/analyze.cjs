@@ -119,7 +119,7 @@ function baselineOf(records, environment = {}, ledger = null) {
   b.yamlFeatures = f
 
   // resolve.
-  const rs = { resolved: 0, threwByCode: {}, skipped: {}, notRun: 0, sites: 0, status: {}, kinds: {}, unresolved: {}, documentsByUnresolved: {}, cuts: 0, documentsWithCuts: 0, dataSlots: 0, documentsWithDataSlots: 0, connections: {}, checks: {} }
+  const rs = { resolved: 0, threwByCode: {}, skipped: {}, notRun: 0, sites: 0, status: {}, kinds: {}, unresolved: {}, documentsByUnresolved: {}, cuts: 0, documentsWithCuts: 0, heldAsWritten: 0, documentsHeldAsWritten: 0, dataSlots: 0, documentsWithDataSlots: 0, connections: {}, checks: {} }
   for (const r of R) {
     const x = r.resolve
     if (!x) { if (isDesc(r) && r.parse?.ok) rs.notRun++; continue }
@@ -132,6 +132,8 @@ function baselineOf(records, environment = {}, ledger = null) {
     for (const [k, v] of Object.entries(x.why)) { inc(rs.unresolved, k, v); inc(rs.documentsByUnresolved, k) }
     rs.cuts += x.cuts
     if (x.cuts) rs.documentsWithCuts++
+    rs.heldAsWritten += x.held ?? 0
+    if (x.held) rs.documentsHeldAsWritten++
     const ds = 'number' === typeof x.dataSlots ? x.dataSlots : Array.isArray(x.dataSlots) ? x.dataSlots.length : 0
     rs.dataSlots += ds
     if (ds) rs.documentsWithDataSlots++
@@ -200,6 +202,7 @@ function summary(b) {
   const st = b.resolve.status
   p(`resolve: ${b.resolve.resolved} descriptions, ${Object.values(b.resolve.threwByCode).reduce((a, n) => a + n, 0)} threw; ${b.resolve.sites} sites: ${Object.entries(st).map(([k, v]) => `${v} ${k}`).join(', ')}; ${b.resolve.cuts} cuts in ${b.resolve.documentsWithCuts} documents`)
   p(`  left as written: ${Object.entries(b.resolve.unresolved).map(([k, v]) => `${k} ${v} (${b.resolve.documentsByUnresolved[k]} documents)`).join(', ') || 'none'}`)
+  p(`  reported resolved, and held as written: ${b.resolve.heldAsWritten ?? 0} in ${b.resolve.documentsHeldAsWritten ?? 0} documents`)
   p(`  data slots: ${b.resolve.dataSlots} in ${b.resolve.documentsWithDataSlots} documents`)
   p(`references into other documents: ${b.external.references} in ${b.external.documents} documents`)
   if (b.ledger) p(`ledger: ${b.ledger.rows} rows: ${b.ledger.accepted} accepted, ${b.ledger.open} open`)

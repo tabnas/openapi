@@ -234,6 +234,32 @@ function yamlFeatures(text, docs) {
   return f
 }
 
+// The sites `resolve` reports resolved while the resolved tree holds, at
+// the site, the very map the raw tree has there: said to be resolved, and
+// left as written. `at` is an RFC 6901 pointer. A resolved site is a new
+// value in the tree, and so is a cut one, so one that is still the raw
+// object was never given a value: the fold's defect W10 is the cause the
+// plan knows.
+function heldAsWritten(raw, result) {
+  const at = (root, pointer) => {
+    let node = root
+    if ('' === pointer) return node
+    for (const part of pointer.slice(1).split('/')) {
+      const seg = part.replace(/~1/g, '/').replace(/~0/g, '~')
+      if (null == node || 'object' !== typeof node || !Object.prototype.hasOwnProperty.call(node, seg)) return undefined
+      node = node[seg]
+    }
+    return node
+  }
+  const held = []
+  for (const p of result.provenance) {
+    if ('resolved' !== p.status) continue
+    const here = at(result.tree, p.at)
+    if (null != here && 'object' === typeof here && here === at(raw, p.at)) held.push(p.at)
+  }
+  return held
+}
+
 // RFC 6901 on the raw tree, to check what `resolve` says it could not find.
 // With `follow`, a map that lacks the next member and holds a `$ref` is
 // walked through to what that names. `active` is the pointers being
@@ -440,11 +466,12 @@ function examine(text, { ext = '', fast = true, reading = 'base', send = () => {
         g.verdicts[verdict] = (g.verdicts[verdict] ?? 0) + 1
         if (g.samples.length < 6) g.samples.push({ at: u.at.slice(0, 200), ref: trunc(u.ref), verdict })
       }
-      emit('resolve', { ok: true, ms, version: r.version, sites: r.provenance.length, status, kinds, why, cuts: r.cuts.length, cutSamples: r.cuts.slice(0, 2), dataSlots: r.dataSlots, connections: conn, connMissing, checks, ext, rssKiB: rss() })
+      const held = heldAsWritten(tree, r)
+      emit('resolve', { ok: true, ms, version: r.version, sites: r.provenance.length, status, kinds, why, cuts: r.cuts.length, cutSamples: r.cuts.slice(0, 2), held: held.length, heldSamples: held.slice(0, 2).map((at) => at.slice(0, 200)), dataSlots: r.dataSlots, connections: conn, connMissing, checks, ext, rssKiB: rss() })
     }
   } else if (parsed) emit('resolve', { skipped: 'no-version' })
   emit('done', { rssKiB: rss() })
   return record
 }
 
-module.exports = { PHASES, load, examine, compare, classify, groupDiffs, kindOfClass, yNode, yamlFeatures, errInfo, extForm, walkPtr, findAnchors, ptr }
+module.exports = { PHASES, load, examine, compare, classify, groupDiffs, kindOfClass, yNode, yamlFeatures, errInfo, extForm, walkPtr, findAnchors, ptr, heldAsWritten }

@@ -177,7 +177,10 @@ Each document runs in its own process (`worker.cjs`), through
 5. **`resolve`**, on a document that declares a version: its sites by
    status and kind, what it left as written and why, its cuts, its data
    slots, its connections, and the form of each reference into another
-   document.
+   document. It also counts the sites reported resolved while the tree
+   still holds, at the site, the very map the document has there: said to
+   be resolved, and left as written. That figure is `heldAsWritten` in
+   the baseline, and the plan's T3 holds it to zero.
 
 A phase that ends sends its result to the sweep at once, so a document
 that runs out of memory or time keeps the phases it finished.

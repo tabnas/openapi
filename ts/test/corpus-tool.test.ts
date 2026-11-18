@@ -27,6 +27,7 @@ type Examine = {
   examine(text: string, options?: { ext?: string }): Rec
   kindOfClass(cls: string): string
   walkPtr(root: unknown, fragment: string, options?: { follow?: boolean }): Walk
+  heldAsWritten(raw: unknown, result: { tree: unknown; provenance: { at: string; status: string }[] }): string[]
 }
 type Accepted = { rows: number; accepted: number; open: number; stranded: Row[]; lines: string[] }
 type Ledger = {
@@ -42,6 +43,8 @@ type Ledger = {
 }
 type Analyze = {
   compareBaseline(before: object, after: object): { figures: string[]; lines: string[]; same: boolean }
+  baselineOf(records: Rec[], environment?: object): Rec
+  summary(baseline: Rec): string
 }
 type Sources = { codeHash(dir: string): string }
 type Sweep = {
@@ -126,6 +129,49 @@ describe('corpus tool: classifying one document', () => {
     assert.deepStrictEqual(r.resolve.why, { 'not-found': 1 })
     assert.deepStrictEqual(r.resolve.checks['not-found'].verdicts, { 'absent:absent': 1 })
     assert.deepStrictEqual(L.rowsOf(r), [])
+  })
+})
+
+describe('corpus tool: a site reported resolved and held as written', () => {
+  // `heldAsWritten` is given a raw tree and what `resolve` made of it. A
+  // site counts when the report says it is resolved and the resolved tree
+  // holds, at the site, the very map the raw tree has there.
+  const site = { $ref: '#/b' }
+  const raw = { a: site, b: { x: 1 }, 'c/d': [site], e: { $ref: '#/b' } }
+  const rows = (...at: string[]) => at.map((at) => ({ at, status: 'resolved' }))
+
+  test('it is the raw object itself, at a site that is reported resolved', () => {
+    assert.deepStrictEqual(E.heldAsWritten(raw, { tree: { a: site, b: raw.b }, provenance: rows('/a') }), ['/a'])
+    // A copy of the map is a value the resolver made, and so is its target.
+    assert.deepStrictEqual(E.heldAsWritten(raw, { tree: { a: { ...site }, b: raw.b }, provenance: rows('/a') }), [])
+    assert.deepStrictEqual(E.heldAsWritten(raw, { tree: { a: raw.b, b: raw.b }, provenance: rows('/a') }), [])
+    // A site that is cut, or left unresolved, is not said to be resolved.
+    for (const status of ['cut', 'unresolved', 'dynamic']) {
+      assert.deepStrictEqual(E.heldAsWritten(raw, { tree: raw, provenance: [{ at: '/a', status }] }), [], status)
+    }
+  })
+
+  test('the pointer is read as RFC 6901, through lists, and a scalar is never held', () => {
+    assert.deepStrictEqual(E.heldAsWritten(raw, { tree: raw, provenance: rows('/a', '/c~1d/0', '/e', '/nope', '/b/x') }),
+      ['/a', '/c~1d/0', '/e'])
+    assert.deepStrictEqual(E.heldAsWritten(raw, { tree: raw, provenance: rows('') }), [''])
+    assert.deepStrictEqual(E.heldAsWritten(raw, { tree: { ...raw }, provenance: rows('') }), [])
+    assert.deepStrictEqual(E.heldAsWritten(raw, { tree: raw, provenance: rows('/constructor', '/a/__proto__') }), [])
+  })
+
+  test('the sweep records the count for every description it resolves', () => {
+    const r = sweep('openapi: 3.1.0\ninfo:\n  title: t\n  version: "1"\npaths: {}\ncomponents:\n  schemas:\n    A:\n      $ref: "#/components/schemas/B"\n    B:\n      type: string\n')
+    assert.strictEqual(r.resolve.ok, true)
+    assert.strictEqual(r.resolve.sites, 1)
+    assert.strictEqual(r.resolve.held, 0)
+    assert.deepStrictEqual(r.resolve.heldSamples, [])
+    const b = A.baselineOf([{ id: 'x', done: true, ...r }], {})
+    assert.strictEqual(b.resolve.heldAsWritten, 0)
+    assert.strictEqual(b.resolve.documentsHeldAsWritten, 0)
+    const held = A.baselineOf([{ id: 'x', done: true, ...r, resolve: { ...r.resolve, held: 3 } }], {})
+    assert.strictEqual(held.resolve.heldAsWritten, 3)
+    assert.strictEqual(held.resolve.documentsHeldAsWritten, 1)
+    assert.match(A.summary(held), /reported resolved, and held as written: 3 in 1 documents/)
   })
 })
 
