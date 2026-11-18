@@ -261,7 +261,9 @@ the right answer for both orders. Unlike W1 to W6, this one shows in the
 corpus: under the default options, 180 references in 23 documents, all
 versions of one Azure description. `ts/test/resolve.test.ts` pins it, so
 that its repair in `expr` shows here. `cycles: 'keep'` no longer meets
-it (section 11).
+it (section 11). The sweep counts such sites since T3, as
+`heldAsWritten` in each baseline, and the repair is built in
+tabnas/expr#117 (section 11).
 
 **Found in T2: W11 and W12.** Both are the yaml grammar's. Neither
 changes a tree the corpus reads: W11 is about where a token is said to
@@ -595,7 +597,14 @@ holds its map as written.
 Item 1 is done, as
 [`prototype/e12-site-index.result.md`](prototype/e12-site-index.result.md),
 with no source change. Each of its six points is shown, and section 11
-has what it found beside them. Items 2 to 5 are not begun.
+has what it found beside them.
+
+Item 2 is begun. Its three changes in `expr` (section 7) are built, in
+every implementation there, and up for review as tabnas/expr#117. Here
+the sweep counts a site that is reported resolved and holds its map as
+written. The index, and `resolve` on it, are not begun: this
+repository's CI builds against `expr`'s `main`, so they wait for that
+pull request to be merged. Items 3 to 5 are not begun.
 
 ### T4: several documents (L)
 
@@ -729,9 +738,9 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 
 | Repository | Change | Needed by | Size |
 |---|---|---|---|
-| expr | fold a location as written, not through the sites above it. Prototyped in E12 as `site.written`, 11 lines, with `expr`'s suite unchanged | T3 | S |
-| expr | a step budget, so that a caller can bound or cancel a walk | T3 | S |
-| expr | W10: a result folded while a site it needs is still being folded is not final. The fold reports a cycle to that site, and folds the container again once the site is settled | T3; 23 documents | S to M |
+| expr | fold a location as written, not through the sites above it. Prototyped in E12 as `site.written`, 11 lines, with `expr`'s suite unchanged. Built, as tabnas/expr#117 | T3 | S |
+| expr | a step budget, so that a caller can bound or cancel a walk. Built, in tabnas/expr#117, as the option `budget`: past `steps` the fold fails with `fold_budget`, and `onCheck`, called every `checkEveryN` steps, cancels it with `fold_cancel` | T3 | S |
+| expr | W10: a result folded while a site it needs is still being folded is not final. The plan had the fold report a cycle to that site and fold the container again once the site is settled. Built, in tabnas/expr#117, without the second fold: the site that asks for such a container is told it has met a cycle before the container is started, so nothing is folded twice and each site's resolver is asked once (section 11) | T3; 23 documents | S to M |
 | yaml | an option for the core schema's words | T2b; 166 documents | S to M |
 | yaml | compact nested lists; a list at its key's indent with an empty entry; a scalar on the line after its key; `>+` with a trailing blank line | T2b; 13 documents | S to M each |
 | yaml | an indented root mapping; a digit-led key with colons and a block value; `.5 x` | T2b; 7 documents | S to M each |
@@ -792,6 +801,50 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T3's second item was begun:
+
+- **The three changes T3 asks of `expr` are built**, in every
+  implementation there, each with a shared fixture, as one pull request,
+  tabnas/expr#117: `site.written`, as E12 prototyped it; a step budget;
+  and the repair of W10. None is merged or released, and nothing under
+  `ts/src` changes here yet.
+- **The step budget** is the option `budget` on `fold`, shaped as the
+  engine's own `parse.budget` is. `steps` is the most steps a fold may
+  take, and the step after it fails with `fold_budget`. `onCheck` is
+  called every `checkEveryN` steps and cancels the fold with
+  `fold_cancel` when it returns false. A step is one container the fold
+  starts to fold, or one location a resolver asks a site for, so the
+  count is the same in every implementation and a fixture pins it.
+- **W10 is repaired another way than section 7 planned.** The plan had
+  the fold report a cycle and then fold the container a second time.
+  The repair needs no second fold. A location that a reference reaches
+  before the walk is counted on every location above it. A site that
+  asks for a location holding one is told it has met a cycle, before
+  that location is started. It is the cycle the walk finds when the
+  container is written first, cut at the same site, so the two orders
+  of section 2.3 give one answer, and each site's resolver is still
+  asked once.
+- **Measured before it is merged**, with this package's `resolve` on the
+  released fold and on the repaired one, over the 5,168 descriptions of
+  the corpus and apidef's 43 definitions, 1,140,055 sites. The released
+  fold leaves 180 sites reported resolved that hold their map as
+  written, in 23 descriptions, which are the figures of section 2.3.
+  The repaired fold leaves none. Those 23 are the only documents whose
+  result moves, in 96 report rows: 55 go from resolved to cut and 41
+  from cut to resolved, as the cut moves to the site that closes the
+  cycle. Nothing moves under `cycles: 'keep'` or under the preset. This
+  package's suite moves in the one test that pins W10.
+- **The sweep counts what it could not see.** Its `resolve` phase counts
+  the sites reported resolved while the tree holds, at the site, the
+  very map the document has there. Both baselines carry the figure as
+  `heldAsWritten`: 180 in 23 descriptions under each reading, on the
+  released packages. T3's acceptance holds it to zero.
+- **What waits for the merge**, as one change here: the test of W10
+  expects the cut in both orders, and both baselines are rewritten from
+  a sweep on the repaired fold. Until then this repository's `main`
+  will fail that one test once `expr`'s `main` has the repair, since CI
+  builds against it.
 
 **Since acceptance**, as T3 was begun, with its prototype:
 

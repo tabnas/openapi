@@ -209,8 +209,10 @@
       "external": 789,
       "not-found": 1
     },
+    "documentsHeldAsWritten": 23,
     "documentsWithCuts": 600,
     "documentsWithDataSlots": 893,
+    "heldAsWritten": 180,
     "kinds": {
       "pathItem": 13,
       "reference": 433820,
