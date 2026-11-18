@@ -102,7 +102,7 @@ var te *tabnas.TabnasError
 if errors.As(err, &te) {
 	fmt.Println(te.Code, te.Row, te.Col)
 }
-// openapi_stream 3 1
+// openapi_stream 2 1
 ```
 
 The code is what to test for. The message is written for people.

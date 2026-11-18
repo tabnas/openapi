@@ -311,8 +311,8 @@ func TestNumbersJSONCannotCarryAndLoneSurrogates(t *testing.T) {
 }
 
 func TestErrorsCarryThePositionOfWhatTheyRefuse(t *testing.T) {
-	// At the first line of the second document's content.
-	expectError(t, failure(t, "openapi: 3.1.0\n---\nopenapi: 3.0.0"), "openapi_stream", 3, 1)
+	// At the marker that starts the second document.
+	expectError(t, failure(t, "openapi: 3.1.0\n---\nopenapi: 3.0.0"), "openapi_stream", 2, 1)
 
 	root := failure(t, "- a\n- b")
 	expectError(t, root, "openapi_root", 1, 1)
@@ -516,7 +516,7 @@ func TestParseUsesAGivenInstance(t *testing.T) {
 
 	// An instance reads on after a parse the plugin refused mid-stream.
 	loose := Make()
-	expectError(t, failure(t, "a: 1\n---\nb: 2\n---\nc: 3", ParseOptions{Instance: loose}), "openapi_stream", 3, 1)
+	expectError(t, failure(t, "a: 1\n---\nb: 2\n---\nc: 3", ParseOptions{Instance: loose}), "openapi_stream", 2, 1)
 	if got := flatten(mustParse(t, "a: 1", ParseOptions{Instance: loose})); !reflect.DeepEqual(got,
 		map[string]any{"a": 1.0}) {
 		t.Errorf("after a refusal: %v", got)

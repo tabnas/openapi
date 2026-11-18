@@ -65,21 +65,26 @@ offsets are counted in the text without the mark. `parse` throws a
 
 #### `reading`
 
-`reading` decides what starts a comment, what is a number, and what an
-empty document after the description gives:
+`reading` decides what starts a comment, what a plain scalar is, and
+what an empty document after the description gives:
 
 | | `'base'` | `'spec'` |
 |---|---|---|
 | A comment starts with | `#`, `//` or `/*` | `#` |
 | A number | whatever the base grammars and JavaScript read as one: `1_000`, `0b11`, `0X1F`, `-0x1F`, `Infinity` | one the YAML core schema reads as a number: a decimal integer or float with an optional sign, `0o17`, `0x1F` |
+| `yes`, `no`, `on`, `off` | `true` and `false`, as in YAML 1.1 | the text as written |
 | An empty document after the description | refused, as `openapi_stream` | passed over |
 
-Under `'spec'` a plain scalar that is not a core-schema number is the
-text as written, so `1_000` is the string `'1_000'` and `//host/path` is
-the string `'//host/path'`. A second document that holds anything is
-refused under both. `yes`, `no`, `on` and `off` are read as `true` and
-`false` under both. Under `strict` the grammar is JSON's and `reading`
-changes nothing.
+Under `'spec'` a plain scalar is what the YAML 1.2 core schema reads it
+as. One that is not a number, a Boolean or a null of that schema is the
+text as written, so `1_000` is the string `'1_000'`, `yes` is the string
+`'yes'` and `//host/path` is the string `'//host/path'`. A second
+document that holds anything is refused under both. Under `strict` the
+grammar is JSON's and `reading` changes nothing.
+
+`'spec'` needs `@tabnas/yaml` 0.5.33 or later, the first with the core
+schema. With an earlier one `make` and `parse` throw a `TypeError`
+rather than read `yes` as `true`.
 
 #### `fast`
 
@@ -532,8 +537,11 @@ Returns a new parser with the plugin installed:
 | `true` | `json` | JSON text by RFC 8259 |
 
 `reading: 'spec'` sets the parser to the specification's reading, by
-options of the engine and a subscriber to its lexer. It adds no token
-and no rule. Under `strict` it changes nothing.
+the yaml grammar's `schema: 'core'` option and two options of the
+engine. It adds no token and no rule. Under `strict` it changes nothing.
+The option needs `@tabnas/yaml` 0.5.33 or later: `make` asks the parser
+it built whether it reads the core schema, and throws a `TypeError` when
+it does not.
 
 Every call builds a new parser. A parser can be reused for any number of
 parses. Its own `parse` method reads the text with the grammar alone and
@@ -592,7 +600,7 @@ YAML rules that decide a value's type, under both readings:
 | `swagger: '2.0'` | the string `'2.0'` |
 | `$ref: #/a` | `null`: the `#` after a space starts a comment |
 | `$ref: '#/a'` | the string `'#/a'` |
-| `yes`, `on`, `no`, `off` | `true`, `true`, `false`, `false` |
+| `true`, `False`, `~`, `NULL` | `true`, `false`, `null`, `null` |
 | `.inf`, `-.inf`, `.nan` | `Infinity`, `-Infinity`, `NaN` |
 
 And where the readings part:
@@ -602,6 +610,7 @@ And where the readings part:
 | `url: //host/path` | `null`: `//` starts a comment | the string `'//host/path'` |
 | `path: /*` | refused, as `unterminated_comment` | the string `'/*'` |
 | `1_000` | the number `1000` | the string `'1_000'` |
+| `yes`, `on`, `no`, `off` | `true`, `true`, `false`, `false` | the strings `'yes'`, `'on'`, `'no'`, `'off'` |
 | `0b11`, `0X1F`, `-0x1F` | `3`, `31`, `-31` | the strings as written |
 | `Infinity` | `Infinity` | the string `'Infinity'` |
 

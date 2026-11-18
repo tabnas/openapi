@@ -109,7 +109,7 @@ default that a shared row pins changes until porting starts.
 | T0 | gates: the corpus sweep and its ledger, the apidef gate, the fixture homes | done |
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
 | T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
-| T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and measured from here with that build linked in: under `reading: 'spec'` the corpus ledger falls from 190 rows to 5, with none added. It waits for that pull request's merge and a release. Then `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and both ledgers are rewritten from a sweep. The rule history is measured, and turning it on is Decision 34 |
+| T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Measured with that build linked in, before the release: under `reading: 'spec'` the corpus ledger falls from 190 rows to 5, with none added. The rule history is measured, and turning it on is Decision 34 |
 | T3 to T6 | the site index, several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -142,9 +142,10 @@ grammar on any refusal, so every error comes from the grammar.
 ### What T2 added to the TypeScript `parse`
 
 All of it is in `ts/src/openapi.ts`, `ts/src/text.ts`,
-`ts/src/yaml-alias.ts`, `ts/src/lossy.ts` and `ts/src/well-formed.ts`,
-and none of it is ported, so its fixtures are in `test/pending/` and its
-other tests in `ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
+`ts/src/yaml-alias.ts`, `ts/src/lossy.ts`, `ts/src/well-formed.ts` and
+`ts/src/core-schema.ts`, and none of it is ported, so its fixtures are
+in `test/pending/` and its other tests in `ts/test/openapi.test.ts` and
+`ts/test/hostile.test.ts`.
 
 - **What runs on a text before the grammar is one pass, or counted.**
   `parse` reads text from outside a system, so a check there must not
@@ -161,16 +162,20 @@ other tests in `ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
   what is the worst text for it, and what does that text cost.
 
 - **`reading: 'spec'`** is the same parser with other settings, made in
-  `make`: `comment.def.slash` and `comment.def.multi` off,
-  `number.sep` unset, and a subscriber to the lexer that turns a number
-  token into a text token where `CORE_NUMBER` does not match its source.
-  It adds no token, rule or alternate, and
-  `ts/test/debug-model.test.ts` holds that. A parser reads one way:
-  `READING` records what `make` built each for, and `parse` refuses the
-  other reading on a given `instance`. The YAML 1.1 words stay booleans
-  under both, because the released yaml grammar matches them in its own
-  code, out of reach of an option. Its `schema: 'core'` option, built as
-  tabnas/yaml#151, changes that once it is released.
+  `make`: the yaml grammar's `schema: 'core'` option, and
+  `comment.def.slash` and `comment.def.multi` off. It adds no token,
+  rule or alternate, and `ts/test/debug-model.test.ts` holds that. A
+  parser reads one way: `READING` records what `make` built each for,
+  and `parse` refuses the other reading on a given `instance`.
+- **`make` asks the yaml grammar whether it reads the core schema.**
+  The option arrived in `@tabnas/yaml` 0.5.33, and a grammar before it
+  takes an option it does not know in silence, so `yes` would stay a
+  Boolean with nothing said. The manifests name no version of the yaml
+  package, so the check is in the code: `readsCoreSchema`
+  (`ts/src/core-schema.ts`) parses the text `yes` with the parser
+  `make` built, and `make` throws a `TypeError` unless it is a string.
+  Keep the check for as long as the peer range admits an earlier yaml
+  package.
 - **`maxBytes` bounds the work as well as the size, and the work is
   what costs.** The engine keeps about 900 bytes for each rule pass
   until the parse ends: its rule history, which TypeScript does not

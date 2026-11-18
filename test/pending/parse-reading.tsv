@@ -56,9 +56,11 @@ a: 1\n---\n~\n	ERROR:openapi_stream	{"reading":"spec"}
 # The root is still checked: a list first and nothing after is a list.
 - 1\n---\n	ERROR:openapi_root	{"reading":"spec"}
 #
-# The words of YAML 1.1 are the yaml grammar's to read, and it reads
-# them as booleans under both readings until it offers the choice. A
-# change there shows here.
-a: yes\nb: No\nc: ON\nd: off\n	{"a":true,"b":false,"c":true,"d":false}	{"reading":"spec"}
+# The words of YAML 1.1 are text, as the core schema has them: under
+# this reading `make` passes the yaml grammar its `schema: 'core'`
+# option (@tabnas/yaml 0.5.33). ../spec/raw-yaml-scalars.tsv pins the
+# base reading, where they are booleans.
+a: yes\nb: No\nc: ON\nd: off\n	{"a":"yes","b":"No","c":"ON","d":"off"}	{"reading":"spec"}
+y: y\nn: N\nt: TRUE\nf: false\n	{"y":"y","n":"N","t":true,"f":false}	{"reading":"spec"}
 # The core schema's own words are unchanged.
 a: true\nb: False\nc: NULL\nd: ~\n	{"a":true,"b":false,"c":null,"d":null}	{"reading":"spec"}

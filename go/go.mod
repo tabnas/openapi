@@ -7,5 +7,5 @@ require (
 	github.com/tabnas/jsonic/go v0.7.11
 	github.com/tabnas/parser/go v0.12.20
 	github.com/tabnas/support/go v0.3.9
-	github.com/tabnas/yaml/go v0.5.32
+	github.com/tabnas/yaml/go v0.5.33
 )

@@ -280,7 +280,8 @@ be, and no document of the corpus has the shape of W12.
 
 **Repaired in T2b**, in tabnas/yaml#151: W9, W11 and W12, with the
 layout defects and the refusals of section 2.1. They are repaired in the
-yaml grammar, so they reach this package with that grammar's release.
+yaml grammar, and reached this package with that grammar's release,
+`@tabnas/yaml` 0.5.33.
 
 **Found in T2b.** Four shapes were read, each wrongly, and are refused
 by that change. No document of the corpus has one. The first three are
@@ -487,9 +488,10 @@ All of it is this package's own configuration and code.
 1. **`reading: 'spec'`** (Decision 21), one option that selects the
    specification's reading: comments are YAML's `#` alone; numbers
    follow the core schema; a trailing empty document is accepted. It
-   takes in the YAML 1.1 words when `@tabnas/yaml` offers that option
-   (T2b). It is an option until porting starts, since shared fixtures
-   pin today's reading (section 5).
+   takes in the YAML 1.1 words since `@tabnas/yaml` 0.5.33, whose
+   `schema: 'core'` option `make` passes (T2b). It is an option until
+   porting starts, since shared fixtures pin today's reading
+   (section 5).
 2. **The alias budget** (Decision 23): checked on the text before the
    grammar runs, as apidef's `yamlalias.ts` does, default the larger of
    1 MB and ten times the input, raising `openapi_alias_budget`.
@@ -537,10 +539,10 @@ Acceptance: in the sweep, no valid description refused and no tree
 difference outside the two kinds section 1 allows.
 
 Built, as one pull request in that repository, tabnas/yaml#151, in every
-implementation there. It waits for the maintainer's merge and for a
-release, and until then nothing here can use it. Section 11 has the
-record, measured from this checkout with that build linked in. Items 1,
-2, 4 and 6 are repaired, and the acceptance holds for the grammar: under
+implementation there, then merged and released as `@tabnas/yaml` 0.5.33,
+which this package reads with. Section 11 has the record, measured from
+this checkout with that build linked in. Items 1, 2, 4 and 6 are
+repaired, and the acceptance holds for the grammar: under
 `reading: 'spec'` the only trees that differ are the two the reference
 parser reads wrongly, and the only descriptions refused are the two this
 package refuses for their size. Item 3 is repaired in the grammar, and
@@ -781,6 +783,36 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, once the yaml grammar's change was released:
+
+- tabnas/yaml#151 is merged and released as `@tabnas/yaml` 0.5.33, and
+  this package follows it in one change.
+- `make` passes `schema: 'core'` to the yaml plugin under
+  `reading: 'spec'`, so the YAML 1.1 words are text there. The row of
+  `test/pending/parse-reading.tsv` that pinned them as booleans pins
+  them as strings.
+- The subscriber to the lexer that turned a number the core schema does
+  not name into text is gone, and so is `number.sep` unset. Both were
+  measured first, with the option passed. Over 1,003 texts, 64 scalars
+  in each of 13 positions and the inputs of this repository's fixtures,
+  neither changes a tree. Over 8,077 of the corpus's 8,079 distinct YAML
+  documents neither changes a tree, and the subscriber acts on no token.
+  The two left out are the Microsoft Graph descriptions, for their size.
+  The yaml grammar says why: under the option a scalar that is no number
+  of the core schema goes to its text handler, and the engine's number
+  matcher never sees it.
+- An earlier yaml package takes an option it does not know in silence,
+  and would go on reading `yes` as `true`. The manifests name no version
+  of that package, so the requirement is held in code, which the plan
+  did not foresee: `make` parses the text `yes` with the parser it built
+  and throws unless the answer is a string (`readsCoreSchema`).
+- The yaml grammar's repairs moved what this repository pinned, in every
+  implementation. A second document is refused at its marker, a line
+  earlier than before. JSON text after a blank first line is read. The
+  list of rows where the second implementation parted from the first is
+  empty, since both of its entries were defects that change repaired.
+  That implementation's manifest requires yaml v0.5.33.
 
 **Since acceptance**, while T2b was built:
 

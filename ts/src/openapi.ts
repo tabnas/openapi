@@ -16,11 +16,12 @@
 // docs/design/typescript-plan.md.
 
 import { Tabnas, TabnasError, Plugin } from '@tabnas/parser'
-import type { Context, Rule, RuleDone, Token } from '@tabnas/parser'
+import type { Context, Rule, RuleDone } from '@tabnas/parser'
 import { jsonic } from '@tabnas/jsonic'
 import { Yaml } from '@tabnas/yaml'
 import { json } from '@tabnas/json'
 
+import { readsCoreSchema } from './core-schema'
 import { version } from './oas-version'
 import type { VersionInfo } from './oas-version'
 import { isLossy, located, lossyInJson } from './lossy'
@@ -407,14 +408,14 @@ function kindOf(value: unknown): string {
 // 'base', the default, is the base grammars' own reading: `//` and
 // `/* */` start a comment, as in jsonic; a number is whatever the engine
 // and JavaScript read as one, so `1_000`, `0b11` and `Infinity` are
-// numbers; and a second document is refused, an empty one included.
+// numbers; the words of YAML 1.1 (`yes`, `no`, `on`, `off`) are
+// booleans; and a second document is refused, an empty one included.
 //
 // 'spec' is the specification's: a comment starts with `#` and nothing
-// else; a number is one the YAML core schema reads as a number, and any
-// other is the text as written; and an empty document after the
-// description is passed over. The words of YAML 1.1 (`yes`, `no`, `on`,
-// `off`) are read as booleans under both until the yaml grammar offers
-// the choice.
+// else; a plain scalar is what the YAML 1.2 core schema reads it as, so
+// a number is one of that schema's number forms, a boolean is `true` or
+// `false`, and any other is the text as written; and an empty document
+// after the description is passed over.
 type Reading = 'base' | 'spec'
 
 // Options for `make`.
@@ -427,13 +428,6 @@ type MakeOptions = {
   // under `strict` this changes nothing.
   reading?: Reading
 }
-
-// What the YAML core schema reads as a number: a decimal integer or
-// float, with an optional sign, and an unsigned `0o` octal or `0x`
-// hexadecimal integer. `.inf` and `.nan` are words to the yaml grammar,
-// not numbers, and it reads them already.
-const CORE_NUMBER =
-  /^(?:[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|0o[0-7]+|0x[0-9a-fA-F]+)$/
 
 // The reading each parser from `make` was built for.
 const READING = new WeakMap<Tabnas, Reading>()
@@ -457,35 +451,31 @@ function readingOf(value: unknown, who: string): Reading {
 // after everything the base and the plugins set.
 //
 // The specification's reading is this package's own configuration of that
-// parser, and adds no rule. Two engine options end jsonic's comment
-// syntax, one ends `_` inside a number, and a subscriber to the lexer
-// reads as text any number token whose text the core schema does not read
-// as a number, before a rule sees it.
+// parser, and adds no rule. The yaml grammar's `schema: 'core'` option
+// makes a plain scalar what the YAML 1.2 core schema reads it as, and two
+// engine options end jsonic's comment syntax.
+//
+// That option arrived in @tabnas/yaml 0.5.33. A grammar before it takes
+// the option in silence and keeps its own reading, and this package names
+// no version of that one, so `make` asks the parser it built
+// (`readsCoreSchema`) and refuses the reading where the answer is no.
 function make(options: MakeOptions = {}): Tabnas {
   const strict = true === options.strict
   const reading = readingOf(options.reading, 'make')
+  const spec = 'spec' === reading && !strict
   const tn = strict
     ? new Tabnas().use(json)
-    : new Tabnas().use(jsonic).use(Yaml)
+    : new Tabnas().use(jsonic).use(Yaml, spec ? { schema: 'core' } : {})
   tn.use(OpenApi)
-  if ('spec' === reading && !strict) {
-    tn.options({
-      comment: { def: { slash: { lex: false }, multi: { lex: false } } },
-      number: { sep: null },
-    })
-    const NR = tn.token('#NR')
-    const TX = tn.token('#TX')
-    tn.sub({
-      lex: (tkn: Token) => {
-        if (NR === tkn.tin && 'string' === typeof tkn.src && !CORE_NUMBER.test(tkn.src)) {
-          tkn.tin = TX
-          tkn.name = '#TX'
-          tkn.val = tkn.src
-        }
-      },
-    })
+  if (spec) {
+    tn.options({ comment: { def: { slash: { lex: false }, multi: { lex: false } } } })
   }
   tn.options({ lex: { window: false } })
+  if (spec && !readsCoreSchema(tn)) {
+    throw new TypeError(
+      "make: reading 'spec' needs @tabnas/yaml 0.5.33 or later; the yaml grammar installed does not read the core schema",
+    )
+  }
   READING.set(tn, strict ? 'base' : reading)
   return tn
 }

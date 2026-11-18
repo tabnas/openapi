@@ -12,8 +12,7 @@ input	expected	opts
 {"a":1,}	{"a":1}
 {"openapi":"3.1.0","a":1,}	ERROR:unexpected	{"strict":true}
 a: 1	ERROR:unexpected	{"strict":true}
-# A JSON text whose first line is empty. The fast path reads it; the
-# yaml grammar refuses it, a defect of the published yaml grammar that
-# this row pins so that its repair shows here.
+# A JSON text whose first line is empty. The fast path reads it, and so
+# does the yaml grammar from 0.5.33 on, which refused it before.
 \n{"a":1}	{"a":1}
-\n{"a":1}	ERROR:unexpected	{"fast":false}
+\n{"a":1}	{"a":1}	{"fast":false}

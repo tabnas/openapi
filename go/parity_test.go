@@ -40,23 +40,10 @@ var goDivergent = []struct {
 	want              string // what Go gives, in the expected column's vocabulary
 	why               string
 }{
-	{
-		file:  "raw-fast.tsv",
-		input: "{\"a\":1}\n{\"b\":2}",
-		want:  "ERROR:openapi_root",
-		why: "TypeScript's yaml grammar refuses a second flow mapping at the start " +
-			"of a line, as `unexpected` at 2:1; Go's yaml 0.5.27 reads the two " +
-			"as jsonic's implicit list, a root raw mode refuses as a list",
-	},
-	{
-		file:  "raw-json.tsv",
-		input: "\n{\"a\":1}",
-		opts:  `{"fast":false}`,
-		want:  `{"a":1}`,
-		why: "the row pins a defect of TypeScript's yaml grammar, which refuses JSON " +
-			"text whose first line is blank (`unexpected` at 2:1); Go's yaml 0.5.27 " +
-			"does not have it and reads the map",
-	},
+	// None at present. yaml 0.5.33 repaired the two this list held: a
+	// second flow mapping at the start of a line, which Go read as an
+	// implicit list, and JSON text after a blank first line, which
+	// TypeScript refused.
 }
 
 // TestSpec runs every fixture in the spec directory. FindSpecDir walks up

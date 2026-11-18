@@ -112,11 +112,12 @@ parse('{"openapi":"3.1.0"}', { fast: false }) // => { openapi: '3.1.0' }
 ## Read YAML as the specification does
 
 The grammars beneath this package read more than YAML does. `//` starts
-a comment, as in JSON with comments, and `1_000` is a number. A
-description written for a YAML reader can lose a value that way: a
-server URL with no scheme reads as nothing at all. Pass
-`reading: 'spec'` to read a comment as YAML does and a number as its
-core schema does:
+a comment, as in JSON with comments, `1_000` is a number, and `on` and
+`off` are `true` and `false`, as in YAML 1.1. A description written for
+a YAML reader can lose a value that way: a server URL with no scheme
+reads as nothing at all, and a list of the words `on` and `off` reads as
+`true` and `false`. Pass `reading: 'spec'` to read a comment as YAML does
+and a plain scalar as its core schema does:
 
 ```js
 const { parse } = require('@tabnas/openapi')
@@ -126,13 +127,18 @@ openapi: 3.0.0
 servers:
   - url: //api.example.com/v1
 x-batch: 1_000
+x-modes: [on, off]
 `
 
 parse(text).servers[0].url // => null
 parse(text)['x-batch'] // => 1000
+parse(text)['x-modes'] // => [true, false]
 parse(text, { reading: 'spec' }).servers[0].url // => '//api.example.com/v1'
 parse(text, { reading: 'spec' })['x-batch'] // => '1_000'
+parse(text, { reading: 'spec' })['x-modes'] // => ['on', 'off']
 ```
+
+The specification's reading needs `@tabnas/yaml` 0.5.33 or later.
 
 It also passes over an empty document after the description, which the
 default reading refuses as a second document. The
@@ -465,7 +471,7 @@ try {
   ;({ code, row } = err.toJSON())
 }
 code // => 'openapi_stream'
-row // => 3
+row // => 2
 ```
 
 The [reference](reference.md#errors) lists the codes.
