@@ -541,13 +541,14 @@ difference outside the two kinds section 1 allows.
 Built, as one pull request in that repository, tabnas/yaml#151, in every
 implementation there, then merged and released as `@tabnas/yaml` 0.5.33,
 which this package reads with. Section 11 has the record, measured from
-this checkout with that build linked in. Items 1, 2, 4 and 6 are
-repaired, and the acceptance holds for the grammar: under
-`reading: 'spec'` the only trees that differ are the two the reference
-parser reads wrongly, and the only descriptions refused are the two this
-package refuses for their size. Item 3 is repaired in the grammar, and
-apidef keeps `normalizePathKeys` until both of its implementations can
-drop it. Item 5 is measured, and what is left of it is Decision 34.
+this checkout with that build linked in and then swept on the released
+packages. Items 1, 2, 4 and 6 are repaired, and the acceptance holds for
+the grammar: under `reading: 'spec'` the only trees that differ are the
+two the reference parser reads wrongly, and the only descriptions
+refused are the two this package refuses for their size. Item 3 is
+repaired in the grammar, and apidef keeps `normalizePathKeys` until both
+of its implementations can drop it. Item 5 is measured, and what is left
+of it is Decision 34.
 
 ### T3: the site index, and `resolve` on it (L)
 
@@ -813,6 +814,24 @@ what the code does.
   list of rows where the second implementation parted from the first is
   empty, since both of its entries were defects that change repaired.
   That implementation's manifest requires yaml v0.5.33.
+- The three gates ran on the released packages: `@tabnas/yaml` 0.5.33,
+  with jsonic 0.7.12 and expr 0.6.3, where the earlier records were made
+  with 0.5.32, 0.7.11 and 0.5.21. The sweep gives what the linked build
+  gave. Under `'spec'` it refuses 3 documents where it refused 10, and 2
+  trees differ where 180 did. The ledger falls from 190 rows to 5: 185
+  removed, none added, none changed. Three of the five are the accepted
+  rows, and the other two are the Microsoft Graph descriptions, refused
+  for their size, so no row is left that is a defect of reading. Under
+  `'base'` it refuses 15 where it refused 22, and 220 trees differ where
+  232 did. That ledger goes from 254 rows to 235: 20 removed and one
+  added, the EPA's description, which was refused and, now that it is
+  read, holds one YAML 1.1 word.
+- Under both readings the resolve figures that moved are those of the
+  seven descriptions now read, to the unit: 1,067 more sites, all
+  resolved. No other figure moved, so the newer expr and jsonic change
+  nothing the sweep measures. The apidef gate passes as before, with 57
+  of 57 definitions byte-identical, and the preset comparison finds no
+  difference in 15,177 documents.
 
 **Since acceptance**, while T2b was built:
 
