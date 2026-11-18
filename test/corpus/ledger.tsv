@@ -65,10 +65,7 @@ apis-guru	APIs/azure.com/frontdoor/2020-01-01/swagger.yaml	refused	unterminated_
 apis-guru	APIs/azure.com/logic/2016-06-01/swagger.yaml	differs	type:string->null:comment-syntax:PLAIN=1
 apis-guru	APIs/azure.com/logic/2018-07-01-preview/swagger.yaml	differs	type:string->null:comment-syntax:PLAIN=1
 apis-guru	APIs/azure.com/logic/2019-05-01/swagger.yaml	differs	type:string->null:comment-syntax:PLAIN=1
-apis-guru	APIs/azure.com/machinelearning-webservices/2017-01-01/swagger.yaml	differs	length:BLOCK_SEQ=5; value:string:PLAIN=5
 apis-guru	APIs/azure.com/recoveryservicessiterecovery-service/2018-07-10/swagger.yaml	differs	value:string:BLOCK_LITERAL:|N-=2
-apis-guru	APIs/azure.com/resourcegraph/2018-09-01-preview/swagger.yaml	differs	length:BLOCK_SEQ=1; value:string:PLAIN=1
-apis-guru	APIs/azure.com/resourcegraph/2019-04-01/swagger.yaml	differs	length:BLOCK_SEQ=1; value:string:PLAIN=1
 apis-guru	APIs/bclaws.ca/bclaws/1.0.0/openapi.yaml	differs	type:string->number:underscore:PLAIN=4
 apis-guru	APIs/biapi.pro/2.0/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
 apis-guru	APIs/billingo.hu/3.0.7/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
@@ -81,13 +78,12 @@ apis-guru	APIs/contract-p.fit/1.0/openapi.yaml	differs	type:string->null:comment
 apis-guru	APIs/daniweb.com/4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
 apis-guru	APIs/deutschebahn.com/stada/2.2.01/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
 apis-guru	APIs/digitalocean.com/2.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=10
-apis-guru	APIs/docker.com/engine/1.33/openapi.yaml	refused	unexpected
 apis-guru	APIs/drchrono.com/v4 (Hunt Valley)/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=8
 apis-guru	APIs/edrv.io/v1/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
 apis-guru	APIs/epa.gov/air/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=11
 apis-guru	APIs/epa.gov/case/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
 apis-guru	APIs/epa.gov/cwa/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=10
-apis-guru	APIs/epa.gov/dfr/0.0.0/swagger.yaml	refused	unexpected
+apis-guru	APIs/epa.gov/dfr/0.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/epa.gov/echo/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=3
 apis-guru	APIs/epa.gov/rcra/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
 apis-guru	APIs/epa.gov/sdw/2019.10.15/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
@@ -147,15 +143,12 @@ apis-guru	APIs/id4i.de/1.0.2/openapi.yaml	differs	type:string->null:comment-synt
 apis-guru	APIs/just-eat.co.uk/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
 apis-guru	APIs/launchdarkly.com/5.3.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/linode.com/4.151.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
-apis-guru	APIs/mailchimp.com/3.0.55/openapi.yaml	differs	length:BLOCK_SEQ=2; value:string:PLAIN=2
 apis-guru	APIs/mashape.com/geodb/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/mastercard.com/CurrencyConversionCalculator/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/mastercard.com/Locations/1.0.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=4
 apis-guru	APIs/mastercard.com/PaymentAccountReferenceInquiryAPI/1.1/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/mastercard.com/SpendingPulse/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=5
 apis-guru	APIs/mcw.edu/1.1/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=1
-apis-guru	APIs/meraki.com/0.0.0-streaming/openapi.yaml	refused	unexpected
-apis-guru	APIs/meraki.com/1.32.0/openapi.yaml	refused	unexpected
 apis-guru	APIs/mercedes-benz.com/configurator/1.0/swagger.yaml	differs	type:string->number:underscore:PLAIN=2
 apis-guru	APIs/mermade.org.uk/openapi-converter/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/microsoft.com/cognitiveservices-AutoSuggest/1.0/swagger.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
@@ -226,7 +219,6 @@ apis-guru	APIs/truora.com/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11
 apis-guru	APIs/twilio.com/twilio_insights_v1/1.55.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/unicourt.com/1.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/vercel.com/0.0.1/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=2
-apis-guru	APIs/viator.com/1.0.0/openapi.yaml	differs	value:string:BLOCK_FOLDED:>+=1
 apis-guru	APIs/visma.net/9.66.02.1023/openapi.yaml	differs	type:string->null:comment-syntax:PLAIN=6
 apis-guru	APIs/vtex.local/Checkout-API/1.0/openapi.yaml	differs	type:string->number:underscore:PLAIN=13
 apis-guru	APIs/vtex.local/Logistics-API/1.0/openapi.yaml	differs	type:string->number:underscore:PLAIN=25
@@ -240,16 +232,5 @@ apis-guru	APIs/xero.com/xero_accounting/2.9.4/openapi.yaml	differs	type:string->
 apis-guru	APIs/xero.com/xero_bankfeeds/2.9.4/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
 apis-guru	APIs/zoom.us/2.0.0/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=42
 apis-guru	APIs/zuora.com/2021-08-20/openapi.yaml	differs	type:string->boolean:yaml11-bool-word:PLAIN=124
-digitalocean	specification/resources/apps/responses/examples.yml	differs	type:number->string:other:PLAIN=2
 digitalocean	specification/resources/droplets/models/droplet.yml	differs	type:string->boolean:yaml11-bool-word:PLAIN=1
-digitalocean	specification/resources/droplets/responses/examples.yml	differs	type:number->string:other:PLAIN=2
-digitalocean	specification/resources/images/responses/examples.yml	differs	type:number->string:other:PLAIN=6
-digitalocean	specification/resources/regions/responses/all_regions.yml	differs	type:number->string:other:PLAIN=1
-digitalocean	specification/resources/sizes/responses/all_sizes.yml	differs	type:number->string:other:PLAIN=1
-digitalocean	specification/resources/ssh_keys/responses/sshKeys_all.yml	differs	type:number->string:other:PLAIN=1
-github	descriptions-next/api.github.com/api.github.com.yaml	differs	length:BLOCK_SEQ=14; type:null->array:PLAIN=14
-github	descriptions/api.github.com/api.github.com.yaml	differs	length:BLOCK_SEQ=6; type:null->array:PLAIN=6
-oai-learn	examples/v2.0/yaml/petstore-minimal.yaml	refused	unexpected
-oai-learn	examples/v2.0/yaml/petstore-simple.yaml	refused	unexpected
-oai-learn	examples/v2.0/yaml/petstore-with-external-docs.yaml	refused	unexpected
 oai-tests-3.3	tests/schema/minimal-objects.yaml	refused	openapi_root
