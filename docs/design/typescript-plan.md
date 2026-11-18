@@ -232,8 +232,11 @@ rest of W9 stand on the audit's probes alone.
 | W8 | Integers past 2^53, such as int64 limits | lose precision, on both paths |
 | W9 | CR-only line breaks; JSON text after a blank line on the grammar path; a recursive alias (`a: &x {b: *x}` reads `b` as `null`) | a valid document refused, or read wrongly |
 
-None of W1 to W6 showed in the corpus: they are shapes the
-specification allows and real documents rarely use. Missing rather than
+None of W1 to W6 showed in the sweep: they are shapes the
+specification allows and real documents rarely use. The sweep cannot
+see W1 to W3, and E12 looked for them with the index: W3 is in seven
+descriptions of the corpus and the W1 shape in two (section 11). Missing
+rather than
 wrong: resolution across documents; the implicit discriminator mapping;
 a check that a target has the type its reference expects;
 `$recursiveRef`; bundling; and the reading rules for an operation
@@ -589,6 +592,11 @@ unchanged, or each change explained; in the sweep, no reference
 `not-found` whose target exists, and no site reported resolved that
 holds its map as written.
 
+Item 1 is done, as
+[`prototype/e12-site-index.result.md`](prototype/e12-site-index.result.md),
+with no source change. Each of its six points is shown, and section 11
+has what it found beside them. Items 2 to 5 are not begun.
+
 ### T4: several documents (L)
 
 1. **Documents given up front, or loaded.** `documents`, a table from
@@ -706,8 +714,8 @@ Numbered from 16, after the earlier plan's fifteen.
 | 24 | A lone surrogate read as U+FFFD | a function here, `wellFormed(tree)`, which apidef calls; raw mode itself rewrites nothing | T2 |
 | 25 | Leniency: a trailing empty YAML document, a byte-order mark under `strict`, a 3.0 component name outside the pattern, a version this package does not know read as the latest, the specification's text over its schema where they differ | accept each, and report where a report exists | T2, T3 |
 | 26 | Which changes to ask of `@tabnas/yaml`, `@tabnas/expr` and the engine, and in what order. Those repositories' own rules govern how each lands | the rows of section 7, in that order, each its own instruction | T2b, T3 |
-| 27 | A pointer that passes through a reference | lenient: the document first, then through the reference, reported in the row; `strict` raises it. E8 recommended the strict reading; E12 counts what each would cost | T3 |
-| 28 | A target the object model does not type | the rounds of section 3; a conflict reported | T3 |
+| 27 | A pointer that passes through a reference | lenient: the document first, then through the reference, reported in the row; `strict` raises it. E8 recommended the strict reading. E12 counted: no reference of the corpus needs the lenient step, so the two cost the same there, and six references pass a site at all, each landing on an empty stub beside the `$ref` (section 11) | T3 |
+| 28 | A target the object model does not type | the rounds of section 3; a conflict reported. E12 ran them: they end, with one answer however the members are ordered, but for two references of one round that give one target different types, which the order of the document decides. Taking the sites of a round in the order of their pointers decides it one way (section 11) | T3 |
 | 29 | Schema dialects. This replaces the earlier Decision 13 | draft-04, 06, 07 and 2019-09 read; an unknown dialect read as 2020-12 and reported | T3 |
 | 30 | The texts the object model follows | 3.1.2 and 3.2.1, the latest published, with the vendored schemas refreshed to match | T3 |
 | 31 | Loaders | a confined file loader and an allow-listed HTTP loader, both opt-in; nothing loads by default | T4 |
@@ -721,7 +729,7 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 
 | Repository | Change | Needed by | Size |
 |---|---|---|---|
-| expr | fold a location as written, not through the sites above it | T3 | S |
+| expr | fold a location as written, not through the sites above it. Prototyped in E12 as `site.written`, 11 lines, with `expr`'s suite unchanged | T3 | S |
 | expr | a step budget, so that a caller can bound or cancel a walk | T3 | S |
 | expr | W10: a result folded while a site it needs is still being folded is not final. The fold reports a cycle to that site, and folds the container again once the site is settled | T3; 23 documents | S to M |
 | yaml | an option for the core schema's words | T2b; 166 documents | S to M |
@@ -784,6 +792,66 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T3 was begun, with its prototype:
+
+- E12 is item 1 of T3, and
+  [`prototype/e12-site-index.result.md`](prototype/e12-site-index.result.md)
+  is its record. It changes no source. It builds the index of
+  section 3, makes a resolver from the compiled one by seven
+  replacements, so that `recognise` and `inherit` are look-ups in the
+  index and a site is read at its landing, and gives `expr` a way to
+  fold a location as written, as a diff of 11 lines.
+- **The index and the fold agree.** With the index alone, the prototype
+  gives today's result for every one of 5,168 descriptions of the
+  corpus and their 1,139,457 sites, for apidef's 43 definitions and the
+  petstore pair, for all 118 rows of `test/resolve/`, and for 6,000
+  generated documents under each of four sets of options. Stripe's
+  three descriptions, GitHub's four and the 600-document check set are
+  among them.
+- **With landings and typing, eight descriptions of the corpus move.**
+  Seven are codat.io's, all 3.1.0, which keep schemas under
+  `definitions`. That is W3: 196 references inside 170 such regions
+  come back as written today, with their sites reported resolved. The
+  sweep could not see them, which is why section 2.3 said W3 was not in
+  the corpus. Two descriptions hold the W1 shape, in six references.
+- **Decision 27 has its count.** Of 1,110,054 landings in the corpus,
+  none passes through a site that lacks the step as written, so the
+  lenient and the strict readings give the same there. The six
+  references that pass a site find their steps as written, in an empty
+  stub that a converter left beside a `$ref`, and resolve to `{}`.
+  Today cuts all six. Under `cycles: 'keep'` today gives three of them
+  the member of the target that the author meant, and the other three
+  the stub. A widely used resolver gives three the stub and three the
+  member, the other way about.
+- **The rounds of Decision 28 end, with one answer.** Five cases give
+  one answer under 502 orders of their members each: a second reference
+  to one target revealed by typing, of the same type and of another; an
+  `$id` inside a region typed only by reference; a region that
+  references itself; and a chain of 40 regions, which ends after round
+  41. In the corpus no description needs more than five rounds. One
+  case has two answers: two references of one round that give one
+  target different types, where the first in the document wins.
+  Taking the sites of a round in the order of their pointers gives it
+  one.
+- **The preset is unmoved, and so is `cycles: 'keep'` off the eight.**
+  Under the preset the prototype equals apidef's own resolver on all
+  15,177 documents the comparison tool runs. It is unmoved because the
+  index types nothing by reference under `refs: 'pointer'` and leaves
+  that reading as it is. `cycles: 'keep'`, built on landings, gives
+  today's graph for 5,160 of the 5,168.
+- **Three things for item 2 to settle**, none of them in the plan before.
+  A pointer that passes a site which is in a cycle, and names nothing
+  there, is cut today and not found on landings. Report rows are in the
+  order the fold first meets each site, and a fold that reads as
+  written no longer meets a site that a pointer only passes, so rows
+  change places in 219 of the 6,000 generated documents, and in none of
+  the corpus. And eight references of the corpus, in four descriptions,
+  land on a type their reference does not expect, which item 4 will
+  report.
+- **The cost is small.** The prototype's `resolve` takes 6% to 17% more
+  time than today's over the corpus, and 24% more under `keep`, with an
+  index that is not written for speed.
 
 **Since acceptance**, once the yaml grammar's change was released:
 

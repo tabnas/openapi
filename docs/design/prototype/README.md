@@ -33,7 +33,9 @@ repository's own build (`ts/dist/openapi.js`, with `@tabnas/parser`
 0.12.20, `@tabnas/yaml` 0.5.32, `@tabnas/jsonic` 0.7.11, `@tabnas/json`
 0.5.20 and `@tabnas/expr` 0.5.21). Each result file is the report of the
 pass, as written. A sixth, E13, was taken on 17 November 2026, and its
-result says which yaml build each part of it ran on.
+result says which yaml build each part of it ran on. A seventh, E12,
+was taken on 18 November 2026 against the packages as released by then,
+and its result names them.
 
 | Folder | Question | Result |
 |---|---|---|
@@ -42,6 +44,7 @@ result says which yaml build each part of it ran on.
 | `e9-apidef-swap/` | Does `voxgig/apidef`'s own suite pass with its parsing and resolution replaced by this package, and what does each remaining hand-written step need? Two diffs against apidef at 3058271, and `preset-shapes.cjs`, the shapes where apidef's reading of a pointer and the preset part. | `e9-apidef-swap.result.md` |
 | `e10-aless-needs/` | What does the `rjrodger/aless` viewer need in order to open a reference in place, and what does the package cost on a 14 MB description? Set aside with that goal until a port exists; kept as a record, and not used by the plan. | `e10-aless-needs.result.md` |
 | `e11-apidef-reads/` | apidef reads through the same base grammars, so are the documents E7 flagged misread by apidef too, and does it show in apidef's output? apidef's own reader over those documents, apidef's models from each document as written against the same document re-read by the reference parser, and what two engine options on this package's own parser repair. | `e11-apidef-reads.result.md` |
+| `e12-site-index/` | Can `resolve` be rebuilt on an index of the document's sites, made in one pass before the fold, without moving what it gives today? The index, a resolver made from the compiled one by seven replacements, the `expr` change it needs as a diff, and both resolvers over the corpus, the fixtures and generated documents. Taken on 18 November 2026, for item 1 of step T3 of the plan and its Decisions 27 and 28. | `e12-site-index.result.md` |
 | `e13-rule-history/` | The engine keeps a record of every rule until a parse ends. Bounded at 3, by its `rule.history` option, is every document read to the same tree, and what does the bound cost and save? Taken on 17 November 2026, for step T2b of the plan and its Decision 34. | `e13-rule-history.result.md` |
 
 Two of these became tools in the plan's T0, and the tools are what to
@@ -57,6 +60,12 @@ folder, named by `CORPUS_SRC`, and the npm `yaml` package installed in
 a scratch folder, named by `YAML_REF`. These scripts declare no
 dependency on that package. The tool that replaced them takes it as the
 `yaml` development dependency that the plan's Decision 17 added.
+
+E12 reads the corpus as the tool of T0 leaves it, in `.corpus/`, and
+needs two things this repository does not declare: a build of
+`@tabnas/expr` with its diff applied, named by `EXPR_DIST`, and for
+`second-opinion.cjs` alone a reference resolver installed in a scratch
+folder, named by `REF_PARSER`. Its result ends with the commands.
 
 ```sh
 cd e7-corpus
