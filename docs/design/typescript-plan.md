@@ -253,17 +253,19 @@ parser holds about 840 MB until it is dropped. T2 removed it
 it is being folded is left in the tree as the raw map, and reported as
 resolved. In `A: { $ref: '#/…/C/properties/q' }` written before
 `C: { properties: { q: { $ref: '#/…/C' } } }`, the fold follows `q` to
-`C`, and `C` holds `q`, which is still being folded. `expr`'s fold then
-gives `C` the map as written for it. Nothing is cut and nothing is
-listed as unresolved, and the resolved tree shares that map with the
-raw tree. With `C` written first, `q` is cut and `A` with it, which is
-the right answer for both orders. Unlike W1 to W6, this one shows in the
-corpus: under the default options, 180 references in 23 documents, all
-versions of one Azure description. `ts/test/resolve.test.ts` pins it, so
-that its repair in `expr` shows here. `cycles: 'keep'` no longer meets
-it (section 11). The sweep counts such sites since T3, as
-`heldAsWritten` in each baseline, and the repair is built in
-tabnas/expr#117 (section 11).
+`C`, and `C` holds `q`, which is still being folded. `expr`'s fold, as
+released, then gives `C` the map as written for it. Nothing is cut and
+nothing is listed as unresolved, and the resolved tree shares that map
+with the raw tree. With `C` written first, `q` is cut and `A` with it,
+which is the right answer for both orders. Unlike W1 to W6, this one
+shows in the corpus: under the default options, 180 references in 23
+documents, all versions of one Azure description. The repair is merged
+in `expr`, as tabnas/expr#117, and is in no release yet.
+`ts/test/resolve.test.ts` expects the cut in both orders, so it passes
+on `expr`'s `main`, which CI builds against, and fails on 0.6.3, the
+latest release. `cycles: 'keep'` no longer meets it (section 11). The
+sweep counts such sites since T3, as `heldAsWritten` in each baseline
+(section 11).
 
 **Found in T2: W11 and W12.** Both are the yaml grammar's. Neither
 changes a tree the corpus reads: W11 is about where a token is said to
@@ -600,11 +602,11 @@ with no source change. Each of its six points is shown, and section 11
 has what it found beside them.
 
 Item 2 is begun. Its three changes in `expr` (section 7) are built, in
-every implementation there, and up for review as tabnas/expr#117. Here
-the sweep counts a site that is reported resolved and holds its map as
-written. The index, and `resolve` on it, are not begun: this
-repository's CI builds against `expr`'s `main`, so they wait for that
-pull request to be merged. Items 3 to 5 are not begun.
+every implementation there, and merged as tabnas/expr#117. No release
+of `expr` has them yet. Here the sweep counts a site that is reported
+resolved and holds its map as written, and the test of W10 expects the
+repaired fold. The index, and `resolve` on it, are not begun. Items 3
+to 5 are not begun.
 
 ### T4: several documents (L)
 
@@ -738,9 +740,9 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 
 | Repository | Change | Needed by | Size |
 |---|---|---|---|
-| expr | fold a location as written, not through the sites above it. Prototyped in E12 as `site.written`, 11 lines, with `expr`'s suite unchanged. Built, as tabnas/expr#117 | T3 | S |
-| expr | a step budget, so that a caller can bound or cancel a walk. Built, in tabnas/expr#117, as the option `budget`: past `steps` the fold fails with `fold_budget`, and `onCheck`, called every `checkEveryN` steps, cancels it with `fold_cancel` | T3 | S |
-| expr | W10: a result folded while a site it needs is still being folded is not final. The plan had the fold report a cycle to that site and fold the container again once the site is settled. Built, in tabnas/expr#117, without the second fold: the site that asks for such a container is told it has met a cycle before the container is started, so nothing is folded twice and each site's resolver is asked once (section 11) | T3; 23 documents | S to M |
+| expr | fold a location as written, not through the sites above it. Prototyped in E12 as `site.written`, 11 lines, with `expr`'s suite unchanged. Merged, as tabnas/expr#117, and not yet released | T3 | S |
+| expr | a step budget, so that a caller can bound or cancel a walk. Merged, in tabnas/expr#117, as the option `budget`: past `steps` the fold fails with `fold_budget`, and `onCheck`, called every `checkEveryN` steps, cancels it with `fold_cancel` | T3 | S |
+| expr | W10: a result folded while a site it needs is still being folded is not final. The plan had the fold report a cycle to that site and fold the container again once the site is settled. Merged, in tabnas/expr#117, without the second fold: the site that asks for such a container is told it has met a cycle before the container is started, so nothing is folded twice and each site's resolver is asked once (section 11) | T3; 23 documents | S to M |
 | yaml | an option for the core schema's words | T2b; 166 documents | S to M |
 | yaml | compact nested lists; a list at its key's indent with an empty entry; a scalar on the line after its key; `>+` with a trailing blank line | T2b; 13 documents | S to M each |
 | yaml | an indented root mapping; a digit-led key with colons and a block value; `.5 x` | T2b; 7 documents | S to M each |
@@ -807,8 +809,8 @@ what the code does.
 - **The three changes T3 asks of `expr` are built**, in every
   implementation there, each with a shared fixture, as one pull request,
   tabnas/expr#117: `site.written`, as E12 prototyped it; a step budget;
-  and the repair of W10. None is merged or released, and nothing under
-  `ts/src` changes here yet.
+  and the repair of W10. It is merged, and no release of `expr` has it
+  yet. Nothing under `ts/src` changes here yet.
 - **The step budget** is the option `budget` on `fold`, shaped as the
   engine's own `parse.budget` is. `steps` is the most steps a fold may
   take, and the step after it fails with `fold_budget`. `onCheck` is
@@ -825,7 +827,7 @@ what the code does.
   container is written first, cut at the same site, so the two orders
   of section 2.3 give one answer, and each site's resolver is still
   asked once.
-- **Measured before it is merged**, with this package's `resolve` on the
+- **Measured before it was merged**, with this package's `resolve` on the
   released fold and on the repaired one, over the 5,168 descriptions of
   the corpus and apidef's 43 definitions, 1,140,055 sites. The released
   fold leaves 180 sites reported resolved that hold their map as
@@ -840,11 +842,14 @@ what the code does.
   very map the document has there. Both baselines carry the figure as
   `heldAsWritten`: 180 in 23 descriptions under each reading, on the
   released packages. T3's acceptance holds it to zero.
-- **What waits for the merge**, as one change here: the test of W10
-  expects the cut in both orders, and both baselines are rewritten from
-  a sweep on the repaired fold. Until then this repository's `main`
-  will fail that one test once `expr`'s `main` has the repair, since CI
-  builds against it.
+- **What followed the merge, and what waits for a release.** The test
+  of W10 expects the cut in both orders since the merge, because CI
+  here builds against `expr`'s `main`. On an install from the registry
+  that one test fails until `expr` is released, since 0.6.3 has the
+  defect. Both baselines keep the 180. A baseline names its
+  dependencies by version, and `expr`'s `main` is still 0.6.3 by that
+  measure, so the baselines are rewritten from a sweep on the release
+  that carries the repair.
 
 **Since acceptance**, as T3 was begun, with its prototype:
 

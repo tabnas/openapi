@@ -143,7 +143,7 @@ default that a shared row pins changes until porting starts.
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
 | T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
 | T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger is 5 rows where it was 190, three of them accepted and two the descriptions refused for their size, and under the base reading it is 235 where it was 254. The rule history is measured, and turning it on is Decision 34 |
-| T3 | the site index, and `resolve` on it | begun. Item 1, the prototype E12, is done and changes no source: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). The index and today's fold agree on every site of the corpus, and what moves with it is eight descriptions in the shapes the plan names. Item 2 is begun: its three changes in `expr` are built and up for review as tabnas/expr#117, and the sweep counts a site reported resolved that holds its map as written. The index and `resolve` on it wait for that pull request to be merged, since CI here builds against `expr`'s `main`. Items 3 to 5 are not begun |
+| T3 | the site index, and `resolve` on it | begun. Item 1, the prototype E12, is done and changes no source: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). The index and today's fold agree on every site of the corpus, and what moves with it is eight descriptions in the shapes the plan names. Item 2 is begun: its three changes in `expr` are merged as tabnas/expr#117 and in no release yet, the sweep counts a site reported resolved that holds its map as written, and the test of W10 expects the repaired fold, so it fails on an install from the registry until `expr` is released. The index and `resolve` on it are not begun. Items 3 to 5 are not begun |
 | T4 to T6 | several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -325,12 +325,14 @@ members that a resolved site dropped included, so that each site is
 reported as what it is.
 
 That is deliberate, and it is not to be folded back into `site.at`. A
-graph cannot be read off a tree that is still being built, and the fold
-has a defect there: when it follows a reference into a container that
-is still being folded, it hands back the map as written, unresolved and
-unreported. Section 2.3 of the plan records that defect as W10. It
-still reaches `cycles: 'cut'`, and `ts/test/resolve.test.ts` pins it
-there, so that its repair in `expr` shows.
+graph cannot be read off a tree that is still being built. The fold, as
+released, also has a defect there: when it follows a reference into a
+container that is still being folded, it hands back the map as written,
+unresolved and unreported. Section 2.3 of the plan records that defect
+as W10, and it reaches `cycles: 'cut'` too. Its repair is merged in
+`expr` and in no release yet. `ts/test/resolve.test.ts` expects the
+repaired fold under `cycles: 'cut'`, so that one test fails on an
+install from the registry until `expr` is released.
 
 `inline-once` and `copy` deep-copy the finished graph, `copy` counting
 the compact JSON's UTF-8 bytes against `budget`. `xref` (apidef's
