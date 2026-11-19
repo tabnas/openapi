@@ -930,7 +930,7 @@ what the code does.
   now stated in the reference page and held by
   `test/resolve/versions.tsv`. The text over the schema where they
   differ is item 3's, with Decision 30.
-- **The suite** is 887 tests and the 11 of the pages' style.
+- **The suite** is 888 tests and the 11 of the pages' style.
 - **T3's acceptance runs hold on the build that has all five items.**
 
   | Run | Result |
