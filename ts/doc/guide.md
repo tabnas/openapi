@@ -249,6 +249,34 @@ out.tree.components.schemas.Name // => { type: 'string' }
 
 Under `strict` that step is not taken, and the reference is not found.
 
+## Find a reference that lands on the wrong type
+
+A reference resolves to whatever its pointer comes to. Where that is
+not the type the reference stands for, its entry in `provenance` has
+`conflict`, the type it landed on:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.0.3
+components:
+  responses:
+    Gone: {description: gone}
+  schemas:
+    Wrong: {$ref: '#/components/responses/Gone'}
+    Right: {$ref: '#/components/schemas/Wrong'}
+`)
+const out = resolve(raw)
+out.provenance.filter((p) => p.conflict).map((p) => p.at) // => ['/components/schemas/Wrong']
+out.provenance.find((p) => p.conflict).conflict // => 'response'
+out.tree.components.schemas.Wrong // => { description: 'gone' }
+```
+
+`Wrong` stands for a schema and lands on a Response Object, so it has a
+conflict. `Right` lands on `Wrong`, which is a schema where it stands,
+and has none.
+
 ## Read schemas written in an older dialect
 
 A schema of OpenAPI 3.1 or 3.2 says which JSON Schema dialect it is
@@ -382,6 +410,69 @@ paths:
 
 resolve(raw).connections.filter((c) => !c.found).map((c) => c.name) // => ['toys']
 ```
+
+## List the schemas a discriminator can name
+
+A discriminator names a schema by the value of a property. Beside the
+entries of its `mapping`, a value names the schema component of that
+name. The `implicitMapping` rows of `connections` list those
+components:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+components:
+  schemas:
+    Pet:
+      discriminator:
+        propertyName: kind
+        mapping: {dog: '#/components/schemas/Dog'}
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+    Dog: {type: object}
+    Cat: {type: object}
+`)
+const rows = resolve(raw).connections.filter((c) => c.kind === 'implicitMapping')
+rows.map((c) => c.name) // => ['Dog', 'Cat']
+rows.map((c) => c.target) // => ['/components/schemas/Dog', '/components/schemas/Cat']
+rows.map((c) => c.from) // => ['oneOf', 'oneOf']
+```
+
+The value `dog` is the entry of `mapping`, which has a row of kind
+`mapping`. The values `Dog` and `Cat` are the names of the components
+listed beside the discriminator, and `from` says where: `oneOf`,
+`anyOf`, or `allOf` for a schema that builds on this one.
+
+## List the URLs a description gives
+
+`urls` has a row for each URL the description gives for something
+outside it, with what a relative one is relative to. Give
+`retrievalUri` for the absolute form of a relative one:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+info:
+  title: Pets
+  version: '1'
+  license: {name: MIT, url: LICENSE.txt}
+servers:
+  - url: /v1
+`)
+const out = resolve(raw, { retrievalUri: 'https://example.com/api/openapi.yaml' })
+out.urls.map((u) => u.at) // => ['/info/license/url', '/servers/0/url']
+out.urls.map((u) => u.base) // => ['description', 'retrieval']
+out.urls.map((u) => u.uri) // => ['https://example.com/api/LICENSE.txt', 'https://example.com/v1']
+```
+
+Nothing is loaded. Without `retrievalUri` the two rows are the same
+but for `uri`, which neither has. The
+[reference](reference.md#urls) has which field has which base.
 
 ## Resolve the references inside an extension
 

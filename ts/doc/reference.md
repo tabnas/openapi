@@ -296,6 +296,7 @@ type ResolveResult = {
   connections: Connection[]
   dataSlots: number             // $ref maps read as data
   dialects: DialectUse[]        // the schema dialects it declares
+  urls: UrlUse[]                // the URLs it gives for things outside it
 }
 
 type DialectUse = {
@@ -303,6 +304,13 @@ type DialectUse = {
   dialect: string               // as written
   as: 'draft-04' | 'draft-06' | 'draft-07' | '2019-09' | '2020-12'
   known: boolean                // false: not a dialect this package knows
+}
+
+type UrlUse = {
+  at: string                    // the field
+  value: string                 // as written
+  base: 'description' | 'retrieval' | 'api' | 'none'
+  uri?: string                  // its absolute form, where it has one
 }
 
 type Provenance = {
@@ -315,6 +323,7 @@ type Provenance = {
   through?: string[]            // the references its pointer was read through
   uri?: string                  // for a reference into another document: its URI
   fragment?: string             // and its fragment, when it has one
+  conflict?: string             // the type it lands on, when not the one it expects
   status: 'resolved' | 'unresolved' | 'cut' | 'kept'
   row?: number                  // with positions
   col?: number
@@ -323,6 +332,10 @@ type Provenance = {
 
 Returns a new tree with every reference in the document replaced by
 what it names. The raw tree is never changed.
+
+The description is read by the version its root names, or by `version`
+when that is given. A version this package does not know is read as
+3.2, and the result's `version` is `'unknown'`.
 
 #### Sites
 
@@ -335,11 +348,15 @@ does the same inside the extension members it names.
 
 A map the version gives no type at all takes the type of the first
 reference to land on it, in document order. Such a map is in an
-extension, under a member the version does not have, such as
-`definitions` in a 2020-12 schema, or under a 3.0 component name that
-the specification's pattern refuses. The references inside it are then
+extension, or under a member the version does not have, such as
+`definitions` in a 2020-12 schema. The references inside it are then
 sites, and they can type further maps in turn. A reference of kind
 `data` types nothing.
+
+A component is what its map of the Components Object holds, whatever
+its name. The specification has a pattern for a component's name,
+`^[a-zA-Z0-9\.\-_]+$`, and a component named otherwise is read as any
+other, in every version.
 
 #### Targets
 
@@ -377,6 +394,16 @@ location.
 
 A reference to a site left as written is left as written too, and
 reported as that site is.
+
+A reference expects a type: a Reference Object the type its place
+holds, the `$ref` of a schema a schema, and the `$ref` of a Path Item
+a Path Item. Where it lands on something the version gives another
+type, the reference resolves all the same, and its row has `conflict`,
+the type it landed on: `response` for a reference from a schema to a
+Response Object, `map` or `list` for a container with no type of its
+own, and `data` for plain JSON, as an example is. A landing the
+version gives no type takes the reference's, and has no conflict.
+Neither has a reference of kind `data`, which expects nothing.
 
 `refs: 'pointer'` reads a `$ref` as a JSON Pointer into the document
 and nothing else:
@@ -588,6 +615,7 @@ type Connection = {
   anchor?: boolean
   fields?: string[]
   routes?: string[]
+  from?: 'oneOf' | 'anyOf' | 'allOf' | 'self'
 }
 ```
 
@@ -603,10 +631,22 @@ through `$ref`. Nothing in it is put into the tree.
 | `tagParent` | a 3.2 tag's `parent` | the root `tags` entry of that name | `cycle`, when the chain of parents loops |
 | `mapping` | a Discriminator `mapping` value | a schema by component name, failing that by URI | `via` |
 | `defaultMapping` | a 3.2 Discriminator's `defaultMapping` | as `mapping` | `via` |
+| `implicitMapping` | the `discriminator` of a schema | a schema component whose name is a value of the discriminating property | `from`: where the component is named |
 | `dynamicRef` | a 2020-12 schema with `$dynamicRef` | its initial target, by URI | `anchor`, when that target has a `$dynamicAnchor` of the fragment's name |
 | `recursiveRef` | a 2019-09 schema with `$recursiveRef` | its initial target, by URI | `anchor`, when that target has `$recursiveAnchor: true` |
 | `pathItemMerge` | a Path Item with `$ref` | the Path Item it names | `fields`: the fields both have, where the specification leaves the merge undefined |
 | `operationIdReuse` | the first route | one `operationId` that more than one route through `paths`, `webhooks` and callbacks reaches | `routes` |
+
+A discriminator has an implicit mapping beside its `mapping`: a value
+of its property names the schema component of that name. Its
+`implicitMapping` rows list the components it can name that way, each
+with `name`, the value. They are the ones listed by reference beside
+it in `oneOf` or `anyOf`, and the ones that build on its schema with
+`allOf`, and on those in turn. An inline schema has no name, and has
+no row. A value that `mapping` has is that entry's, and has no
+implicit row. In 2.0 the discriminator is the name of the property,
+and the name of the schema itself is a value too, with `from` set to
+`self`.
 
 The rows come in document order, then the `pathItemMerge` rows in walk
 order, then the `operationIdReuse` rows. A name inside example data is
@@ -616,6 +656,31 @@ written, and through a `$ref` where a step is missing, so a target
 reached through a `$ref` is found. A route is walked the same way, with
 a Path Item's own fields beside its `$ref`. None of the report depends
 on `sharing`, `cycles` or `siblings`.
+
+#### URLs
+
+`urls` lists each URL or URI the description gives for something
+outside it, in document order. Nothing is loaded. `base` says what a
+relative value is relative to, and `uri` is the absolute form of the
+value, in its normal form, where it has one. A value written with a
+scheme has one whatever its `base`:
+
+| `base` | The field | `uri` of a relative value |
+|---|---|---|
+| `description` | `termsOfService` (3.1, 3.2), `url` of a Contact, License or External Documentation Object, `externalValue` | the value against the base URI in force, as for a `$ref` |
+| `retrieval` | `url` of a Server Object | the value against `retrievalUri`, whatever `$self` says. None while the URL has variables |
+| `api` | `openIdConnectUrl`, `oauth2MetadataUrl`, `authorizationUrl`, `tokenUrl`, `refreshUrl`, `deviceAuthorizationUrl`, and `termsOfService` in 3.0 | none: it is relative to a server of the API |
+| `none` | `namespace` of an XML Object, and every URL of 2.0 | none |
+
+A relative value has a `uri` only against a base that a relative
+reference can be read against: a URI with a scheme, and with an
+authority or a path from the root. With no `retrievalUri`, the
+description is read under a base that stands for no location, and a
+relative value has no `uri`, unless `$self` or the nearest `$id` is
+such a URI. A `urn:` is none either.
+
+A value that is no string has no row, and neither has one in an example
+or an extension.
 
 ### `version(tree)`
 

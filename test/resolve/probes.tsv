@@ -1,0 +1,75 @@
+input	expected	unresolved	cuts	opts	select	provenance	dialects
+# The probes of the audit that are about references, each with the
+# audit's own input and what `resolve` gives for it now. The audit is
+# ../../docs/design/prototype/e8-spec-probes.result.md, and its section 3
+# has the probes, by the numbers used here. ../pending/parse-probes.tsv
+# has the probes that are about reading a text, and
+# ts/test/probes.test.ts holds both files to the audit's list.
+#
+# Before them, every member a `provenance` row gained in T3 of the
+# plan, in one description. `landing` is where the pointer comes to on
+# the document as written. `through` lists the references it was read
+# through. `uri` and `fragment` are of a reference into another
+# document. `conflict` is the type of a landing that is not the type
+# the reference expects.
+{"openapi":"3.1.0","paths":{"/a":{"get":{"responses":{"200":{"$ref":"#/components/schemas/Plain"},"404":{"$ref":"common.yaml#/components/responses/NotFound"},"500":{"$ref":"common.yaml"}}}}},"components":{"schemas":{"Plain":{"type":"object","properties":{"id":{"type":"integer"}}},"Alias":{"$ref":"#/components/schemas/Plain"},"Direct":{"$ref":"#/components/schemas/Plain/properties/id"},"Through":{"$ref":"#/components/schemas/Alias/properties/id"}}}}	"3.1.0"	["/paths/~1a/get/responses/404 external","/paths/~1a/get/responses/500 external"]	[]	{"retrievalUri":"https://e.com/a/api.yaml"}	["openapi"]	["/paths/~1a/get/responses/200 resolved -> /components/schemas/Plain conflict=schema","/paths/~1a/get/responses/404 unresolved -> - uri=https://e.com/a/common.yaml fragment=/components/responses/NotFound","/paths/~1a/get/responses/500 unresolved -> - uri=https://e.com/a/common.yaml","/components/schemas/Alias resolved -> /components/schemas/Plain","/components/schemas/Direct resolved -> /components/schemas/Plain/properties/id","/components/schemas/Through resolved -> /components/schemas/Plain/properties/id through=/components/schemas/Alias"]	
+# Probe 3.3. A reference inside a keyword that 2020-12 does not have,
+# in a 3.1 schema. A reference that lands in `definitions` types what it
+# lands on as a schema, so the reference there is read, and both
+# resolve. The same for `dependencies`, for `items` as a list and for
+# `additionalItems`.
+{"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B":{"definitions":{"x":{"$ref":"#/components/schemas/A"}}},"C":{"$ref":"#/components/schemas/B/definitions/x"}}}}	{"A":{"type":"string"},"B":{"definitions":{"x":{"type":"string"}}},"C":{"type":"string"}}	[]	[]		["components","schemas"]	["/components/schemas/B/definitions/x resolved -> /components/schemas/A","/components/schemas/C resolved -> /components/schemas/B/definitions/x"]	
+{"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B":{"dependencies":{"p":{"$ref":"#/components/schemas/A"}}},"C":{"$ref":"#/components/schemas/B/dependencies/p"}}}}	{"A":{"type":"string"},"B":{"dependencies":{"p":{"type":"string"}}},"C":{"type":"string"}}	[]	[]		["components","schemas"]		
+{"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B":{"items":[{"$ref":"#/components/schemas/A"}],"additionalItems":{"$ref":"#/components/schemas/A"}},"C":{"$ref":"#/components/schemas/B/items/0"},"D":{"$ref":"#/components/schemas/B/additionalItems"}}}}	{"A":{"type":"string"},"B":{"items":[{"type":"string"}],"additionalItems":{"type":"string"}},"C":{"type":"string"},"D":{"type":"string"}}	[]	[]		["components","schemas"]		
+# With nothing that lands on it, such a keyword is not a schema in
+# 2020-12, and its reference is data. Under a dialect that has the
+# keyword it is a schema by where it is.
+{"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B":{"definitions":{"x":{"$ref":"#/components/schemas/A"}}}}}}	{"A":{"type":"string"},"B":{"definitions":{"x":{"$ref":"#/components/schemas/A"}}}}	[]	[]		["components","schemas"]		
+{"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B":{"$schema":"http://json-schema.org/draft-07/schema#","definitions":{"x":{"$ref":"#/components/schemas/A"}}}}}}	{"A":{"type":"string"},"B":{"$schema":"http://json-schema.org/draft-07/schema#","definitions":{"x":{"type":"string"}}}}	[]	[]		["components","schemas"]		
+# Probe 3.4. A schema whose `$ref` names a member of itself, by its own
+# `$id`, and one that reaches it by that `$id`. It is no cycle: the
+# member is read as written. Without the `$id` it is the same, and in
+# 3.0, where the members beside a `$ref` are not kept.
+{"openapi":"3.1.0","components":{"schemas":{"B":{"$id":"https://e.com/s","$ref":"#/$defs/x","$defs":{"x":{"type":"string"}}},"C":{"$ref":"https://e.com/s"}}}}	{"B":{"allOf":[{"type":"string"}],"$id":"https://e.com/s","$defs":{"x":{"type":"string"}}},"C":{"allOf":[{"type":"string"}],"$id":"https://e.com/s","$defs":{"x":{"type":"string"}}}}	[]	[]		["components","schemas"]		
+{"openapi":"3.1.0","components":{"schemas":{"B":{"$ref":"#/components/schemas/B/$defs/x","$defs":{"x":{"type":"string"}}}}}}	{"B":{"allOf":[{"type":"string"}],"$defs":{"x":{"type":"string"}}}}	[]	[]		["components","schemas"]		
+{"openapi":"3.0.3","components":{"schemas":{"B":{"$ref":"#/components/schemas/B/properties/x","properties":{"x":{"type":"string"}}}}}}	{"B":{"type":"string"}}	[]	[]		["components","schemas"]		
+# Probe 3.5. A pointer that passes a reference is read on the document
+# as it is written: the member beside the `$ref` is there, and is what
+# the pointer names.
+{"openapi":"3.0.3","components":{"schemas":{"A":{"properties":{"x":{"type":"string"}}},"B":{"$ref":"#/components/schemas/A","properties":{"x":{"type":"integer"}}},"C":{"$ref":"#/components/schemas/B/properties/x"}}}}	{"type":"integer"}	[]	[]		["components","schemas","C"]	["/components/schemas/B resolved -> /components/schemas/A","/components/schemas/C resolved -> /components/schemas/B/properties/x"]	
+# Probe 3.6. A target where the object model has no type, here in an
+# extension, takes the type of the reference that lands on it, and the
+# references in it are read.
+{"openapi":"3.0.3","paths":{"/a":{"get":{"responses":{"404":{"$ref":"#/x-common/NotFound"}}}}},"x-common":{"NotFound":{"description":"nf","content":{"application/json":{"schema":{"$ref":"#/components/schemas/E"}}}}},"components":{"schemas":{"E":{"type":"object"}}}}	{"description":"nf","content":{"application/json":{"schema":{"type":"object"}}}}	[]	[]		["paths","/a","get","responses","404"]	["/paths/~1a/get/responses/404 resolved -> /x-common/NotFound","/x-common/NotFound/content/application~1json/schema resolved -> /components/schemas/E"]	
+# Probe 3.7. A 3.0 component under a name its schema's pattern does not
+# have is read as any other, as it is in 3.1.
+{"openapi":"3.0.3","components":{"schemas":{"A":{"type":"string"},"B C":{"properties":{"p":{"$ref":"#/components/schemas/A"}}}}}}	{"properties":{"p":{"type":"string"}}}	[]	[]		["components","schemas","B C"]		
+{"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B C":{"properties":{"p":{"$ref":"#/components/schemas/A"}}}}}}	{"properties":{"p":{"type":"string"}}}	[]	[]		["components","schemas","B C"]		
+# Probe 3.8. A schema that declares a dialect is read by it: draft-07,
+# where a `$ref` stands alone; 2020-12 written with an empty fragment;
+# and 2019-09. A dialect this package does not know is read as 2020-12,
+# and reported.
+{"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B":{"$schema":"http://json-schema.org/draft-07/schema#","$ref":"#/components/schemas/A"}}}}	{"type":"string"}	[]	[]		["components","schemas","B"]		["/components/schemas/B/$schema http://json-schema.org/draft-07/schema# as draft-07"]
+{"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B":{"$schema":"https://json-schema.org/draft/2020-12/schema#","$ref":"#/components/schemas/A"}}}}	{"allOf":[{"type":"string"}],"$schema":"https://json-schema.org/draft/2020-12/schema#"}	[]	[]		["components","schemas","B"]		["/components/schemas/B/$schema https://json-schema.org/draft/2020-12/schema# as 2020-12"]
+{"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B":{"$schema":"https://json-schema.org/draft/2019-09/schema","$ref":"#/components/schemas/A"}}}}	{"allOf":[{"type":"string"}],"$schema":"https://json-schema.org/draft/2019-09/schema"}	[]	[]		["components","schemas","B"]		["/components/schemas/B/$schema https://json-schema.org/draft/2019-09/schema as 2019-09"]
+{"openapi":"3.1.0","jsonSchemaDialect":"https://example.com/my-dialect","components":{"schemas":{"A":{"type":"string"},"B":{"$ref":"#/components/schemas/A"}}}}	{"type":"string"}	[]	[]		["components","schemas","B"]		["/jsonSchemaDialect https://example.com/my-dialect as 2020-12 unknown"]
+# Probe 3.9. Two spellings of one URI are one URI: the case of the
+# scheme and the host, the default port, and a percent-encoded letter.
+# So is an `$id` and a reference to it. The audit's reference is from
+# a schema to the Info Object, which its row has as a conflict.
+{"openapi":"3.1.0","info":{"title":"t","version":"1"},"components":{"schemas":{"B":{"$ref":"HTTPS://E.COM/a/api.yaml#/info"}}}}	{"title":"t","version":"1"}	[]	[]	{"retrievalUri":"https://e.com/a/api.yaml"}	["components","schemas","B"]	["/components/schemas/B resolved -> /info conflict=info"]	
+{"openapi":"3.1.0","info":{"title":"t","version":"1"},"components":{"schemas":{"B":{"$ref":"https://e.com:443/a/api.yaml#/info"}}}}	{"title":"t","version":"1"}	[]	[]	{"retrievalUri":"https://e.com/a/api.yaml"}	["components","schemas","B"]		
+{"openapi":"3.1.0","info":{"title":"t","version":"1"},"components":{"schemas":{"B":{"$ref":"https://e.com/a/%61pi.yaml#/info"}}}}	{"title":"t","version":"1"}	[]	[]	{"retrievalUri":"https://e.com/a/api.yaml"}	["components","schemas","B"]		
+{"openapi":"3.1.0","components":{"schemas":{"A":{"$id":"https://e.com/s/a","type":"string"},"B":{"$ref":"https://E.com/s/a"}}}}	{"$id":"https://e.com/s/a","type":"string"}	[]	[]		["components","schemas","B"]		
+# Probe 3.10. A 3.2 Media Type Object has no `description`, so one
+# beside a reference to it has no effect. A Response Object has one,
+# and there it overrides.
+{"openapi":"3.2.0","components":{"mediaTypes":{"M":{"schema":{"type":"string"}}},"responses":{"R":{"description":"r","content":{"application/json":{"$ref":"#/components/mediaTypes/M","description":"over"}}},"Q":{"$ref":"#/components/responses/R","description":"over"}}}}	{"R":{"description":"r","content":{"application/json":{"schema":{"type":"string"}}}},"Q":{"description":"over","content":{"application/json":{"schema":{"type":"string"}}}}}	[]	[]		["components","responses"]		
+# Probe 7.2. Nesting, or a chain of references, deeper than `maxDepth`
+# is refused with this package's own code. The bound is 1,000 unless
+# given, and ts/test/resolve.test.ts holds the default.
+{"openapi":"3.1.0","components":{"schemas":{"A":{"items":{"items":{"items":{"items":{"items":{"items":{"items":{"items":{"items":{"type":"string"}}}}}}}}}}}}}	ERROR:openapi_depth	[]	[]	{"maxDepth":8}	["openapi"]		
+{"openapi":"3.1.0","components":{"schemas":{"S0":{"$ref":"#/components/schemas/S1"},"S1":{"$ref":"#/components/schemas/S2"},"S2":{"$ref":"#/components/schemas/S3"},"S3":{"$ref":"#/components/schemas/S4"},"S4":{"$ref":"#/components/schemas/S5"},"S5":{"$ref":"#/components/schemas/S6"},"S6":{"$ref":"#/components/schemas/S7"},"S7":{"$ref":"#/components/schemas/S8"},"S8":{"$ref":"#/components/schemas/S9"},"S9":{"type":"string"}}}}	ERROR:openapi_depth	[]	[]	{"maxDepth":8}	["openapi"]		
+# Under a bound that is deep enough the same two are read.
+{"openapi":"3.1.0","components":{"schemas":{"A":{"items":{"items":{"items":{"items":{"items":{"items":{"items":{"items":{"items":{"type":"string"}}}}}}}}}}}}}	"3.1.0"	[]	[]	{"maxDepth":20}	["openapi"]		
+{"openapi":"3.1.0","components":{"schemas":{"S0":{"$ref":"#/components/schemas/S1"},"S1":{"$ref":"#/components/schemas/S2"},"S2":{"$ref":"#/components/schemas/S3"},"S3":{"$ref":"#/components/schemas/S4"},"S4":{"$ref":"#/components/schemas/S5"},"S5":{"$ref":"#/components/schemas/S6"},"S6":{"$ref":"#/components/schemas/S7"},"S7":{"$ref":"#/components/schemas/S8"},"S8":{"$ref":"#/components/schemas/S9"},"S9":{"type":"string"}}}}	{"type":"string"}	[]	[]	{"maxDepth":20}	["components","schemas","S0"]		

@@ -862,7 +862,7 @@ export type {
   Unresolved,
   Why,
 } from './resolve'
-export type { Connection, ConnectionKind } from './connections'
+export type { Connection, ConnectionKind, UrlUse } from './connections'
 export type { DialectName, DialectUse } from './dialect'
 
 export type {

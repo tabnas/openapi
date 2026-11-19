@@ -5,9 +5,12 @@
 // names an operation by operationId, or locates one with operationRef; a
 // Security Requirement's member names name security schemes; an
 // operation's tags name tags; a 3.2 tag names its parent; a Discriminator
-// maps payload values to schemas by name or URI; a `$dynamicRef` has an
-// initial target. Nothing here is substituted into the tree: the report
-// says what each name reaches, and the caller decides.
+// maps payload values to schemas by name or URI, and by the names of the
+// schemas it is beside or that build on its own; a `$dynamicRef` or a
+// `$recursiveRef` has an initial target. Nothing here is substituted into
+// the tree: the report says what each name reaches, and the caller
+// decides. The URLs a description gives for things outside it are a
+// report of their own, since nothing here can say whether one is there.
 //
 // Everything here is read from the site index (site-index.ts), which has
 // the type of every location, the base URI it is read under, and where a
@@ -20,7 +23,7 @@
 import { slot, step } from './model'
 import type { ModelVersion } from './model'
 import type { Landing, Loc, SiteIndex } from './site-index'
-import { ANCHOR, NOTHING, fragmentOf, isMap, own, pointer, resolveUri, stepInto } from './uri'
+import { ANCHOR, NOTHING, fragmentOf, hierarchical, isMap, normalizeUri, own, pointer, resolveUri, stepInto } from './uri'
 import type { Path } from './uri'
 
 type ConnectionKind =
@@ -31,6 +34,7 @@ type ConnectionKind =
   | 'tagParent'
   | 'mapping'
   | 'defaultMapping'
+  | 'implicitMapping'
   | 'dynamicRef'
   | 'recursiveRef'
   | 'pathItemMerge'
@@ -70,9 +74,56 @@ type Connection = {
   // Every route through paths, webhooks and callbacks that reaches an
   // operation with one operationId, when there is more than one.
   routes?: string[]
+  // Where an implicit mapping comes from: a schema listed beside the
+  // discriminator in `oneOf` or `anyOf`, one that builds on the
+  // discriminator's schema with `allOf`, or in 2.0 that schema itself.
+  from?: 'oneOf' | 'anyOf' | 'allOf' | 'self'
 }
 
-type Use = { kind: ConnectionKind; at: string; name: string; base: string; holder?: string }
+// A URL or URI that a description gives for something outside it: its
+// terms of service, an external example, a server, a token endpoint.
+// `value` is the field as written. `base` is what a relative value is
+// relative to: the description's base URI where the field is
+// (`description`), the URI the description was retrieved from
+// (`retrieval`, for a Server Object's `url`), a server of the API (`api`),
+// or nothing, where the value must be absolute (`none`). `uri` is the
+// absolute URI in its normal form, where the value has one that this
+// package can work out. A value written with a scheme always has one,
+// but for a server's URL with variables. A relative one has one under
+// `description` and `retrieval`, where its base is a URI that a relative
+// reference can be read against: the base a description has when nobody
+// says where it is stands for no location, and gives none. Nothing is
+// loaded.
+type UrlUse = {
+  at: string
+  value: string
+  base: 'description' | 'retrieval' | 'api' | 'none'
+  uri?: string
+}
+
+type Use = {
+  kind: ConnectionKind
+  at: string
+  name: string
+  base: string
+  holder?: string
+  // For an implicit mapping: the schema that has the discriminator.
+  loc?: Loc
+  node?: any
+}
+
+// A URI with a scheme, which needs no base.
+const ABSOLUTE = /^[A-Za-z][A-Za-z0-9+.-]*:/
+
+// The absolute form of a URL as written, in its normal form: its own
+// where it has a scheme, and else its form against `base`, where there
+// is one and a relative reference can be read against it.
+const absoluteOf = (value: string, base: string | undefined): string | undefined =>
+  ABSOLUTE.test(value)
+    ? normalizeUri(resolveUri('', value))
+    : undefined !== base && hierarchical(base)
+      ? normalizeUri(resolveUri(base, value))
+      : undefined
 
 const esc = (seg: string | number) => String(seg).replace(/~/g, '~0').replace(/\//g, '~1')
 
@@ -92,10 +143,17 @@ function namesAt(raw: any, path: Path): Record<string, any> {
   return isMap(node) ? node : Object.create(null)
 }
 
-function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boolean, tick?: () => void): Connection[] {
+function connectionsOf(
+  raw: any,
+  mv: ModelVersion,
+  index: SiteIndex,
+  hasIds: boolean,
+  tick?: () => void,
+): { rows: Connection[]; urls: UrlUse[] } {
   // A root that is neither a map nor a list names nothing.
-  if (!Array.isArray(raw) && !isMap(raw)) return []
+  if (!Array.isArray(raw) && !isMap(raw)) return { rows: [], urls: [] }
   const uses: Use[] = []
+  const urls: UrlUse[] = []
   const declared = new Map<string, string[]>()
   const tags = new Map<string, { at: string; parent?: string }>()
 
@@ -140,9 +198,32 @@ function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boo
           })
         } else if ('mapping' === state) {
           uses.push({ kind: 'defaultMapping' === f.last ? 'defaultMapping' : 'mapping', at: f.at, name: node, base: f.base })
+        } else if ('url' === s.kind) {
+          const base = ('description' === s.type || 'retrieval' === s.type || 'api' === s.type ? s.type : 'none') as UrlUse['base']
+          const row: UrlUse = { at: f.at, value: node, base }
+          // A server's URL with variables has no absolute form until
+          // they are given.
+          const uri =
+            'description' === base
+              ? absoluteOf(node, f.base)
+              : 'retrieval' !== base
+                ? absoluteOf(node, undefined)
+                : /[{}]/.test(node)
+                  ? undefined
+                  : absoluteOf(node, index.retrieved)
+          if (undefined !== uri) row.uri = uri
+          urls.push(row)
         }
       }
       if (isMap(node)) {
+        // A discriminator, which in 2.0 is the name of the property and
+        // from 3.0 an object that has it.
+        if ('schema' === s.kind && undefined !== loc) {
+          const d = node.discriminator
+          if ('2.0' === mv ? 'string' === typeof d : isMap(d) && 'string' === typeof d.propertyName) {
+            uses.push({ kind: 'implicitMapping', at: f.at + '/discriminator', name: '', base: f.base, loc, node })
+          }
+        }
         if ('connection:securityScheme' === s.keys) {
           for (const key of Object.keys(node)) {
             uses.push({ kind: 'securityScheme', at: f.at + '/' + esc(key), name: key, base: f.base })
@@ -196,8 +277,103 @@ function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boo
     }
   }
 
+  // The schema components that build on a schema with `allOf`, by the
+  // location of the schema built on. A reference in `allOf` names a
+  // schema, and where that one is itself a reference, the one it names
+  // too.
+  const holder = ((): Loc | undefined => {
+    let loc: Loc | undefined = index.root
+    for (const seg of schemasAt) loc = undefined === loc ? undefined : index.child(loc, seg)
+    return loc
+  })()
+  let builders: Map<Loc, string[]> | undefined
+  const buildersOf = (): Map<Loc, string[]> => {
+    if (undefined !== builders) return builders
+    const found = new Map<Loc, string[]>()
+    for (const name of undefined === holder ? [] : Object.keys(schemas)) {
+      if (undefined !== tick) tick()
+      const schema = schemas[name]
+      const list = isMap(schema) && Array.isArray(schema.allOf) ? index.child(index.child(holder!, name)!, 'allOf') : undefined
+      if (undefined === list) continue
+      for (let i = 0; i < schema.allOf.length; i++) {
+        let loc = index.child(list, i)
+        const seen = new Set<Loc>()
+        while (undefined !== loc && undefined !== loc.site && !seen.has(loc)) {
+          seen.add(loc)
+          const land: Landing = index.landing(loc.site)
+          loc = land.found ? land.loc : undefined
+          if (undefined === loc) break
+          const names = found.get(loc)
+          if (undefined === names) found.set(loc, [name])
+          else names.push(name)
+        }
+      }
+    }
+    return (builders = found)
+  }
+
+  // The name of the schema component at a path, where it is one.
+  const componentAt = (path: Path | undefined): string | undefined =>
+    undefined !== path && path.length === schemasAt.length + 1 && schemasAt.every((seg, i) => seg === String(path[i]))
+      ? String(path[path.length - 1])
+      : undefined
+
+  // The implicit mapping of a discriminator: the value of its property is
+  // the name of a schema component, where no `mapping` entry has that
+  // value. The schemas it can name are the ones listed beside it in
+  // `oneOf` or `anyOf` by reference, since an inline one has no name, and
+  // the components that build on its schema with `allOf`, and on those in
+  // turn. In 2.0 the schema's own name is one too.
+  const implied = (use: Use): Connection[] => {
+    const node = use.node
+    const rows: Connection[] = []
+    const explicit = '2.0' !== mv && isMap(node.discriminator.mapping) ? node.discriminator.mapping : undefined
+    const seen = new Set<string>()
+    const add = (name: string, from: Connection['from']) => {
+      if (seen.has(name) || (undefined !== explicit && own(explicit, name))) return
+      seen.add(name)
+      rows.push({ kind: 'implicitMapping', at: use.at, name, found: true, target: pointer([...schemasAt, name]), from })
+    }
+    if ('2.0' === mv) {
+      const path: Path = []
+      for (let p: Loc | undefined = use.loc; undefined !== p && undefined !== p.parent; p = p.parent) path.unshift(p.seg)
+      const self = componentAt(path)
+      if (undefined !== self) add(self, 'self')
+    } else {
+      for (const k of ['oneOf', 'anyOf'] as const) {
+        const list = Array.isArray(node[k]) ? index.child(use.loc!, k) : undefined
+        if (undefined === list) continue
+        for (let i = 0; i < node[k].length; i++) {
+          const item = index.child(list, i)
+          if (undefined === item || undefined === item.site) continue
+          const land: Landing = index.landing(item.site)
+          const name = land.found ? componentAt(land.path) : undefined
+          if (undefined !== name) add(name, k)
+        }
+      }
+    }
+    const built = buildersOf()
+    const queue: Loc[] = [use.loc!]
+    const done = new Set<Loc>()
+    while (0 < queue.length) {
+      const at = queue.shift()!
+      if (done.has(at)) continue
+      done.add(at)
+      for (const name of built.get(at) ?? []) {
+        add(name, 'allOf')
+        const child = index.child(holder!, name)
+        if (undefined !== child) queue.push(child)
+      }
+    }
+    return rows
+  }
+
   const out: Connection[] = []
   for (const use of uses) {
+    if ('implicitMapping' === use.kind) {
+      for (const row of implied(use)) out.push(row)
+      continue
+    }
     const row: Connection = { kind: use.kind, at: use.at, name: use.name, found: false, target: null }
     if ('operationId' === use.kind) {
       const decl = declared.get(use.name)
@@ -270,7 +446,7 @@ function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boo
     }
     out.push(row)
   }
-  return out
+  return { rows: out, urls }
 }
 
 // Every route through paths, webhooks and callbacks that reaches an
@@ -366,4 +542,4 @@ function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex, tick?: () => void
 
 export { connectionsOf, reuseOf }
 
-export type { Connection, ConnectionKind }
+export type { Connection, ConnectionKind, UrlUse }

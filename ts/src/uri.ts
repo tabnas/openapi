@@ -170,6 +170,15 @@ function normalizeUri(u: string): string {
   return out
 }
 
+// Whether a relative reference can be read against a URI: it has a
+// scheme, and an authority or a path that starts at a root (RFC 3986
+// section 1.2.3). A `urn:` cannot be, and so neither can the base a
+// description is read under when nobody says where it is.
+function hierarchical(u: string): boolean {
+  const p = parseUri(u)
+  return undefined !== p.scheme && (undefined !== p.authority || p.path.startsWith('/'))
+}
+
 const withoutFragment = (u: string) => u.replace(/#.*$/s, '')
 
 function fragmentOf(u: string): string | undefined {
@@ -218,6 +227,7 @@ export {
   PLAIN_NAME,
   define,
   fragmentOf,
+  hierarchical,
   isMap,
   merged,
   normalizeEncoding,

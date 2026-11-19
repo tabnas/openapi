@@ -69,3 +69,21 @@ version	path	state
 # A member named $ref in a map of schema names is a name, not a site:
 # the map is an anonymous map of schemas.
 3.1	/components/schemas/Ids/properties	"schema{}"
+# A 3.0 component under a name its schema's pattern does not have is
+# what its map holds all the same, as it is in 3.1 and 3.2. An
+# extension name is a name there too.
+3.0	/components/schemas/B C	"schema"
+3.0	/components/schemas/B C/properties/p	"schema"
+3.0	/components/schemas/Paged«Pet»	"schema"
+3.0	/components/schemas/x-internal	"schema"
+3.0	/components/responses/Not Found	"response?"
+3.0	/components/parameters/page[size]	"parameter?"
+3.0	/components/examples/an example	"example?"
+3.0	/components/requestBodies/New Pet	"requestBody?"
+3.0	/components/headers/X Rate	"header?"
+3.0	/components/securitySchemes/api key	"securityScheme?"
+3.0	/components/links/next page	"link?"
+3.0	/components/callbacks/on event	"callback?"
+3.1	/components/schemas/B C	"schema"
+3.2	/components/schemas/B C	"schema"
+2.0	/definitions/B C	"schema"

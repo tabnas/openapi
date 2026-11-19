@@ -102,6 +102,28 @@ describe('object model generator gates', () => {
     assert.throws(() => Gen.generate({ overlay: o }), /has no position noSuchMember/)
   })
 
+  test('an overlay entry that reads any name is refused where no one pattern types the names', () => {
+    const at = (o: any) => o.entries.findIndex((e: any) => true === e.anyName)
+    // A state with named members is no map of names.
+    const named = overlay()
+    named.entries[at(named)].state = 'components'
+    assert.throws(() => Gen.generate({ overlay: named }), /3\.0 components is not a map typed by one pattern of names/)
+    // The entry is for the version whose schema has the pattern: 3.1 types
+    // every member already.
+    const typed = overlay()
+    typed.entries[at(typed)].versions = ['3.0', '3.1']
+    assert.throws(() => Gen.generate({ overlay: typed }), /3\.1 components\.\w+ is not a map typed by one pattern of names/)
+    // Without the entries a 3.0 component is typed under the pattern alone.
+    const none = overlay()
+    none.entries = none.entries.filter((e: any) => true !== e.anyName)
+    const states = Gen.generate({ overlay: none }).versions['3.0'].states
+    assert.equal(states['components.schemas'].rest, undefined)
+    assert.equal(states['components.responses'].rest, undefined)
+    const now = Gen.generate().versions['3.0'].states
+    assert.equal(now['components.schemas'].rest, 'schema')
+    assert.equal(now['components.responses'].rest, 'response?')
+  })
+
   test('an overlay entry that matches no version is refused', () => {
     const o = overlay()
     o.entries[0].versions = ['9.9']

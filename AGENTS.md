@@ -166,7 +166,7 @@ default that a shared row pins changes until porting starts.
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
 | T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
 | T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger is 5 rows where it was 190, three of them accepted and two the descriptions refused for their size, and under the base reading it is 235 where it was 254. The rule history is measured, and turning it on is Decision 34 |
-| T3 | the site index, and `resolve` on it | items 1 to 3 built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. Item 3 is the dialects: a schema of 3.1 or 3.2 is read by the dialect it declares, draft-04 to 2020-12, an unknown one as 2020-12 and reported in `dialects`; URIs are compared in their normal form; and the vendored schemas are the latest published, with the model held to the 3.1.2 and 3.2.1 texts. W4 and W5 are repaired. Items 2 and 3 need what tabnas/expr#117 added to the fold, which is on `expr`'s `main` and in no release: until one carries it, `resolve` runs in CI and in the linked model only, and the corpus baselines stay as swept on the released packages. Items 4 and 5 are not begun |
+| T3 | the site index, and `resolve` on it | all five items built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. Item 3 is the dialects: a schema of 3.1 or 3.2 is read by the dialect it declares, draft-04 to 2020-12, an unknown one as 2020-12 and reported in `dialects`; URIs are compared in their normal form; and the vendored schemas are the latest published, with the model held to the 3.1.2 and 3.2.1 texts. W4 and W5 are repaired. Items 2 to 5 need what tabnas/expr#117 added to the fold, which is on `expr`'s `main` and in no release: until one carries it, `resolve` runs in CI and in the linked model only, and the corpus baselines stay as swept on the released packages. Item 4 is the three reports the audit found missing, each read from the index and none changing the resolved tree: the `implicitMapping` rows of `connections`, `conflict` on a `provenance` row whose reference lands on a type it does not expect, and `urls`, the URLs a description gives with what a relative one is relative to. Item 5 is the fixtures: every probe of the audit has a row under its number, in `test/resolve/probes.tsv` or `test/pending/parse-probes.tsv`, and `ts/test/probes.test.ts` holds the two files to the audit's list. With it, the last leniency of Decision 25 that the object model owed: a 3.0 component is read under any name, as 3.1 and 3.2 read it |
 | T4 to T6 | several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -339,6 +339,15 @@ every fact about the document:
   what the new region changes, and reads again only the sites whose
   facts moved. `incremental: false` works every round out from nothing,
   and `ts/test/site-index.test.ts` holds the two to each other.
+- A conflict, `index.conflict(site)`: the type of a landing the model
+  types by where it is, when that is not the type its reference
+  expects. `typeOf` reads a type off a state: an object's name,
+  `schema` for every schema state of every dialect, `map` or `list`
+  for a container with no type, and `data` for the rest, a string the
+  model reads as a name or a URL among them. A landing the model gives no state has no
+  conflict: it takes its reference's type, as the rounds have it. The
+  reference resolves either way, and `resolve` puts the conflict on its
+  `provenance` row. Under `refs: 'pointer'` none is read.
 
 The index refuses three things with a code: nesting past `maxDepth`
 and a pointer read through more sites than that (`openapi_depth`), and
@@ -460,12 +469,34 @@ schema whose dialect has it), each URI judged by where it lands; Path Item merge
 `operationIdReuse` walks routes through paths, webhooks and callbacks on
 the document, a reference on the way standing for its landing. None of
 it reads the resolved tree, so it does not depend on the shape asked
-for. `ts/src/uri.ts` holds the RFC 3986 and RFC 6901 helpers both use.
+for.
+
+The same walk gives two more things. A schema with a discriminator has
+its **implicit mapping** worked out after the walk, by `implied`: the
+schema components it lists by reference in `oneOf` and `anyOf`, and the
+ones that build on it with `allOf` (`buildersOf` indexes every `allOf`
+entry by the location it lands on, so a child that names its parent
+through an alias is found), and on those in turn. Each is a row of kind
+`implicitMapping` with `from`. A name the explicit `mapping` has as a
+key has no row, and neither has a schema that is no component, which
+has no name. In 2.0 `discriminator` is the property's name and the
+schema's own name is a value too (`from: 'self'`).
+
+And every string at a leaf of kind `url` is a row of **`urls`**, with
+the base the overlay gives the field (`url:description`,
+`url:retrieval`, `url:api` or `url:none`): against the base URI in
+force for the first, against the retrieval URI for a Server Object's
+`url` whatever `$self` says, and absolute or nothing for the other two.
+Nothing is loaded. The specification's rule differs by version, and the
+overlay's reasons say which sentence each entry is read from: 3.1 and
+3.2 name the fields that follow the base URI and the ones that are
+relative to a server, 3.0.4 recommends the base URI for four of them,
+and 2.0 has no rule. `ts/src/uri.ts` holds the RFC 3986 and RFC 6901 helpers both use.
 
 A reference into another document is reported `external`: loading is
 Phase 3. `test/resolve/*.tsv` pins the resolver, with
 `ts/test/resolve-spec.test.ts` as the runner (optional `select`,
-`connections`, `provenance` and `dialects` columns); identity, cyclic graphs, the
+`connections`, `provenance`, `dialects` and `urls` columns); identity, cyclic graphs, the
 byte budget and the step bound, which JSON cannot carry, are in
 `ts/test/resolve.test.ts`.
 
@@ -499,14 +530,22 @@ The table is **generated, never hand-edited**, by
   version's own (2020-12, Wright-00, and the part of draft-04 that 2.0
   takes), and `declared` has the dialects a 3.1 or 3.2 schema may
   declare with `$schema` (draft-04, draft-06, draft-07, 2019-09);
-- `model/overlay.json`: the locators, connections and mappings the
-  schemas type as plain strings, each with its reason.
+- `model/overlay.json`: the locators, connections, mappings and URLs
+  the schemas type as plain strings, each with its reason. A URL's kind
+  is `url:` and what a relative one is relative to. An entry with
+  `anyName` is of another sort: it says that a map the schema types by
+  one pattern of names holds the same thing under any other name. The
+  nine maps of the 3.0 Components Object have one each, since the 3.0
+  schema types a component only under a name that matches
+  `^[a-zA-Z0-9\.\-_]+$` and the 3.1 and 3.2 schemas type every member
+  and check the name apart (Decision 25 of the plan).
 
 It writes `model/object-model.json`, which the ports will embed, and
 `ts/src/object-model.ts`. `ts/test/model.test.ts` fails when either is
 stale, and checks that the generator refuses an overlay entry with no
 reason, one naming a position the schemas lack, one that matches no
-version, a vendored schema whose hash has changed, and a `$ref` it
+version, an `anyName` entry on a state that one pattern of names does
+not type, a vendored schema whose hash has changed, and a `$ref` it
 cannot follow: a pointer that names nothing, or one into a document it
 does not read. It follows every local pointer, nested definitions
 included (3.1's OAuth flows live in `#/$defs/oauth-flows/$defs/`), and

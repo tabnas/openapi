@@ -31,7 +31,7 @@ const OBJECT_MODEL = {
           "props": {
             "email": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:none"
           },
           "type": "contact"
         },
@@ -58,7 +58,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data"
+            "url": "url:none"
           },
           "type": "externalDocs"
         },
@@ -154,7 +154,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "name": "data",
-            "url": "data"
+            "url": "url:none"
           },
           "type": "license"
         },
@@ -429,13 +429,13 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "authorizationUrl": "data",
+            "authorizationUrl": "url:none",
             "description": "data",
             "flow": "data",
             "in": "data",
             "name": "data",
             "scopes": "oauth2Scopes",
-            "tokenUrl": "data",
+            "tokenUrl": "url:none",
             "type": "data"
           }
         },
@@ -464,6 +464,10 @@ const OBJECT_MODEL = {
           },
           "type": "tag"
         },
+        "url:none": {
+          "kind": "url",
+          "type": "none"
+        },
         "xml": {
           "kind": "object",
           "patterns": [
@@ -475,7 +479,7 @@ const OBJECT_MODEL = {
           "props": {
             "attribute": "data",
             "name": "data",
-            "namespace": "data",
+            "namespace": "url:none",
             "prefix": "data",
             "wrapped": "data"
           },
@@ -532,7 +536,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "callback?"
             ]
-          ]
+          ],
+          "rest": "callback?"
         },
         "components.examples": {
           "kind": "object",
@@ -541,7 +546,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "example?"
             ]
-          ]
+          ],
+          "rest": "example?"
         },
         "components.headers": {
           "kind": "object",
@@ -550,7 +556,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "header?"
             ]
-          ]
+          ],
+          "rest": "header?"
         },
         "components.links": {
           "kind": "object",
@@ -559,7 +566,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "link?"
             ]
-          ]
+          ],
+          "rest": "link?"
         },
         "components.parameters": {
           "kind": "object",
@@ -568,7 +576,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "parameter?"
             ]
-          ]
+          ],
+          "rest": "parameter?"
         },
         "components.requestBodies": {
           "kind": "object",
@@ -577,7 +586,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "requestBody?"
             ]
-          ]
+          ],
+          "rest": "requestBody?"
         },
         "components.responses": {
           "kind": "object",
@@ -586,7 +596,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "response?"
             ]
-          ]
+          ],
+          "rest": "response?"
         },
         "components.schemas": {
           "kind": "object",
@@ -595,7 +606,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "schema"
             ]
-          ]
+          ],
+          "rest": "schema"
         },
         "components.securitySchemes": {
           "kind": "object",
@@ -604,7 +616,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "securityScheme?"
             ]
-          ]
+          ],
+          "rest": "securityScheme?"
         },
         "connection:operationId": {
           "kind": "connection",
@@ -629,7 +642,7 @@ const OBJECT_MODEL = {
           "props": {
             "email": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "contact"
         },
@@ -679,7 +692,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "externalValue": "data",
+            "externalValue": "url:description",
             "summary": "data",
             "value": "data"
           },
@@ -700,7 +713,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "externalDocs"
         },
@@ -752,7 +765,7 @@ const OBJECT_MODEL = {
             "contact": "contact",
             "description": "data",
             "license": "license",
-            "termsOfService": "data",
+            "termsOfService": "url:api",
             "title": "data",
             "version": "data"
           },
@@ -768,7 +781,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "license"
         },
@@ -839,10 +852,10 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "authorizationUrl": "data",
-            "refreshUrl": "data",
+            "authorizationUrl": "url:api",
+            "refreshUrl": "url:api",
             "scopes": "oauthFlow.scopes",
-            "tokenUrl": "data"
+            "tokenUrl": "url:api"
           },
           "type": "oauthFlow"
         },
@@ -1169,7 +1182,7 @@ const OBJECT_MODEL = {
             "flows": "oauthFlows",
             "in": "data",
             "name": "data",
-            "openIdConnectUrl": "data",
+            "openIdConnectUrl": "url:api",
             "scheme": "data",
             "type": "data"
           },
@@ -1190,7 +1203,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data",
+            "url": "url:retrieval",
             "variables": "server.variables"
           },
           "type": "server"
@@ -1233,6 +1246,22 @@ const OBJECT_MODEL = {
           },
           "type": "tag"
         },
+        "url:api": {
+          "kind": "url",
+          "type": "api"
+        },
+        "url:description": {
+          "kind": "url",
+          "type": "description"
+        },
+        "url:none": {
+          "kind": "url",
+          "type": "none"
+        },
+        "url:retrieval": {
+          "kind": "url",
+          "type": "retrieval"
+        },
         "xml": {
           "kind": "object",
           "patterns": [
@@ -1244,7 +1273,7 @@ const OBJECT_MODEL = {
           "props": {
             "attribute": "data",
             "name": "data",
-            "namespace": "data",
+            "namespace": "url:none",
             "prefix": "data",
             "wrapped": "data"
           },
@@ -1370,7 +1399,7 @@ const OBJECT_MODEL = {
           "props": {
             "email": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "contact"
         },
@@ -1431,7 +1460,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "externalValue": "data",
+            "externalValue": "url:description",
             "summary": "data",
             "value": "data"
           },
@@ -1452,7 +1481,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "externalDocs"
         },
@@ -1499,7 +1528,7 @@ const OBJECT_MODEL = {
             "description": "data",
             "license": "license",
             "summary": "data",
-            "termsOfService": "data",
+            "termsOfService": "url:description",
             "title": "data",
             "version": "data"
           },
@@ -1516,7 +1545,7 @@ const OBJECT_MODEL = {
           "props": {
             "identifier": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "license"
         },
@@ -1588,10 +1617,10 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "authorizationUrl": "data",
-            "refreshUrl": "data",
+            "authorizationUrl": "url:api",
+            "refreshUrl": "url:api",
             "scopes": "mapOfStrings",
-            "tokenUrl": "data"
+            "tokenUrl": "url:api"
           },
           "type": "oauthFlow"
         },
@@ -2109,7 +2138,7 @@ const OBJECT_MODEL = {
             "flows": "oauthFlows",
             "in": "data",
             "name": "data",
-            "openIdConnectUrl": "data",
+            "openIdConnectUrl": "url:api",
             "scheme": "data",
             "type": "data"
           },
@@ -2130,7 +2159,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data",
+            "url": "url:retrieval",
             "variables": "server.variables"
           },
           "type": "server"
@@ -2173,6 +2202,22 @@ const OBJECT_MODEL = {
           },
           "type": "tag"
         },
+        "url:api": {
+          "kind": "url",
+          "type": "api"
+        },
+        "url:description": {
+          "kind": "url",
+          "type": "description"
+        },
+        "url:none": {
+          "kind": "url",
+          "type": "none"
+        },
+        "url:retrieval": {
+          "kind": "url",
+          "type": "retrieval"
+        },
         "xml": {
           "kind": "object",
           "patterns": [
@@ -2184,7 +2229,7 @@ const OBJECT_MODEL = {
           "props": {
             "attribute": "data",
             "name": "data",
-            "namespace": "data",
+            "namespace": "url:none",
             "prefix": "data",
             "wrapped": "data"
           },
@@ -2315,7 +2360,7 @@ const OBJECT_MODEL = {
           "props": {
             "email": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "contact"
         },
@@ -2389,7 +2434,7 @@ const OBJECT_MODEL = {
           "props": {
             "dataValue": "data",
             "description": "data",
-            "externalValue": "data",
+            "externalValue": "url:description",
             "serializedValue": "data",
             "summary": "data",
             "value": "data"
@@ -2411,7 +2456,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "externalDocs"
         },
@@ -2458,7 +2503,7 @@ const OBJECT_MODEL = {
             "description": "data",
             "license": "license",
             "summary": "data",
-            "termsOfService": "data",
+            "termsOfService": "url:description",
             "title": "data",
             "version": "data"
           },
@@ -2475,7 +2520,7 @@ const OBJECT_MODEL = {
           "props": {
             "identifier": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "license"
         },
@@ -2559,11 +2604,11 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "authorizationUrl": "data",
-            "deviceAuthorizationUrl": "data",
-            "refreshUrl": "data",
+            "authorizationUrl": "url:api",
+            "deviceAuthorizationUrl": "url:api",
+            "refreshUrl": "url:api",
             "scopes": "mapOfStrings",
-            "tokenUrl": "data"
+            "tokenUrl": "url:api"
           },
           "type": "oauthFlow"
         },
@@ -3088,8 +3133,8 @@ const OBJECT_MODEL = {
             "flows": "oauthFlows",
             "in": "data",
             "name": "data",
-            "oauth2MetadataUrl": "data",
-            "openIdConnectUrl": "data",
+            "oauth2MetadataUrl": "url:api",
+            "openIdConnectUrl": "url:api",
             "scheme": "data",
             "type": "data"
           },
@@ -3111,7 +3156,7 @@ const OBJECT_MODEL = {
           "props": {
             "description": "data",
             "name": "data",
-            "url": "data",
+            "url": "url:retrieval",
             "variables": "server.variables"
           },
           "type": "server"
@@ -3157,6 +3202,22 @@ const OBJECT_MODEL = {
           },
           "type": "tag"
         },
+        "url:api": {
+          "kind": "url",
+          "type": "api"
+        },
+        "url:description": {
+          "kind": "url",
+          "type": "description"
+        },
+        "url:none": {
+          "kind": "url",
+          "type": "none"
+        },
+        "url:retrieval": {
+          "kind": "url",
+          "type": "retrieval"
+        },
         "xml": {
           "kind": "object",
           "patterns": [
@@ -3168,7 +3229,7 @@ const OBJECT_MODEL = {
           "props": {
             "attribute": "data",
             "name": "data",
-            "namespace": "data",
+            "namespace": "url:none",
             "nodeType": "data",
             "prefix": "data",
             "wrapped": "data"

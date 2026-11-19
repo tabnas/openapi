@@ -314,6 +314,21 @@ that is the URI of the resource it is in, such as `id: '#'` at the top
 of a schema pasted from draft-04, or the document's own URI: it names
 nothing new, and the document stays where it is.
 
+**Added in T3, item 4**: the three reports the audit found missing and
+this phase owed, each read from the index and none changing the tree.
+The implicit mapping of a discriminator is rows of `connections`; a
+reference that lands on a type it does not expect has `conflict` in its
+`provenance` row; and the URLs a description gives are a report of
+their own, `urls`. `test/resolve/reports.tsv` has the rows.
+
+**Repaired in T3, item 5**: the last of the audit's findings on the
+object model, a 3.0 component under a name the specification's pattern
+refuses. The repair of W3 reads such a component where a reference
+lands on it. One that nothing references kept its own references as
+written, counted as data and reported nowhere, which is the audit's
+probe 3.7. It is read as any other component now, as 3.1 and 3.2 read
+it, which Decision 25 chose.
+
 **Found in T2b.** Four shapes were read, each wrongly, and are refused
 by that change. No document of the corpus has one. The first three are
 not YAML, and the reference parser refuses them as well. The fourth is
@@ -637,8 +652,19 @@ packages.
 Item 3 is built, on the defaults of Decisions 29 and 30, and section 11
 has its record. The rules of each dialect are in `ts/src/dialect.ts`,
 the members that hold schemas in each are in `model/applicators.json`,
-and the index reads both. It asks nothing more of `expr`. Items 4 and 5
-are not begun.
+and the index reads both. It asks nothing more of `expr`.
+
+Item 4 is built. The three reports are read from the index after it is
+built: `implied` in `ts/src/connections.ts` gives the implicit mapping,
+`index.conflict` the type a reference did not expect, and the same walk
+that finds the names gives `urls`, from the leaves the object model's
+overlay marks as URLs. None of them changes the tree.
+
+Item 5 is built: every probe of the audit has a row under its number,
+and a test holds the rows to the audit's list. With it the object model
+reads a 3.0 component under any name, which was the last leniency of
+Decision 25 it owed. Section 11 has the record of both items, and of
+the acceptance runs on the build that has all five.
 
 ### T4: several documents (L)
 
@@ -836,6 +862,147 @@ what the code does.
 
 ## 11. What each revision changed
 
+**Since acceptance**, as T3's fifth item was built:
+
+- **Every probe of the audit has a row under its number.** Section 3 of
+  E8 has 17 probes that showed wrong behaviour. The eight about reading
+  a text are in `test/pending/parse-probes.tsv`, and the nine about
+  references in `test/resolve/probes.tsv`, each with the audit's own
+  input and what it gives now. `ts/test/probes.test.ts` reads the list
+  from the audit and holds the two files to it: a probe added there
+  needs a row, and a row under a number the audit lacks fails.
+
+  | Probe | It gives now | Repaired in |
+  |---|---|---|
+  | 3.1 YAML 1.1 words | strings under `reading: 'spec'`; booleans by default, until porting starts | T2, T2b (Decision 21) |
+  | 3.2 an integer past 2^53 | the nearest number, listed with its text in `lossy` | T2 (W8, Decision 22) |
+  | 2.1 an empty document after the description | accepted under `reading: 'spec'`; refused by default | T2 (Decision 25) |
+  | 2.2 a byte-order mark under `strict` | read | T2 (Decision 25) |
+  | 2.3 a carriage return alone as a line break | read | T2b (W9) |
+  | 2.4 a blank line before JSON, read by the grammar | read | T2b (W9) |
+  | 2.5 a tab in indentation | refused as `yaml_tab_indent` | T2b |
+  | 3.3 a reference inside `definitions`, `dependencies`, list `items` or `additionalItems` of a 3.1 schema | both references resolve | T3, item 2 (W3) |
+  | 3.4 a schema that references its own `$defs` | resolved, as the audit expected | T3, item 2 (W2) |
+  | 3.5 a pointer that passes a reference | the member the document has there | T3, item 2 (W1) |
+  | 3.6 a target in an extension | resolved, with the references in it | T3, item 2 (W3) |
+  | 3.7 a 3.0 component under a name the pattern refuses | read as any other | T3, item 5 (Decision 25) |
+  | 3.8 a schema that declares a dialect | read by it, an unknown one as 2020-12 and reported | T3, item 3 (W4) |
+  | 3.9 two spellings of one URI | one URI | T3, item 3 (W5) |
+  | 3.10 `description` beside a reference to a 3.2 Media Type Object | no effect | T3, item 3 (Decision 30) |
+  | 7.1 aliases that copy a text out past memory | refused as `openapi_alias_budget` | T2 (W7) |
+  | 7.2 nesting or a chain of references past 1,000 | refused as `openapi_depth` | T3, item 2 (W6) |
+
+- **Every member a `provenance` row gained in T3 is in one row**, the
+  first of `probes.tsv`: `landing`, `through`, `uri`, `fragment` and
+  `conflict`. The same test holds it to that.
+- **A 3.0 component is read under any name**, which is probe 3.7 and the
+  leniency of Decision 25 that the object model still owed. The 3.0
+  validation schema types a member of each map of the Components Object
+  only under a name that matches `^[a-zA-Z0-9\.\-_]+$`. The 3.1 and 3.2
+  schemas type every member and check the name apart, so the three
+  versions say one thing of a name and their schemas read a wrong one
+  differently. The object model's overlay gains an entry form for it,
+  `anyName`: a map the schema types by one pattern of names holds the
+  same thing under any other. The nine maps of the 3.0 Components Object
+  have one each, and the generator refuses the form where it does not
+  fit. The repair of W3 already read such a component where a reference
+  landed on it. What changes is one that nothing references: the
+  references in it were data, and are read.
+- **No description of the corpus has such a name where it mattered.**
+  The corpus and apidef's own definitions have 1,922 descriptions of
+  3.0, and none names a component outside the pattern, so this leniency
+  moves nothing there. Thirty descriptions of 2.0 have 684 such names
+  between them, generic types such as `Expression[Func[Account,Int64]]`,
+  and 2.0 reads a definition under any name already.
+- **The other two leniencies of Decision 25 were already built.** A
+  version this package does not know is read as the latest it does,
+  3.2, and the result says `unknown`: that was so since Phase 2, and is
+  now stated in the reference page and held by
+  `test/resolve/versions.tsv`. The text over the schema where they
+  differ is item 3's, with Decision 30.
+- **The suite** is 887 tests and the 11 of the pages' style.
+
+**Since acceptance**, as T3's fourth item was built:
+
+- **Three reports are added, and none of them changes the tree.** Each
+  is read from the index once it is built. What they hold in the corpus
+  is at the end of this list.
+- **The implicit mapping of a discriminator is rows of `connections`**,
+  of kind `implicitMapping`, at the discriminator. A value of the
+  discriminating property names the schema component of that name,
+  unless `mapping` has the value as a key. The rows are the components
+  a description lets it name that way. Beside `oneOf` or `anyOf` they
+  are the ones listed there by reference, since an inline schema has no
+  name. On a parent schema they are the components that build on it
+  with `allOf`, and on those in turn, a child that names its parent
+  through another reference among them. `from` says which: `oneOf`,
+  `anyOf` or `allOf`. In 2.0, where `discriminator` is the name of the
+  property, the schema's own name is a value too, with `from: 'self'`.
+  The rows are the same under the preset, since they do not depend on
+  how a reference is read.
+- **A reference that lands on a type it does not expect has `conflict`**
+  in its `provenance` row, which is the report rule 2 of section 3
+  promised. Its value is the type the object model gives the landing by
+  where it is: the name of an object, `schema`, `map` or `list` for a
+  container with no type of its own, and `data` for plain JSON. The
+  reference resolves all the same, under `strict` too. A landing the
+  model gives no type has no conflict, since it takes the reference's.
+  The second of two references that give one such landing different
+  types conflicts with the first, which is the case Decision 28 left to
+  the order of the document. A reference of kind `data` expects
+  nothing, and under `refs: 'pointer'` no landing is typed, so neither
+  has one.
+- **The URLs a description gives are a report of their own, `urls`.** It
+  has a row for each string at a field that holds a URL or URI of
+  something outside the description: where it is, the value as written,
+  what a relative value is relative to, and its absolute form in the
+  normal form of item 3, where it has one. Nothing is loaded. The
+  fields are in the object model's overlay, as leaves of a new kind,
+  `url`, each with the sentence of the specification it is read from:
+
+  | `base` | The fields | Read against |
+  |---|---|---|
+  | `description` | in 3.1 and 3.2, `termsOfService`, the `url` of a Contact, License and External Documentation Object, and `externalValue`; in 3.0 the same but for `termsOfService` | the base URI in force where the field is, as a `$ref` is |
+  | `retrieval` | the `url` of a Server Object | the URI the description was retrieved from, whatever `$self` says |
+  | `api` | `openIdConnectUrl`, `oauth2MetadataUrl`, the URLs of an OAuth Flow Object, and `termsOfService` in 3.0 | a server of the API, so only a value written absolute has a form |
+  | `none` | the `namespace` of an XML Object, and every URL of 2.0 | nothing: 2.0 has no rule for a relative one |
+
+  3.1 and 3.2 name the fields that follow the base URI and the ones
+  relative to a server. 3.0.4 recommends the base URI for four of them
+  and leaves `termsOfService` to the servers. A server's URL with
+  variables has no absolute form until they are given.
+- **A relative URL has an absolute form only against a real location.**
+  A base is a URI with a scheme, and with an authority or a path from
+  the root. With no `retrievalUri` a description is read under a fixed
+  `urn:`, which is no location, and a relative URL in it has no `uri`.
+  The first build of this item gave it one against the `urn:`, which a
+  caller could not use and had to tell apart. The `uri` of a
+  `provenance` row is as it was: there it is the name the resolver
+  itself knows the other document by.
+- **A test holds the overlay to the fixtures.** Every field the object
+  model reads as a URL, in each version that has it, is listed by a row
+  of `test/resolve/reports.tsv` with its base: 41 fields over the four
+  versions.
+- **In the corpus** and apidef's own definitions, 5,213 descriptions
+  in all, on the build that has all five items and with no retrieval
+  URI given:
+
+  | Report | Rows | In |
+  |---|---|---|
+  | `conflict` | 8 | 4 descriptions |
+  | `implicitMapping` | 8,232, on 1,580 discriminators: 6,855 from `allOf`, 877 `self`, 456 from `oneOf`, 44 from `anyOf` | 237 descriptions |
+  | `urls` | 36,991: 24,245 `description`, 4,566 `retrieval`, 2,949 `api`, 5,231 `none` | 4,568 descriptions |
+
+  The eight conflicts are the ones E12 found: two references to a
+  response that name a schema in swaggerhub.com, five schemas that name
+  a response in rumble.run and rev.ai, and one that names a parameter
+  in enode.io. Of the URLs, 34,942 have an absolute form: every one
+  written absolute but the servers' with variables. The 2,049 without
+  one are relative, or a server's with variables.
+- **The suite** was 814 tests at the end of this item. 29 deliberate
+  faults in the new code are each caught by one, the last of them after
+  two rows were added for it.
+
 **Since acceptance**, as T3's third item was built:
 
 - **Five dialects are read, each by its own rules.** `ts/src/dialect.ts`
@@ -924,6 +1091,13 @@ what the code does.
   own member.
 - **The suite** is 773 tests and the 11 of the pages' style. 41
   deliberate faults in the new code are each caught by one.
+- **The gates run by hand hold on this item's build.** The apidef gate
+  passes: 2,477 of its 2,478 tests with one skipped, and all 57
+  definitions byte-identical. The preset comparison finds no difference
+  in 15,177 documents compared. The sweep moves the ten figures item 2
+  moved, by the same amounts, under both readings, with no ledger row,
+  and no document's record differs from the one item 2's sweep has for
+  it.
 - **Decisions 29 and 30 are built on their defaults.**
 
 **Since acceptance**, as T3's second item was built:

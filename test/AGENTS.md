@@ -8,19 +8,28 @@ mind.
 `resolve/` holds the resolver's fixtures: an input description, the
 resolved tree, the references left as written (`at why`), the cut edges,
 and `resolve` options, or `ERROR:<code>` for an error `resolve` raises.
-Four columns are optional: `select`, a path whose value in the resolved
+Five columns are optional: `select`, a path whose value in the resolved
 tree is held to `expected` in place of the whole tree; `connections`,
 the connections report as one `kind at -> target` line per row (`!why`
-for a target not found, then any flags); `provenance`, one
-`at status -> landing` line for each reference (`-` for one that lands
-nowhere, then `through=`, `uri=` and `fragment=` where the row has
-them); and `dialects`, one `at dialect as name` line for each dialect
-the description declares (then ` unknown` for one this package does not
-know). Report arrays are in walk order, so a row's order is part of what
+for a target not found, then any flags, `from=` among them);
+`provenance`, one `at status -> landing` line for each reference (`-`
+for one that lands nowhere, then `through=`, `uri=`, `fragment=` and
+`conflict=` where the row has them); `dialects`, one
+`at dialect as name` line for each dialect the description declares
+(then ` unknown` for one this package does not know); and `urls`, one
+`at base value -> uri` line for each URL the description gives (`-`
+for one with no absolute form). Report arrays are in walk order, so a row's order is part of what
 it pins. `landings.tsv` holds the shapes the site index repaired, W1 to
 W3 of the plan, with the depth code of W6 and the reports' order.
 `dialects.tsv` holds the rules of each schema dialect, W4 of the plan,
 and `uris.tsv` the comparison of URIs in their normal form, W5.
+`reports.tsv` holds the three reports of T3's fourth item: the implicit
+mapping of a discriminator, a reference that lands on a type it does
+not expect, and the URLs. `versions.tsv` holds the version a
+description is read by. `probes.tsv` holds the probes of the audit that
+are about references, each under a `# Probe n.n.` comment with the
+audit's own input, and before them one row with every member a
+`provenance` row gained in T3.
 `apidef.tsv` is rows 2 to 25 of @voxgig/apidef's `parse-resolve.tsv`,
 under `compat: 'apidef'`, with apidef's own select paths and values;
 keep it in step with apidef's file rather than editing its expected
@@ -42,11 +51,19 @@ a parse.
 the TypeScript package's `parse` gives yet: `parse-duplicates.tsv`, the
 `duplicates` option; `parse-reading.tsv`, what `reading: 'spec'` gives
 where it parts from the base reading; `parse-limits.tsv`, the alias
-budget and the size limit; and `parse-mark.tsv`, a byte-order mark under
-`strict`. A row there with no options pins a default that only the
-TypeScript package has yet. They run in `ts/test/pending.test.ts`, under
-the same runner as `spec/`. "Where a new fixture goes", below, says why they
+budget and the size limit; `parse-mark.tsv`, a byte-order mark under
+`strict`; and `parse-probes.tsv`, the probes of the audit that are
+about reading a text, each under a `# Probe n.n.` comment with the
+audit's own input. A row there with no options pins a default that no
+row of `spec/` pins. They run in `ts/test/pending.test.ts`, under the
+same runner as `spec/`. "Where a new fixture goes", below, says why they
 are not in `spec/`, and when they move there.
+
+`ts/test/probes.test.ts` holds `pending/parse-probes.tsv` and
+`resolve/probes.tsv` to the list of probes in section 3 of
+[`../docs/design/prototype/e8-spec-probes.result.md`](../docs/design/prototype/e8-spec-probes.result.md):
+every probe there has a row in one of the two files, and neither has a
+row for a probe the audit lacks.
 
 `petstore/` holds one OpenAPI 3.1 description twice: `petstore.yaml` as
 written, and `petstore.json`, the same document as JSON. Every runtime's

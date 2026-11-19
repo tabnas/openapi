@@ -1,0 +1,17 @@
+input	expected	unresolved	cuts	opts	select
+# The version a description is read by. `resolve` reads the one the
+# root names, and reads a version this package does not know as the
+# latest it does, 3.2. Each row has a reference at a Media Type Object,
+# which only 3.2 puts there, so it resolves where the description is
+# read as 3.2 and is data where it is read as 3.1.
+{"openapi":"3.2.0","components":{"mediaTypes":{"M":{"schema":{"type":"string"}}},"responses":{"R":{"description":"r","content":{"application/json":{"$ref":"#/components/mediaTypes/M"}}}}}}	{"schema":{"type":"string"}}	[]	[]		["components","responses","R","content","application/json"]
+{"openapi":"3.1.0","components":{"mediaTypes":{"M":{"schema":{"type":"string"}}},"responses":{"R":{"description":"r","content":{"application/json":{"$ref":"#/components/mediaTypes/M"}}}}}}	{"$ref":"#/components/mediaTypes/M"}	[]	[]		["components","responses","R","content","application/json"]
+# A later version, one that is none of OpenAPI's, and no version at
+# all.
+{"openapi":"3.3.0","components":{"mediaTypes":{"M":{"schema":{"type":"string"}}},"responses":{"R":{"description":"r","content":{"application/json":{"$ref":"#/components/mediaTypes/M"}}}}}}	{"schema":{"type":"string"}}	[]	[]		["components","responses","R","content","application/json"]
+{"openapi":"4.0.0","components":{"mediaTypes":{"M":{"schema":{"type":"string"}}},"responses":{"R":{"description":"r","content":{"application/json":{"$ref":"#/components/mediaTypes/M"}}}}}}	{"schema":{"type":"string"}}	[]	[]		["components","responses","R","content","application/json"]
+{"openapi":"next","components":{"mediaTypes":{"M":{"schema":{"type":"string"}}},"responses":{"R":{"description":"r","content":{"application/json":{"$ref":"#/components/mediaTypes/M"}}}}}}	{"schema":{"type":"string"}}	[]	[]		["components","responses","R","content","application/json"]
+{"components":{"mediaTypes":{"M":{"schema":{"type":"string"}}},"responses":{"R":{"description":"r","content":{"application/json":{"$ref":"#/components/mediaTypes/M"}}}}}}	{"schema":{"type":"string"}}	[]	[]		["components","responses","R","content","application/json"]
+# `version` says which to read it by, whatever the root names.
+{"openapi":"3.3.0","components":{"mediaTypes":{"M":{"schema":{"type":"string"}}},"responses":{"R":{"description":"r","content":{"application/json":{"$ref":"#/components/mediaTypes/M"}}}}}}	{"$ref":"#/components/mediaTypes/M"}	[]	[]	{"version":"3.1"}	["components","responses","R","content","application/json"]
+{"openapi":"3.1.0","components":{"mediaTypes":{"M":{"schema":{"type":"string"}}},"responses":{"R":{"description":"r","content":{"application/json":{"$ref":"#/components/mediaTypes/M"}}}}}}	{"schema":{"type":"string"}}	[]	[]	{"version":"3.2"}	["components","responses","R","content","application/json"]

@@ -1,0 +1,47 @@
+input	expected	opts
+# The probes of the audit that are about reading a text, each with the
+# audit's own input and what `parse` gives for it now. The audit is
+# ../../docs/design/prototype/e8-spec-probes.result.md, and its section 3
+# has the probes, by the numbers used here. The rows are here and not in
+# ../spec/ because no row there pins what they show, and because several
+# are behind an option only the TypeScript package has yet (see
+# ../AGENTS.md, "Where a new fixture goes"). ../resolve/probes.tsv has
+# the probes that are about references.
+#
+# Probe 3.1. The YAML 1.1 words. The base reading has them as booleans,
+# and `reading: 'spec'` reads the core schema of YAML 1.2, where each is
+# a string.
+openapi: 3.1.0\nenum: [NO, SE, DK, On, n, Y]	{"openapi":"3.1.0","enum":[false,"SE","DK",true,"n","Y"]}	
+openapi: 3.1.0\nenum: [NO, SE, DK, On, n, Y]	{"openapi":"3.1.0","enum":["NO","SE","DK","On","n","Y"]}	{"reading":"spec"}
+# Probe 3.2. An integer past 2^53 is the nearest number JavaScript has,
+# on both paths. The tree stays plain, and `parse` lists the number with
+# its text in the `lossy` report, which ts/test/openapi.test.ts holds
+# for this input.
+openapi: 3.1.0\nmax: 9223372036854775807	{"openapi":"3.1.0","max":9223372036854775807}	
+{"openapi":"3.1.0","max":9223372036854775807}	{"openapi":"3.1.0","max":9223372036854775807}	
+{"openapi":"3.1.0","max":9223372036854775807}	{"openapi":"3.1.0","max":9223372036854775807}	{"fast":false}
+# Probe 2.1. An empty document after the description. The base reading
+# refuses a second document, empty or not, and `reading: 'spec'`
+# accepts an empty one.
+openapi: 3.1.0\n---\n	ERROR:openapi_stream	
+openapi: 3.1.0\n---\n# end\n	ERROR:openapi_stream	
+openapi: 3.1.0\n...\n---\n	ERROR:openapi_stream	
+openapi: 3.1.0\n---\n	{"openapi":"3.1.0"}	{"reading":"spec"}
+openapi: 3.1.0\n---\n# end\n	{"openapi":"3.1.0"}	{"reading":"spec"}
+openapi: 3.1.0\n...\n---\n	{"openapi":"3.1.0"}	{"reading":"spec"}
+# Probe 2.2. A byte-order mark under `strict`. The input opens with the
+# mark, which is invisible.
+﻿{"openapi":"3.1.0"}	{"openapi":"3.1.0"}	{"strict":true}
+# Probe 2.3. A carriage return alone is a line break.
+openapi: 3.1.0\ra: 1	{"openapi":"3.1.0","a":1}	
+openapi: 3.1.0\ra: 1	{"openapi":"3.1.0","a":1}	{"reading":"spec"}
+# Probe 2.4. A blank line before JSON text, read by the grammar.
+\n{"openapi":"3.1.0"}	{"openapi":"3.1.0"}	{"fast":false}
+# Probe 2.5. A tab in indentation is refused, where it was misread as
+# no indentation.
+openapi: 3.1.0\ninfo:\n\ttitle: x	ERROR:yaml_tab_indent	
+openapi: 3.1.0\ninfo:\n\ttitle: x	ERROR:yaml_tab_indent	{"reading":"spec"}
+# Probe 7.1. Ten aliases to a list of ten, seven deep: 467 bytes that
+# would be copied out to hundreds of megabytes are refused before any
+# is copied.
+openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\nl1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\nl2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\nl3: &l3 [*l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2]\nl4: &l4 [*l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3, *l3]\nl5: &l5 [*l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4, *l4]\nl6: &l6 [*l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5, *l5]\nl7: &l7 [*l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6, *l6]\n	ERROR:openapi_alias_budget	

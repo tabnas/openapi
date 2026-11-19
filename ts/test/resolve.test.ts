@@ -96,6 +96,17 @@ describe('resolve', () => {
     const unknown = resolve(parse('{"components":{"schemas":{"A":{"$ref":"#/components/schemas/B"},"B":{"type":"string"}}}}'))
     assert.equal(unknown.version, 'unknown')
     assert.deepEqual(C(unknown.tree.components.schemas.A), { type: 'string' })
+    // A version this package does not know is read as the latest it does,
+    // and reported as unknown: a reference at a Media Type Object, which
+    // 3.2 alone has, resolves.
+    const later = resolve(
+      parse(
+        '{"openapi":"3.3.0","components":{"mediaTypes":{"M":{"schema":{}}},' +
+          '"responses":{"R":{"description":"r","content":{"a/b":{"$ref":"#/components/mediaTypes/M"}}}}}}',
+      ),
+    )
+    assert.equal(later.version, 'unknown')
+    assert.deepEqual(C(later.tree.components.responses.R.content['a/b']), { schema: {} })
   })
 
   test('a member named __proto__ resolves as data and pollutes nothing', () => {
@@ -643,8 +654,78 @@ describe('resolve', () => {
         assert.deepEqual(out.connections, [])
         assert.equal(out.dataSlots, 0)
         assert.deepEqual(out.dialects, [])
+        assert.deepEqual(out.urls, [])
       }
     }
+  })
+
+  test('says where a reference lands on a type it does not expect, and resolves it all the same', () => {
+    const doc = {
+      openapi: '3.1.0',
+      paths: { '/a': { get: { responses: { 200: { $ref: '#/components/schemas/S' }, 201: { $ref: '#/components/responses/R' } } } } },
+      components: { responses: { R: { description: 'r' } }, schemas: { S: { type: 'object' } } },
+    }
+    const out = resolve(C(doc))
+    const row = (at: string) => out.provenance.find((p) => p.at === at)!
+    assert.equal(row('/paths/~1a/get/responses/200').conflict, 'schema')
+    assert.equal(row('/paths/~1a/get/responses/200').type, 'response')
+    assert.equal(row('/paths/~1a/get/responses/200').status, 'resolved')
+    // The row of a reference that lands on what it expects has no such
+    // member at all.
+    assert.ok(!('conflict' in row('/paths/~1a/get/responses/201')))
+    assert.deepEqual(C(out.tree.paths['/a'].get.responses), { 200: { type: 'object' }, 201: { description: 'r' } })
+    assert.deepEqual(out.unresolved, [])
+    // Whatever shape the tree is asked in, the conflict is the same fact.
+    for (const options of [{ cycles: 'keep' as const }, { sharing: 'site' as const }, { siblings: 'merge' as const }]) {
+      assert.equal(resolve(C(doc), options).provenance.find((p) => p.at === '/paths/~1a/get/responses/200')!.conflict, 'schema')
+    }
+    // Under `refs: 'pointer'` no landing is read, so nothing is said.
+    assert.ok(resolve(C(doc), { refs: 'pointer' }).provenance.every((p) => !('conflict' in p)))
+  })
+
+  test('lists the URLs a description gives, and the implicit mapping of a discriminator, as rows', () => {
+    const doc = {
+      openapi: '3.1.0',
+      info: { title: 't', version: '1', termsOfService: 'terms.html' },
+      servers: [{ url: 'https://{tenant}.example.com/v1' }, { url: '/v2' }],
+      components: {
+        securitySchemes: { oidc: { type: 'openIdConnect', openIdConnectUrl: '/.well-known/openid-configuration' } },
+        schemas: {
+          Pet: { oneOf: [{ $ref: '#/components/schemas/Cat' }], discriminator: { propertyName: 'kind' }, xml: { namespace: 'urn:example:pets' } },
+          Cat: { type: 'object' },
+        },
+      },
+    }
+    const out = resolve(C(doc), { retrievalUri: 'https://API.example.com/descriptions/openapi.yaml' })
+    assert.deepEqual(out.urls, [
+      { at: '/info/termsOfService', value: 'terms.html', base: 'description', uri: 'https://api.example.com/descriptions/terms.html' },
+      { at: '/servers/0/url', value: 'https://{tenant}.example.com/v1', base: 'retrieval' },
+      { at: '/servers/1/url', value: '/v2', base: 'retrieval', uri: 'https://api.example.com/v2' },
+      { at: '/components/securitySchemes/oidc/openIdConnectUrl', value: '/.well-known/openid-configuration', base: 'api' },
+      { at: '/components/schemas/Pet/xml/namespace', value: 'urn:example:pets', base: 'none', uri: 'urn:example:pets' },
+    ])
+    assert.deepEqual(
+      out.connections.filter((c) => 'implicitMapping' === c.kind),
+      [
+        {
+          kind: 'implicitMapping',
+          at: '/components/schemas/Pet/discriminator',
+          name: 'Cat',
+          found: true,
+          target: '/components/schemas/Cat',
+          from: 'oneOf',
+        },
+      ],
+    )
+    // Neither depends on the shape the tree is asked in, or on how a
+    // reference is read.
+    for (const options of [{ cycles: 'keep' as const }, { compat: 'apidef' as const }, { slots: 'all' as const }]) {
+      const other = resolve(C(doc), { ...options, retrievalUri: 'https://API.example.com/descriptions/openapi.yaml' })
+      assert.deepEqual(other.urls, out.urls)
+      assert.deepEqual(other.connections.filter((c) => 'implicitMapping' === c.kind).length, 1)
+    }
+    // The steps of the report are steps of the caller's count.
+    assert.throws(() => resolve(C(doc), { maxSteps: 5 }), (e: any) => 'openapi_work' === e.code)
   })
 
   test('reports the dialects a description declares, and the one each is read by', () => {

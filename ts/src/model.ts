@@ -20,7 +20,13 @@
 //               substituted (a Link's operationRef);
 //   connection  a name that names something elsewhere (a tag, an
 //               operationId, a security scheme);
-//   mapping     a Discriminator mapping value, a schema name or a URI.
+//   mapping     a Discriminator mapping value, a schema name or a URI;
+//   url         a URL or URI of something outside the description, which
+//               is reported and never loaded. Its type is what a relative
+//               one is relative to: the description's base URI
+//               (`description`), the URI the description was retrieved
+//               from (`retrieval`), a server of the API (`api`), or
+//               nothing, where it must be absolute (`none`).
 //
 // An unknown position is data.
 
@@ -38,6 +44,7 @@ type SlotKind =
   | 'locator'
   | 'connection'
   | 'mapping'
+  | 'url'
 
 // A position, as the model sees it.
 type Slot = {

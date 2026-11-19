@@ -513,8 +513,18 @@ function applyOverlay(version, model, overlay) {
       used.push(i)
       return
     }
+    if (true === entry.anyName) {
+      // A map the schema types by one pattern of names and by nothing
+      // else: a name outside the pattern is read as one inside it is.
+      if (null != state.props || null != state.rest || 1 !== (state.patterns ?? []).length) {
+        fail(`${where}: ${version} ${entry.state} is not a map typed by one pattern of names`)
+      }
+      state.rest = state.patterns[0][1]
+      used.push(i)
+      return
+    }
     if (!Array.isArray(entry.at) || 0 === entry.at.length || 'string' !== typeof entry.set) {
-      fail(`${where} needs at and set, or keys`)
+      fail(`${where} needs at and set, or keys, or anyName`)
     }
     let holder = state
     let slot = null
@@ -551,7 +561,7 @@ function slotOf(model, state, seg) {
 function leaf(model, name) {
   if (model.states[name]) return name
   const [kind, type] = name.split(':')
-  const KINDS = ['locator', 'connection', 'mapping']
+  const KINDS = ['locator', 'connection', 'mapping', 'url']
   if (!KINDS.includes(kind)) fail(`unknown leaf ${name}`)
   model.states[name] = null == type ? { kind } : { kind, type }
   return name

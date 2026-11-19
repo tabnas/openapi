@@ -205,6 +205,9 @@ type Located = { target?: Path; why?: Why; uri?: string; fragment?: string }
 
 type SiteIndex = {
   root: Loc
+  // The URI the document was retrieved from, which is not its own where
+  // it has `$self`.
+  retrieved: string
   // Every site, in the order found: document order within a round.
   sites: SiteFacts[]
   // The `$ref` maps the model types as data.
@@ -225,6 +228,9 @@ type SiteIndex = {
   // The dialect each schema declares with `$schema`, in document order,
   // and the one it is read by.
   dialects: () => DialectUse[]
+  // The type of what a site's reference lands on, where the model types
+  // that and it is not the type the reference expects.
+  conflict: (site: SiteFacts) => string | undefined
 }
 
 // Two things the index does can cost more than one pass over the
@@ -830,15 +836,45 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     throw err
   }
 
-  const stateAt = (landing: Landing): string => {
-    if (!landing.found) return 'data'
-    if (undefined !== landing.loc) return landing.loc.state
-    // A value that is neither a map nor a list has no location of its
-    // own: its state is its parent's step to it.
+  // What the model holds at a landing, and what is known of it. A value
+  // that is neither a map nor a list is judged by its parent's step to it.
+  const heldAt = (landing: Landing): { state: string; known: Known } => {
+    if (undefined !== landing.loc) return { state: landing.loc.state, known: landing.loc.known }
     const path = landing.path!
     let loc: Loc | undefined = root
     for (let i = 0; i < path.length - 1 && undefined !== loc; i++) loc = kidOf(loc, path[i])
-    return undefined === loc || 0 === path.length ? 'data' : step(loc.state, path[path.length - 1])
+    if (undefined === loc || 0 === path.length) return { state: 'data', known: 'unknown' }
+    const next = step(loc.state, path[path.length - 1], how)
+    return { state: next, known: knownAfter(loc.known, infoOf(loc.state).from, next) }
+  }
+
+  const stateAt = (landing: Landing): string => (landing.found ? heldAt(landing).state : 'data')
+
+  // The name of what a state holds: the type of an object, `schema` for
+  // a schema of any dialect, `map` or `list` for a container with no type
+  // of its own, and `data` for anything else, a string the model reads
+  // as a name or a URL among them.
+  const typeOf = (state: string): string => {
+    const s = slot(mv, state)
+    if ('schema' === s.kind) return 'schema'
+    if ('object' === s.kind || 'refable' === s.kind) return s.type ?? 'map'
+    return 'list' === s.kind ? 'list' : 'data'
+  }
+
+  // A landing the model types keeps its type, whatever reference lands on
+  // it. Where that is not the type the reference expects, the two
+  // conflict: a schema's `$ref` to a response, say, or to a value the
+  // model reads as plain data. A landing the model gives no type has
+  // none to conflict with.
+  const conflictOf = (row: SiteFacts): string | undefined => {
+    const give = gives(row)
+    if (null === give) return undefined
+    const land = landingOf(row)
+    if (!land.found) return undefined
+    const held = heldAt(land)
+    if ('unknown' === held.known) return undefined
+    const got = typeOf(held.state)
+    return typeOf(give) === got ? undefined : got
   }
 
   const dialects = (): DialectUse[] =>
@@ -851,6 +887,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
 
   return {
     root,
+    retrieved,
     sites,
     dataSlots,
     rounds: round,
@@ -860,6 +897,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     landingAt: (target) => walkTo(target),
     stateAt,
     dialects,
+    conflict: conflictOf,
   }
 }
 

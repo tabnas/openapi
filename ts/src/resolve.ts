@@ -25,7 +25,7 @@ import { fold, FoldError } from '@tabnas/expr'
 import type { FoldOptions, Op, Positions, Site } from '@tabnas/expr'
 
 import { connectionsOf, reuseOf } from './connections'
-import type { Connection } from './connections'
+import type { Connection, UrlUse } from './connections'
 import { dialectOf } from './dialect'
 import type { DialectUse } from './dialect'
 import type { ModelVersion } from './model'
@@ -161,6 +161,11 @@ type Provenance = {
   // fragment of the reference when it has one.
   uri?: string
   fragment?: string
+  // The type of what it lands on, where the object model types that and
+  // it is not the type the reference expects: `response` for a schema's
+  // reference to a Response Object, `data` for one into an example. The
+  // reference resolves all the same.
+  conflict?: string
   status: Status
   row?: number
   col?: number
@@ -187,6 +192,10 @@ type ResolveResult = {
   // and 3.0, which have no dialects, and under `refs: 'pointer'`, which
   // reads none.
   dialects: DialectUse[]
+  // The URLs and URIs the description gives for things outside it, in
+  // document order, each with its absolute form where it has one. None is
+  // loaded.
+  urls: UrlUse[]
 }
 
 class ResolveError extends Error {
@@ -958,8 +967,9 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   }
   if (asApidef && o.xref) orderAsWalked(tree)
 
+  const named = connectionsOf(raw, mv, index, hasIds(mv), counting ? tick : undefined)
   const connections = [
-    ...connectionsOf(raw, mv, index, hasIds(mv), counting ? tick : undefined),
+    ...named.rows,
     ...mergeRows.sort((a, b) => a[0] - b[0]).map((r) => r[1]),
     ...reuseOf(raw, mv, index, counting ? tick : undefined),
   ]
@@ -986,6 +996,8 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       p.uri = row.uri
       if (undefined !== row.fragment) p.fragment = row.fragment
     }
+    const conflict = pointers ? undefined : index.conflict(row)
+    if (undefined !== conflict) p.conflict = conflict
     if (null != info.token) {
       p.row = info.token.rI
       p.col = info.token.cI
@@ -1015,6 +1027,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     connections,
     dataSlots: index.dataSlots,
     dialects,
+    urls: named.urls,
   }
 
 }
