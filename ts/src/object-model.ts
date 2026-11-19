@@ -1256,7 +1256,7 @@ const OBJECT_MODEL = {
       "dialect": "2020-12",
       "meta": "https://spec.openapis.org/oas/3.1/meta/2024-11-10",
       "root": "root",
-      "source": "https://spec.openapis.org/oas/3.1/schema/2026-08-03",
+      "source": "https://spec.openapis.org/oas/3.1/schema/2026-11-05",
       "states": {
         "callback": {
           "kind": "object",
@@ -2000,9 +2000,9 @@ const OBJECT_MODEL = {
     },
     "3.2": {
       "dialect": "2020-12",
-      "meta": "https://spec.openapis.org/oas/3.2/meta/2025-09-17",
+      "meta": "https://spec.openapis.org/oas/3.2/meta/2026-02-26",
       "root": "root",
-      "source": "https://spec.openapis.org/oas/3.2/schema/2026-08-30",
+      "source": "https://spec.openapis.org/oas/3.2/schema/2026-11-12",
       "states": {
         "callback": {
           "kind": "object",
@@ -2322,7 +2322,6 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "description": "data",
             "encoding": "mediaType.encoding",
             "example": "data",
             "examples": "mediaType.examples",
