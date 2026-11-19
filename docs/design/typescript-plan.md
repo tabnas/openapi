@@ -290,6 +290,10 @@ layout defects and the refusals of section 2.1. They are repaired in the
 yaml grammar, and reached this package with that grammar's release,
 `@tabnas/yaml` 0.5.33.
 
+**Repaired in T3, item 2**: W1, W2, W3 and W6, in this repository, by
+the site index of section 3. Each has rows in
+`test/resolve/landings.tsv`. W4 and W5 are item 3's.
+
 **Found in T2b.** Four shapes were read, each wrongly, and are refused
 by that change. No document of the corpus has one. The first three are
 not YAML, and the reference parser refuses them as well. The fourth is
@@ -601,12 +605,14 @@ Item 1 is done, as
 with no source change. Each of its six points is shown, and section 11
 has what it found beside them.
 
-Item 2 is begun. Its three changes in `expr` (section 7) are built, in
-every implementation there, and merged as tabnas/expr#117. No release
-of `expr` has them yet. Here the sweep counts a site that is reported
-resolved and holds its map as written, and the test of W10 expects the
-repaired fold. The index, and `resolve` on it, are not begun. Items 3
-to 5 are not begun.
+Item 2 is built, but for W4 and W5, which item 3's text also has and
+which are left to it. Its three changes in `expr` (section 7) are
+merged as tabnas/expr#117, and no release of `expr` has them yet. Here
+the index is `ts/src/site-index.ts`, with `resolve` and the
+`connections` report built on it, and section 11 has what it was held
+to. Until `expr` is released, `resolve` runs in CI and with the
+siblings linked, and the corpus baselines stay as swept on the released
+packages. Items 3 to 5 are not begun.
 
 ### T4: several documents (L)
 
@@ -803,6 +809,89 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T3's second item was built:
+
+- **The index is in source**, as `ts/src/site-index.ts`, and `resolve`
+  reads it: `inherit` and `recognise` are look-ups, a site is read at
+  its landing with `site.written`, and `cycles: 'keep'` walks the
+  finished tree to the same landing. `provenance` rows gain `landing`,
+  `through`, and for a reference into another document `uri` and
+  `fragment`.
+- **It equals the prototype, everywhere it was run.** The build before
+  the index, E12's prototype made from that build, and the new build
+  were run on the same trees: the 5,168 descriptions of the corpus with
+  apidef's 43 definitions and the petstore pair, 1,140,269 sites, and
+  12,000 generated documents. The new build gives the prototype's
+  result for every one, under the defaults, under `cycles: 'keep'`, and
+  under `slots: 'all'` with `siblings: 'merge'` and `sharing: 'site'`,
+  and the prototype's result under the preset for apidef's own.
+- **Against the build before it, the eight descriptions of E12 move,
+  and a ninth under `slots: 'all'`.** That one is spotify.com: seven
+  references inside an extension that is itself a reference name
+  members beside it, which is the W2 shape. E12 did not run the corpus
+  under that option.
+- **The index carries each round forward.** The prototype surveyed the
+  whole document again in every round. The index surveys only what a
+  newly typed region changes, and reads again only the sites whose
+  facts moved. A second way of running it, which works every round out
+  from nothing, is kept for the tests, and the two are held to each
+  other on 1,200 generated documents, 400 of them made of regions
+  nested in each other.
+- **Two costs are bounded that the prototype left open.** The rounds
+  after the first, and the steps of a pointer read on through
+  references, can each cost more than one pass over the document: a
+  chain of regions that undo each other's base, or many pointers read
+  through one long chain of references. Together they may take sixteen
+  times the work of the first pass and 100,000 steps besides, and past
+  that `resolve` raises `openapi_work`. No description of the corpus has
+  a pointer that takes such a step, and the longest has five rounds.
+- **`through` lists a pointer's own steps.** The prototype also listed
+  what each of those references had itself been read through, which
+  grows with the square of a chain's length. Each reference has a row
+  of its own that says it.
+- **The step budget is two options**, `maxSteps` and `onCheck` with
+  `checkEveryN`, raising `openapi_work` and `openapi_cancel`. They count
+  one run of steps, the index's and then the fold's.
+- **The `connections` report reads the index, not the tree.** It is the
+  same report on every one of the 5,213 documents. It no longer depends
+  on the shape the tree is asked in: under `inline-once` a route
+  through a reference kept as written was not walked, and now is. A
+  name in a region that only a reference types is found.
+- **The report's routes are steps, and their growth is not yet bounded
+  by default.** A value that two routes reach is walked once for each,
+  as it was on the resolved tree, so callbacks that branch to a shared
+  Path Item double the routes at every level: seventeen levels are
+  131,070 routes in under a second, and thirty would not end. `maxSteps`
+  and `onCheck` now stop that walk, since every visit is a step. With
+  neither given nothing does, in this build or the one before it. A
+  bound that needs no option, and its size, is a choice for G1's
+  hostile inputs that this item leaves open.
+- **`sharing: 'inline-once'` counts a target by where a reference
+  lands**, so two pointers to one place, one of them through a
+  reference, are one target. Six of the 12,000 generated documents move
+  by that, and none of the corpus.
+- **The order of report rows is pinned as the new one.** E12 left the
+  choice to this item. A row is listed when the walk first comes to its
+  reference, and a reference that a pointer only passes is not come to
+  then. No description of the corpus moves by it.
+- **The cost** is 15% over the build before it on 290 descriptions of
+  the corpus under the defaults, and 13% under `cycles: 'keep'`, each
+  document resolved three times in turn by both and the least time
+  kept. Descriptions in 3.1 cost what they did. E12 gave 6% to 17%.
+- **The apidef gate passes on this build**, with the three diffs at
+  apidef's 3b24341: 2,477 of 2,478 tests, none failing, one skipped as
+  on apidef's `main`, and 57 of 57 definitions byte-identical.
+- **Decisions 27 and 28 are built on their defaults**, and each is
+  stated once in the index: the lenient step in the walk of a pointer,
+  which `strict` refuses, and the order of a round in one sort.
+- **W4 and W5 are left to item 3.** Item 2's text has W1 to W6, and
+  item 3's has the dialects and the comparison of URIs, which are W4
+  and W5.
+- **`resolve` needs the fold of tabnas/expr#117**, and says so: on an
+  `expr` up to 0.6.3 it throws a `TypeError`, except under
+  `refs: 'pointer'` with no step bound, which asks nothing new and is
+  what the preset sets.
 
 **Since acceptance**, as T3's second item was begun:
 
