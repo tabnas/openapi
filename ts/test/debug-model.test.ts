@@ -79,8 +79,8 @@ describe('compose: openapi + @tabnas/debug', () => {
   })
 
   test('the specification\'s reading adds no token, rule or alternate', { skip }, () => {
-    // It is options on the same parser, and a subscriber to its lexer:
-    // the grammar is the one jsonic and yaml make, down to the graph.
+    // It is options on the same parser, the yaml grammar's own among
+    // them: the grammar is the one jsonic and yaml make, down to the graph.
     const m = model(make({ reading: 'spec' }))
     const base = model(new Tabnas().use(jsonic).use(Yaml))
     const { tokens, rules, graph } = grammar(m)

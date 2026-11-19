@@ -55,6 +55,39 @@ script or loop you write, and anything sent to the background.
 
 A quick command that finishes within 30 seconds needs nothing extra.
 
+## Client work
+
+Never mention or identify a private work-tracking repository, even indirectly,
+in this repository or in anything the client can see. This includes code,
+comments, documentation, configuration, branch names, commits, issues, pull
+requests, chat messages, and visible tool calls or output.
+
+Only plain delivery and task identifiers may be shared from internal tracking.
+For example, “Delivery `rounds`, task `restart`.” Keep repository names,
+URLs, paths, skill names, project and session identifiers, and transcript
+references private. Describe the product work and test results normally.
+
+For every private work record you create or update, write both a purpose
+(`desc`) and a current status explanation (`statusDetail`). This applies to
+the overall collection, projects, deliveries, tasks, sessions and individual
+messages. Give the next agent enough context to resume:
+
+- **Purpose.** State who needs the outcome, what problem it solves and what
+  would count as success. For a session, explain the intended handoff. For a
+  message, identify the request, decision or result it contributes.
+- **Current status.** Say what has happened, what evidence supports it, and
+  what remains open, blocked or deferred. Identify the next action when one
+  is known. For a message, record its disposition separately from its exact
+  text. Describe unknowns explicitly.
+- At handoff, update the affected records and the project summary. Keep task
+  status, status prose and timestamped changes consistent. A state label or
+  a repeated title alone leaves the next agent without a handoff.
+
+For example, a restart task could have the purpose “Let two players start
+another round on the same board.” A useful status update is “Reset clears all
+nine squares and restores X's turn. Keyboard focus after reset still needs
+verification.” Keep these annotations private under the sharing rules above.
+
 ## What this project is
 
 `@tabnas/openapi` reads OpenAPI and Swagger descriptions, in YAML or in
@@ -109,8 +142,9 @@ default that a shared row pins changes until porting starts.
 | T0 | gates: the corpus sweep and its ledger, the apidef gate, the fixture homes | done |
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
 | T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
-| T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and measured from here with that build linked in: under `reading: 'spec'` the corpus ledger falls from 190 rows to 5, with none added. It waits for that pull request's merge and a release. Then `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and both ledgers are rewritten from a sweep. The rule history is measured, and turning it on is Decision 34 |
-| T3 to T6 | the site index, several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
+| T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger is 5 rows where it was 190, three of them accepted and two the descriptions refused for their size, and under the base reading it is 235 where it was 254. The rule history is measured, and turning it on is Decision 34 |
+| T3 | the site index, and `resolve` on it | begun. Item 1, the prototype E12, is done and changes no source: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). The index and today's fold agree on every site of the corpus, and what moves with it is eight descriptions in the shapes the plan names. Item 2 is begun: its three changes in `expr` are merged as tabnas/expr#117 and in no release yet, the sweep counts a site reported resolved that holds its map as written, and the test of W10 expects the repaired fold, so it fails on an install from the registry until `expr` is released. The index and `resolve` on it are not begun. Items 3 to 5 are not begun |
+| T4 to T6 | several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
 `ts/test/debug-model.test.ts` and `rs/tests/debug_model_test.rs` hold
@@ -142,9 +176,10 @@ grammar on any refusal, so every error comes from the grammar.
 ### What T2 added to the TypeScript `parse`
 
 All of it is in `ts/src/openapi.ts`, `ts/src/text.ts`,
-`ts/src/yaml-alias.ts`, `ts/src/lossy.ts` and `ts/src/well-formed.ts`,
-and none of it is ported, so its fixtures are in `test/pending/` and its
-other tests in `ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
+`ts/src/yaml-alias.ts`, `ts/src/lossy.ts`, `ts/src/well-formed.ts` and
+`ts/src/core-schema.ts`, and none of it is ported, so its fixtures are
+in `test/pending/` and its other tests in `ts/test/openapi.test.ts` and
+`ts/test/hostile.test.ts`.
 
 - **What runs on a text before the grammar is one pass, or counted.**
   `parse` reads text from outside a system, so a check there must not
@@ -161,16 +196,20 @@ other tests in `ts/test/openapi.test.ts` and `ts/test/hostile.test.ts`.
   what is the worst text for it, and what does that text cost.
 
 - **`reading: 'spec'`** is the same parser with other settings, made in
-  `make`: `comment.def.slash` and `comment.def.multi` off,
-  `number.sep` unset, and a subscriber to the lexer that turns a number
-  token into a text token where `CORE_NUMBER` does not match its source.
-  It adds no token, rule or alternate, and
-  `ts/test/debug-model.test.ts` holds that. A parser reads one way:
-  `READING` records what `make` built each for, and `parse` refuses the
-  other reading on a given `instance`. The YAML 1.1 words stay booleans
-  under both, because the released yaml grammar matches them in its own
-  code, out of reach of an option. Its `schema: 'core'` option, built as
-  tabnas/yaml#151, changes that once it is released.
+  `make`: the yaml grammar's `schema: 'core'` option, and
+  `comment.def.slash` and `comment.def.multi` off. It adds no token,
+  rule or alternate, and `ts/test/debug-model.test.ts` holds that. A
+  parser reads one way: `READING` records what `make` built each for,
+  and `parse` refuses the other reading on a given `instance`.
+- **`make` asks the yaml grammar whether it reads the core schema.**
+  The option arrived in `@tabnas/yaml` 0.5.33, and a grammar before it
+  takes an option it does not know in silence, so `yes` would stay a
+  Boolean with nothing said. The manifests name no version of the yaml
+  package, so the check is in the code: `readsCoreSchema`
+  (`ts/src/core-schema.ts`) parses the text `yes` with the parser
+  `make` built, and `make` throws a `TypeError` unless it is a string.
+  Keep the check for as long as the peer range admits an earlier yaml
+  package.
 - **`maxBytes` bounds the work as well as the size, and the work is
   what costs.** The engine keeps about 900 bytes for each rule pass
   until the parse ends: its rule history, which TypeScript does not
@@ -286,12 +325,14 @@ members that a resolved site dropped included, so that each site is
 reported as what it is.
 
 That is deliberate, and it is not to be folded back into `site.at`. A
-graph cannot be read off a tree that is still being built, and the fold
-has a defect there: when it follows a reference into a container that
-is still being folded, it hands back the map as written, unresolved and
-unreported. Section 2.3 of the plan records that defect as W10. It
-still reaches `cycles: 'cut'`, and `ts/test/resolve.test.ts` pins it
-there, so that its repair in `expr` shows.
+graph cannot be read off a tree that is still being built. The fold, as
+released, also has a defect there: when it follows a reference into a
+container that is still being folded, it hands back the map as written,
+unresolved and unreported. Section 2.3 of the plan records that defect
+as W10, and it reaches `cycles: 'cut'` too. Its repair is merged in
+`expr` and in no release yet. `ts/test/resolve.test.ts` expects the
+repaired fold under `cycles: 'cut'`, so that one test fails on an
+install from the registry until `expr` is released.
 
 `inline-once` and `copy` deep-copy the finished graph, `copy` counting
 the compact JSON's UTF-8 bytes against `budget`. `xref` (apidef's

@@ -232,8 +232,11 @@ rest of W9 stand on the audit's probes alone.
 | W8 | Integers past 2^53, such as int64 limits | lose precision, on both paths |
 | W9 | CR-only line breaks; JSON text after a blank line on the grammar path; a recursive alias (`a: &x {b: *x}` reads `b` as `null`) | a valid document refused, or read wrongly |
 
-None of W1 to W6 showed in the corpus: they are shapes the
-specification allows and real documents rarely use. Missing rather than
+None of W1 to W6 showed in the sweep: they are shapes the
+specification allows and real documents rarely use. The sweep cannot
+see W1 to W3, and E12 looked for them with the index: W3 is in seven
+descriptions of the corpus and the W1 shape in two (section 11). Missing
+rather than
 wrong: resolution across documents; the implicit discriminator mapping;
 a check that a target has the type its reference expects;
 `$recursiveRef`; bundling; and the reading rules for an operation
@@ -250,15 +253,19 @@ parser holds about 840 MB until it is dropped. T2 removed it
 it is being folded is left in the tree as the raw map, and reported as
 resolved. In `A: { $ref: '#/…/C/properties/q' }` written before
 `C: { properties: { q: { $ref: '#/…/C' } } }`, the fold follows `q` to
-`C`, and `C` holds `q`, which is still being folded. `expr`'s fold then
-gives `C` the map as written for it. Nothing is cut and nothing is
-listed as unresolved, and the resolved tree shares that map with the
-raw tree. With `C` written first, `q` is cut and `A` with it, which is
-the right answer for both orders. Unlike W1 to W6, this one shows in the
-corpus: under the default options, 180 references in 23 documents, all
-versions of one Azure description. `ts/test/resolve.test.ts` pins it, so
-that its repair in `expr` shows here. `cycles: 'keep'` no longer meets
-it (section 11).
+`C`, and `C` holds `q`, which is still being folded. `expr`'s fold, as
+released, then gives `C` the map as written for it. Nothing is cut and
+nothing is listed as unresolved, and the resolved tree shares that map
+with the raw tree. With `C` written first, `q` is cut and `A` with it,
+which is the right answer for both orders. Unlike W1 to W6, this one
+shows in the corpus: under the default options, 180 references in 23
+documents, all versions of one Azure description. The repair is merged
+in `expr`, as tabnas/expr#117, and is in no release yet.
+`ts/test/resolve.test.ts` expects the cut in both orders, so it passes
+on `expr`'s `main`, which CI builds against, and fails on 0.6.3, the
+latest release. `cycles: 'keep'` no longer meets it (section 11). The
+sweep counts such sites since T3, as `heldAsWritten` in each baseline
+(section 11).
 
 **Found in T2: W11 and W12.** Both are the yaml grammar's. Neither
 changes a tree the corpus reads: W11 is about where a token is said to
@@ -280,7 +287,8 @@ be, and no document of the corpus has the shape of W12.
 
 **Repaired in T2b**, in tabnas/yaml#151: W9, W11 and W12, with the
 layout defects and the refusals of section 2.1. They are repaired in the
-yaml grammar, so they reach this package with that grammar's release.
+yaml grammar, and reached this package with that grammar's release,
+`@tabnas/yaml` 0.5.33.
 
 **Found in T2b.** Four shapes were read, each wrongly, and are refused
 by that change. No document of the corpus has one. The first three are
@@ -487,9 +495,10 @@ All of it is this package's own configuration and code.
 1. **`reading: 'spec'`** (Decision 21), one option that selects the
    specification's reading: comments are YAML's `#` alone; numbers
    follow the core schema; a trailing empty document is accepted. It
-   takes in the YAML 1.1 words when `@tabnas/yaml` offers that option
-   (T2b). It is an option until porting starts, since shared fixtures
-   pin today's reading (section 5).
+   takes in the YAML 1.1 words since `@tabnas/yaml` 0.5.33, whose
+   `schema: 'core'` option `make` passes (T2b). It is an option until
+   porting starts, since shared fixtures pin today's reading
+   (section 5).
 2. **The alias budget** (Decision 23): checked on the text before the
    grammar runs, as apidef's `yamlalias.ts` does, default the larger of
    1 MB and ten times the input, raising `openapi_alias_budget`.
@@ -537,15 +546,16 @@ Acceptance: in the sweep, no valid description refused and no tree
 difference outside the two kinds section 1 allows.
 
 Built, as one pull request in that repository, tabnas/yaml#151, in every
-implementation there. It waits for the maintainer's merge and for a
-release, and until then nothing here can use it. Section 11 has the
-record, measured from this checkout with that build linked in. Items 1,
-2, 4 and 6 are repaired, and the acceptance holds for the grammar: under
-`reading: 'spec'` the only trees that differ are the two the reference
-parser reads wrongly, and the only descriptions refused are the two this
-package refuses for their size. Item 3 is repaired in the grammar, and
-apidef keeps `normalizePathKeys` until both of its implementations can
-drop it. Item 5 is measured, and what is left of it is Decision 34.
+implementation there, then merged and released as `@tabnas/yaml` 0.5.33,
+which this package reads with. Section 11 has the record, measured from
+this checkout with that build linked in and then swept on the released
+packages. Items 1, 2, 4 and 6 are repaired, and the acceptance holds for
+the grammar: under `reading: 'spec'` the only trees that differ are the
+two the reference parser reads wrongly, and the only descriptions
+refused are the two this package refuses for their size. Item 3 is
+repaired in the grammar, and apidef keeps `normalizePathKeys` until both
+of its implementations can drop it. Item 5 is measured, and what is left
+of it is Decision 34.
 
 ### T3: the site index, and `resolve` on it (L)
 
@@ -585,6 +595,18 @@ comparison unchanged; the Stripe and GitHub censuses in `AGENTS.md`
 unchanged, or each change explained; in the sweep, no reference
 `not-found` whose target exists, and no site reported resolved that
 holds its map as written.
+
+Item 1 is done, as
+[`prototype/e12-site-index.result.md`](prototype/e12-site-index.result.md),
+with no source change. Each of its six points is shown, and section 11
+has what it found beside them.
+
+Item 2 is begun. Its three changes in `expr` (section 7) are built, in
+every implementation there, and merged as tabnas/expr#117. No release
+of `expr` has them yet. Here the sweep counts a site that is reported
+resolved and holds its map as written, and the test of W10 expects the
+repaired fold. The index, and `resolve` on it, are not begun. Items 3
+to 5 are not begun.
 
 ### T4: several documents (L)
 
@@ -703,8 +725,8 @@ Numbered from 16, after the earlier plan's fifteen.
 | 24 | A lone surrogate read as U+FFFD | a function here, `wellFormed(tree)`, which apidef calls; raw mode itself rewrites nothing | T2 |
 | 25 | Leniency: a trailing empty YAML document, a byte-order mark under `strict`, a 3.0 component name outside the pattern, a version this package does not know read as the latest, the specification's text over its schema where they differ | accept each, and report where a report exists | T2, T3 |
 | 26 | Which changes to ask of `@tabnas/yaml`, `@tabnas/expr` and the engine, and in what order. Those repositories' own rules govern how each lands | the rows of section 7, in that order, each its own instruction | T2b, T3 |
-| 27 | A pointer that passes through a reference | lenient: the document first, then through the reference, reported in the row; `strict` raises it. E8 recommended the strict reading; E12 counts what each would cost | T3 |
-| 28 | A target the object model does not type | the rounds of section 3; a conflict reported | T3 |
+| 27 | A pointer that passes through a reference | lenient: the document first, then through the reference, reported in the row; `strict` raises it. E8 recommended the strict reading. E12 counted: no reference of the corpus needs the lenient step, so the two cost the same there, and six references pass a site at all, each landing on an empty stub beside the `$ref` (section 11) | T3 |
+| 28 | A target the object model does not type | the rounds of section 3; a conflict reported. E12 ran them: they end, with one answer however the members are ordered, but for two references of one round that give one target different types, which the order of the document decides. Taking the sites of a round in the order of their pointers decides it one way (section 11) | T3 |
 | 29 | Schema dialects. This replaces the earlier Decision 13 | draft-04, 06, 07 and 2019-09 read; an unknown dialect read as 2020-12 and reported | T3 |
 | 30 | The texts the object model follows | 3.1.2 and 3.2.1, the latest published, with the vendored schemas refreshed to match | T3 |
 | 31 | Loaders | a confined file loader and an allow-listed HTTP loader, both opt-in; nothing loads by default | T4 |
@@ -718,9 +740,9 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 
 | Repository | Change | Needed by | Size |
 |---|---|---|---|
-| expr | fold a location as written, not through the sites above it | T3 | S |
-| expr | a step budget, so that a caller can bound or cancel a walk | T3 | S |
-| expr | W10: a result folded while a site it needs is still being folded is not final. The fold reports a cycle to that site, and folds the container again once the site is settled | T3; 23 documents | S to M |
+| expr | fold a location as written, not through the sites above it. Prototyped in E12 as `site.written`, 11 lines, with `expr`'s suite unchanged. Merged, as tabnas/expr#117, and not yet released | T3 | S |
+| expr | a step budget, so that a caller can bound or cancel a walk. Merged, in tabnas/expr#117, as the option `budget`: past `steps` the fold fails with `fold_budget`, and `onCheck`, called every `checkEveryN` steps, cancels it with `fold_cancel` | T3 | S |
+| expr | W10: a result folded while a site it needs is still being folded is not final. The plan had the fold report a cycle to that site and fold the container again once the site is settled. Merged, in tabnas/expr#117, without the second fold: the site that asks for such a container is told it has met a cycle before the container is started, so nothing is folded twice and each site's resolver is asked once (section 11) | T3; 23 documents | S to M |
 | yaml | an option for the core schema's words | T2b; 166 documents | S to M |
 | yaml | compact nested lists; a list at its key's indent with an empty entry; a scalar on the line after its key; `>+` with a trailing blank line | T2b; 13 documents | S to M each |
 | yaml | an indented root mapping; a digit-led key with colons and a block value; `.5 x` | T2b; 7 documents | S to M each |
@@ -781,6 +803,161 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T3's second item was begun:
+
+- **The three changes T3 asks of `expr` are built**, in every
+  implementation there, each with a shared fixture, as one pull request,
+  tabnas/expr#117: `site.written`, as E12 prototyped it; a step budget;
+  and the repair of W10. It is merged, and no release of `expr` has it
+  yet. Nothing under `ts/src` changes here yet.
+- **The step budget** is the option `budget` on `fold`, shaped as the
+  engine's own `parse.budget` is. `steps` is the most steps a fold may
+  take, and the step after it fails with `fold_budget`. `onCheck` is
+  called every `checkEveryN` steps and cancels the fold with
+  `fold_cancel` when it returns false. A step is one container the fold
+  starts to fold, or one location a resolver asks a site for, so the
+  count is the same in every implementation and a fixture pins it.
+- **W10 is repaired another way than section 7 planned.** The plan had
+  the fold report a cycle and then fold the container a second time.
+  The repair needs no second fold. A location that a reference reaches
+  before the walk is counted on every location above it. A site that
+  asks for a location holding one is told it has met a cycle, before
+  that location is started. It is the cycle the walk finds when the
+  container is written first, cut at the same site, so the two orders
+  of section 2.3 give one answer, and each site's resolver is still
+  asked once.
+- **Measured before it was merged**, with this package's `resolve` on the
+  released fold and on the repaired one, over the 5,168 descriptions of
+  the corpus and apidef's 43 definitions, 1,140,055 sites. The released
+  fold leaves 180 sites reported resolved that hold their map as
+  written, in 23 descriptions, which are the figures of section 2.3.
+  The repaired fold leaves none. Those 23 are the only documents whose
+  result moves, in 96 report rows: 55 go from resolved to cut and 41
+  from cut to resolved, as the cut moves to the site that closes the
+  cycle. Nothing moves under `cycles: 'keep'` or under the preset. This
+  package's suite moves in the one test that pins W10.
+- **The sweep counts what it could not see.** Its `resolve` phase counts
+  the sites reported resolved while the tree holds, at the site, the
+  very map the document has there. Both baselines carry the figure as
+  `heldAsWritten`: 180 in 23 descriptions under each reading, on the
+  released packages. T3's acceptance holds it to zero.
+- **What followed the merge, and what waits for a release.** The test
+  of W10 expects the cut in both orders since the merge, because CI
+  here builds against `expr`'s `main`. On an install from the registry
+  that one test fails until `expr` is released, since 0.6.3 has the
+  defect. Both baselines keep the 180. A baseline names its
+  dependencies by version, and `expr`'s `main` is still 0.6.3 by that
+  measure, so the baselines are rewritten from a sweep on the release
+  that carries the repair.
+
+**Since acceptance**, as T3 was begun, with its prototype:
+
+- E12 is item 1 of T3, and
+  [`prototype/e12-site-index.result.md`](prototype/e12-site-index.result.md)
+  is its record. It changes no source. It builds the index of
+  section 3, makes a resolver from the compiled one by seven
+  replacements, so that `recognise` and `inherit` are look-ups in the
+  index and a site is read at its landing, and gives `expr` a way to
+  fold a location as written, as a diff of 11 lines.
+- **The index and the fold agree.** With the index alone, the prototype
+  gives today's result for every one of 5,168 descriptions of the
+  corpus and their 1,139,457 sites, for apidef's 43 definitions and the
+  petstore pair, for all 118 rows of `test/resolve/`, and for 6,000
+  generated documents under each of four sets of options. Stripe's
+  three descriptions, GitHub's four and the 600-document check set are
+  among them.
+- **With landings and typing, eight descriptions of the corpus move.**
+  Seven are codat.io's, all 3.1.0, which keep schemas under
+  `definitions`. That is W3: 196 references inside 170 such regions
+  come back as written today, with their sites reported resolved. The
+  sweep could not see them, which is why section 2.3 said W3 was not in
+  the corpus. Two descriptions hold the W1 shape, in six references.
+- **Decision 27 has its count.** Of 1,110,054 landings in the corpus,
+  none passes through a site that lacks the step as written, so the
+  lenient and the strict readings give the same there. The six
+  references that pass a site find their steps as written, in an empty
+  stub that a converter left beside a `$ref`, and resolve to `{}`.
+  Today cuts all six. Under `cycles: 'keep'` today gives three of them
+  the member of the target that the author meant, and the other three
+  the stub. A widely used resolver gives three the stub and three the
+  member, the other way about.
+- **The rounds of Decision 28 end, with one answer.** Five cases give
+  one answer under 502 orders of their members each: a second reference
+  to one target revealed by typing, of the same type and of another; an
+  `$id` inside a region typed only by reference; a region that
+  references itself; and a chain of 40 regions, which ends after round
+  41. In the corpus no description needs more than five rounds. One
+  case has two answers: two references of one round that give one
+  target different types, where the first in the document wins.
+  Taking the sites of a round in the order of their pointers gives it
+  one.
+- **The preset is unmoved, and so is `cycles: 'keep'` off the eight.**
+  Under the preset the prototype equals apidef's own resolver on all
+  15,177 documents the comparison tool runs. It is unmoved because the
+  index types nothing by reference under `refs: 'pointer'` and leaves
+  that reading as it is. `cycles: 'keep'`, built on landings, gives
+  today's graph for 5,160 of the 5,168.
+- **Three things for item 2 to settle**, none of them in the plan before.
+  A pointer that passes a site which is in a cycle, and names nothing
+  there, is cut today and not found on landings. Report rows are in the
+  order the fold first meets each site, and a fold that reads as
+  written no longer meets a site that a pointer only passes, so rows
+  change places in 219 of the 6,000 generated documents, and in none of
+  the corpus. And eight references of the corpus, in four descriptions,
+  land on a type their reference does not expect, which item 4 will
+  report.
+- **The cost is small.** The prototype's `resolve` takes 6% to 17% more
+  time than today's over the corpus, and 24% more under `keep`, with an
+  index that is not written for speed.
+
+**Since acceptance**, once the yaml grammar's change was released:
+
+- tabnas/yaml#151 is merged and released as `@tabnas/yaml` 0.5.33, and
+  this package follows it in one change.
+- `make` passes `schema: 'core'` to the yaml plugin under
+  `reading: 'spec'`, so the YAML 1.1 words are text there. The row of
+  `test/pending/parse-reading.tsv` that pinned them as booleans pins
+  them as strings.
+- The subscriber to the lexer that turned a number the core schema does
+  not name into text is gone, and so is `number.sep` unset. Both were
+  measured first, with the option passed. Over 1,003 texts, 64 scalars
+  in each of 13 positions and the inputs of this repository's fixtures,
+  neither changes a tree. Over 8,077 of the corpus's 8,079 distinct YAML
+  documents neither changes a tree, and the subscriber acts on no token.
+  The two left out are the Microsoft Graph descriptions, for their size.
+  The yaml grammar says why: under the option a scalar that is no number
+  of the core schema goes to its text handler, and the engine's number
+  matcher never sees it.
+- An earlier yaml package takes an option it does not know in silence,
+  and would go on reading `yes` as `true`. The manifests name no version
+  of that package, so the requirement is held in code, which the plan
+  did not foresee: `make` parses the text `yes` with the parser it built
+  and throws unless the answer is a string (`readsCoreSchema`).
+- The yaml grammar's repairs moved what this repository pinned, in every
+  implementation. A second document is refused at its marker, a line
+  earlier than before. JSON text after a blank first line is read. The
+  list of rows where the second implementation parted from the first is
+  empty, since both of its entries were defects that change repaired.
+  That implementation's manifest requires yaml v0.5.33.
+- The three gates ran on the released packages: `@tabnas/yaml` 0.5.33,
+  with jsonic 0.7.12 and expr 0.6.3, where the earlier records were made
+  with 0.5.32, 0.7.11 and 0.5.21. The sweep gives what the linked build
+  gave. Under `'spec'` it refuses 3 documents where it refused 10, and 2
+  trees differ where 180 did. The ledger falls from 190 rows to 5: 185
+  removed, none added, none changed. Three of the five are the accepted
+  rows, and the other two are the Microsoft Graph descriptions, refused
+  for their size, so no row is left that is a defect of reading. Under
+  `'base'` it refuses 15 where it refused 22, and 220 trees differ where
+  232 did. That ledger goes from 254 rows to 235: 20 removed and one
+  added, the EPA's description, which was refused and, now that it is
+  read, holds one YAML 1.1 word.
+- Under both readings the resolve figures that moved are those of the
+  seven descriptions now read, to the unit: 1,067 more sites, all
+  resolved. No other figure moved, so the newer expr and jsonic change
+  nothing the sweep measures. The apidef gate passes as before, with 57
+  of 57 definitions byte-identical, and the preset comparison finds no
+  difference in 15,177 documents.
 
 **Since acceptance**, while T2b was built:
 

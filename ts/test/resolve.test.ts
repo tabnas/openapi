@@ -241,29 +241,22 @@ describe('resolve', () => {
     }
   })
 
-  test('cycles cut: a reference that reaches its own container is left as the raw map (the fold\'s defect, W10)', () => {
-    // This pins a defect of @tabnas/expr's fold, not a reading. A is
-    // written first and names the reference q. The fold follows q to its
-    // container C, which holds q, and q is still being folded: the fold
-    // gives C the map as written for it. So q stays in the tree as the
-    // raw map, though it is reported resolved and nothing is cut. With C
-    // written first, q is cut and A with it, which is the right answer
-    // for both orders. A repair in expr turns this test red: then make
-    // both orders expect the second.
+  test('cycles cut: a reference that reaches its own container is a cycle, in either order (W10, repaired)', () => {
+    // A names the reference q, and q names its own container C. With A
+    // written first the fold comes to q before C. That was a defect of
+    // @tabnas/expr's fold, W10: it folded C there and then, with q's map
+    // as written in it, reported q resolved and cut nothing. The fold now
+    // tells q that asking for C is a cycle, as it does when C is written
+    // first, so q is cut and A with it in both orders.
     const A = { $ref: S + 'C/properties/q' }
     const C_ = { properties: { q: { $ref: S + 'C' } } }
-    const run = (schemas: object) => {
+    for (const schemas of [{ A, C: C_ }, { C: C_, A }]) {
       const raw = parse(JSON.stringify({ openapi: '3.0.0', components: { schemas } }))
-      return { raw, out: resolve(raw) }
+      const out = resolve(raw)
+      assert.deepEqual(out.cuts.map((c) => c.at.slice(S.length - 1)).sort(), ['A', 'C/properties/q'])
+      assert.deepEqual(out.provenance.map((p) => p.status), ['cut', 'cut'])
+      assert.notEqual(out.tree.components.schemas.C.properties.q, raw.components.schemas.C.properties.q)
     }
-    const first = run({ A, C: C_ })
-    assert.equal(first.out.tree.components.schemas.C.properties.q, first.raw.components.schemas.C.properties.q)
-    assert.deepEqual(first.out.provenance.map((p) => p.status), ['resolved', 'resolved'])
-    assert.deepEqual(first.out.cuts, [])
-
-    const second = run({ C: C_, A })
-    assert.deepEqual(second.out.cuts.map((c) => c.at.slice(S.length - 1)), ['C/properties/q', 'A'])
-    assert.notEqual(second.out.tree.components.schemas.C.properties.q, second.raw.components.schemas.C.properties.q)
   })
 
   test('cycles keep reports a site inside members that its own site dropped', () => {

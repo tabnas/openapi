@@ -144,7 +144,7 @@ func ExampleParse() {
 	// Output:
 	// {"openapi":"3.1.0","info":{"title":"Pets","version":"1"},"paths":{}}
 	// 3.1
-	// openapi_stream 3 1
+	// openapi_stream 2 1
 	// the text holds more than one YAML document, where a description is one
 }
 

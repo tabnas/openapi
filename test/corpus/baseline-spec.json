@@ -85,11 +85,11 @@
   },
   "environment": {
     "dependencies": {
-      "@tabnas/expr": "0.5.21",
+      "@tabnas/expr": "0.6.3",
       "@tabnas/json": "0.5.20",
-      "@tabnas/jsonic": "0.7.11",
+      "@tabnas/jsonic": "0.7.12",
       "@tabnas/parser": "0.12.20",
-      "@tabnas/yaml": "0.5.32"
+      "@tabnas/yaml": "0.5.33"
     },
     "node": 24,
     "options": {
@@ -143,28 +143,27 @@
   },
   "ledger": {
     "accepted": 3,
-    "open": 187,
-    "rows": 190
+    "open": 2,
+    "rows": 5
   },
   "parse": {
     "all": {
       "died": 0,
-      "parsed": 8976,
-      "refused": 10
+      "parsed": 8983,
+      "refused": 3
     },
     "descriptions": {
       "died": 0,
-      "parsed": 5173,
-      "refused": 9
+      "parsed": 5180,
+      "refused": 2
     },
     "diedHow": {},
     "referenceRefuses": 0,
     "refusedByCode": {
       "openapi_root": 1,
-      "openapi_size": 2,
-      "unexpected": 7
+      "openapi_size": 2
     },
-    "refusedValid": 10
+    "refusedValid": 3
   },
   "resolve": {
     "checks": {
@@ -190,12 +189,12 @@
         "notFound": 19
       },
       "securityScheme": {
-        "count": 65575,
+        "count": 65577,
         "notFound": 1
       },
       "tag": {
-        "count": 120575,
-        "notFound": 58605
+        "count": 123283,
+        "notFound": 58701
       },
       "tagParent": {
         "count": 197,
@@ -208,22 +207,24 @@
       "external": 789,
       "not-found": 1
     },
+    "documentsHeldAsWritten": 23,
     "documentsWithCuts": 600,
     "documentsWithDataSlots": 893,
+    "heldAsWritten": 180,
     "kinds": {
       "pathItem": 13,
-      "reference": 437138,
-      "schema": 707145
+      "reference": 437418,
+      "schema": 707932
     },
     "notRun": 0,
-    "resolved": 5173,
-    "sites": 1144296,
+    "resolved": 5180,
+    "sites": 1145363,
     "skipped": {
       "no-version": 3803
     },
     "status": {
       "cut": 1913,
-      "resolved": 1112784,
+      "resolved": 1113851,
       "unresolved": 29599
     },
     "threwByCode": {},
@@ -234,49 +235,20 @@
   },
   "trees": {
     "byClass": {
-      "length:BLOCK_SEQ": {
-        "documents": 6,
-        "values": 29
-      },
-      "type:null->array:PLAIN": {
-        "documents": 2,
-        "values": 20
-      },
-      "type:number->string:other:PLAIN": {
-        "documents": 6,
-        "values": 13
-      },
-      "type:string->boolean:yaml11-bool-word:PLAIN": {
-        "documents": 165,
-        "values": 1012
-      },
-      "value:string:BLOCK_FOLDED:>+": {
-        "documents": 1,
-        "values": 1
-      },
       "value:string:BLOCK_LITERAL:|N-": {
         "documents": 2,
         "values": 626
-      },
-      "value:string:PLAIN": {
-        "documents": 4,
-        "values": 9
       }
     },
     "byKind": {
       "other": {
-        "documents": 15,
-        "documentsWithNothingElse": 15,
-        "values": 698
-      },
-      "yaml11-word": {
-        "documents": 165,
-        "documentsWithNothingElse": 165,
-        "values": 1012
+        "documents": 2,
+        "documentsWithNothingElse": 2,
+        "values": 626
       }
     },
-    "compared": 8976,
-    "differ": 180
+    "compared": 8983,
+    "differ": 2
   },
   "yamlFeatures": {
     "aliases": 58,

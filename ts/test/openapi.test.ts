@@ -20,6 +20,7 @@ import { Yaml } from '@tabnas/yaml'
 import { spawnSync } from 'node:child_process'
 
 import { OpenApi, aliasedSize, make, parse, version, wellFormed, VERSION } from '..'
+import { readsCoreSchema } from '../dist/core-schema'
 import type { ParseReport } from '..'
 
 const PETSTORE = join(__dirname, '..', '..', 'test', 'petstore')
@@ -128,8 +129,8 @@ describe('raw mode', () => {
 
   test('the errors carry the position of what they refuse', () => {
     const stream = failure(() => parse('openapi: 3.1.0\n---\nopenapi: 3.0.0'))
-    // At the first line of the second document's content.
-    assert.deepEqual([stream.code, stream.row, stream.col], ['openapi_stream', 3, 1])
+    // At the marker that starts the second document.
+    assert.deepEqual([stream.code, stream.row, stream.col], ['openapi_stream', 2, 1])
 
     const root = failure(() => parse('- a\n- b'))
     assert.deepEqual([root.code, root.row, root.col], ['openapi_root', 1, 1])
@@ -255,6 +256,23 @@ describe('raw mode', () => {
     assert.deepEqual(C(parse(text, { strict: true, reading: 'spec' })), { openapi: '3.1.0', a: 1000 })
     assert.deepEqual(C(parse(text, { instance: make({ strict: true, reading: 'spec' }), strict: true })), { openapi: '3.1.0', a: 1000 })
     assert.throws(() => parse('{"openapi":"3.1.0","a":0x1F}', { strict: true, reading: 'spec' }), (e: any) => 'unexpected' === e.code)
+  })
+
+  test('the specification\'s reading is the core schema\'s, and make checks the grammar reads it', () => {
+    const words = 'a: yes\nb: No\nc: ON\nd: off\ne: true\nf: False\ng: ~\nh: 1_000\ni: 0x1F\n'
+    assert.deepEqual(C(parse(words, { reading: 'spec' })), {
+      a: 'yes', b: 'No', c: 'ON', d: 'off', e: true, f: false, g: null, h: '1_000', i: 31,
+    })
+    assert.deepEqual(C(parse(words)), {
+      a: true, b: false, c: true, d: false, e: true, f: false, g: null, h: 1000, i: 31,
+    })
+    // What `make` asks of the parser it built. A yaml grammar from before
+    // the `schema: 'core'` option takes the option in silence and reads as
+    // a parser without it does, so that parser stands in for one here.
+    assert.equal(readsCoreSchema(make({ reading: 'spec' })), true)
+    assert.equal(readsCoreSchema(make()), false)
+    assert.equal(readsCoreSchema(new Tabnas().use(jsonic).use(Yaml)), false)
+    assert.equal(readsCoreSchema(new Tabnas().use(jsonic).use(Yaml, { schema: 'core' })), true)
   })
 
   test('the specification\'s reading keeps the numbers JSON cannot carry', () => {

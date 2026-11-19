@@ -451,7 +451,7 @@ impl fmt::Debug for ParseOptions<'_> {
 /// assert_eq!(err.code, "openapi_version");
 ///
 /// let err = parse("openapi: 3.1.0\n---\nopenapi: 3.0.0", &ParseOptions::default()).unwrap_err();
-/// assert_eq!((err.code.as_str(), err.row, err.col), ("openapi_stream", 3, 1));
+/// assert_eq!((err.code.as_str(), err.row, err.col), ("openapi_stream", 2, 1));
 /// # Ok::<(), tabnas_openapi::OpenApiError>(())
 /// ```
 pub fn parse(text: &str, options: &ParseOptions<'_>) -> Result<Value, OpenApiError> {

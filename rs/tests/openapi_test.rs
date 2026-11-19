@@ -320,8 +320,8 @@ fn the_errors_carry_the_position_of_what_they_refuse() {
         "openapi: 3.1.0\n---\nopenapi: 3.0.0",
         &ParseOptions::default(),
     ));
-    // At the first line of the second document's content, where the yaml
-    // lexer places the `---` that opens it, as in TypeScript.
+    // At the marker that starts the second document: the `---`, at its
+    // own offset and three characters long, as in TypeScript.
     assert_eq!(
         (
             stream.code.as_str(),
@@ -330,7 +330,7 @@ fn the_errors_carry_the_position_of_what_they_refuse() {
             stream.pos,
             stream.len
         ),
-        ("openapi_stream", 3, 1, 19, 3)
+        ("openapi_stream", 2, 1, 15, 3)
     );
     assert_eq!(stream.token.name, "#DS");
     assert_eq!(
