@@ -220,6 +220,60 @@ try {
 code // => 'openapi_unresolved'
 ```
 
+## See where a reference lands
+
+`provenance` has one entry for each reference. Its `target` is the
+location the pointer names, and its `landing` is the location the
+pointer comes to. The two differ where a step of the pointer is missing
+at a reference and is read in what that reference names. `through`
+lists each such reference:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.0.3
+components:
+  schemas:
+    Pet: {properties: {name: {type: string}}}
+    Alias: {$ref: '#/components/schemas/Pet'}
+    Name: {$ref: '#/components/schemas/Alias/properties/name'}
+`)
+const out = resolve(raw)
+const name = out.provenance.find((p) => p.at === '/components/schemas/Name')
+name.target // => '/components/schemas/Alias/properties/name'
+name.landing // => '/components/schemas/Pet/properties/name'
+name.through // => ['/components/schemas/Alias']
+out.tree.components.schemas.Name // => { type: 'string' }
+```
+
+Under `strict` that step is not taken, and the reference is not found.
+
+## Bound the work of resolving, or stop it
+
+`maxSteps` is the most steps a resolve may take. Past it, `resolve`
+throws `openapi_work`. `onCheck` is asked every `checkEveryN` steps
+whether to go on, and when it returns `false`, `resolve` throws
+`openapi_cancel`. Keep a deadline there:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse('{"openapi":"3.1.0","components":{"schemas":{"A":{"$ref":"#/components/schemas/B"},"B":{"type":"string"}}}}')
+
+let code
+try {
+  resolve(raw, { maxSteps: 3 })
+} catch (err) {
+  code = err.code
+}
+code // => 'openapi_work'
+
+const deadline = Date.now() + 2000
+const out = resolve(raw, { checkEveryN: 100, onCheck: () => Date.now() < deadline })
+out.unresolved // => []
+```
+
 ## Write a resolved description to a file
 
 The default result shares one value among the sites that name it, and

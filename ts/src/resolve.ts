@@ -9,32 +9,28 @@
 // version and kind, the output shapes, and the report. The raw tree is
 // never changed.
 //
+//
+// What a reference names is a fact about the document, and is worked out
+// before the fold, by the site index (site-index.ts): which maps are
+// sites, the state, base URI and dialect of every map, the identifiers,
+// and where each reference lands. The fold's `inherit` and `recognise`
+// are look-ups in it. What depends on the tree being built stays here:
+// the values, what is shared, and which edge of a cycle is cut.
+//
 // One document for now: a reference into another document is reported
 // as external and left as written. The plan is
-// docs/design/implementation-plan.md, Phase 2.
+// docs/design/typescript-plan.md, step T3.
 
 import { fold, FoldError } from '@tabnas/expr'
 import type { FoldOptions, Op, Positions, Site } from '@tabnas/expr'
 
 import { connectionsOf, reuseOf } from './connections'
 import type { Connection } from './connections'
-import { slot, step, rootState, walkModel } from './model'
 import type { ModelVersion } from './model'
 import { version as readVersion } from './oas-version'
-import {
-  ANCHOR,
-  NOTHING,
-  define,
-  fragmentOf,
-  isMap,
-  merged,
-  own,
-  pointer,
-  pointerParts,
-  resolveUri,
-  stepInto,
-  withoutFragment,
-} from './uri'
+import { Loc, buildIndex, hasIds } from './site-index'
+import type { Kind, SiteFacts, Why } from './site-index'
+import { NOTHING, define, isMap, merged, own, pointer, resolveUri, stepInto, withoutFragment } from './uri'
 import type { Path } from './uri'
 
 // The base a description is read under when the caller gives no retrieval
@@ -42,16 +38,6 @@ import type { Path } from './uri'
 // suggests for a document with no location, so that fragment-only
 // references still resolve.
 const DEFAULT_BASE = 'urn:uuid:0c2b4f0e-8f9d-4c7a-9a52-6d1e3b7a4f10'
-
-// Why a reference was left as written.
-type Why =
-  | 'not-a-string'
-  | 'bad-fragment'
-  | 'not-found'
-  | 'no-anchor'
-  | 'external'
-  | 'non-object-target'
-  | 'unsupported-dialect'
 
 // The error codes `strict` raises, by reason.
 const STRICT: Partial<Record<Why, string>> = {
@@ -80,8 +66,20 @@ type ResolveOptions = {
   // Each container's opening token, from expr's recordPositions, so that
   // provenance carries a row and column.
   positions?: Positions
-  // The deepest the fold walks, nesting and references together.
+  // The deepest a map or list may be nested, and the most references that
+  // may be followed one inside another, counted together. Default 1000.
+  // Past it resolve raises `openapi_depth`.
   maxDepth?: number
+  // The most steps resolving may take: one for each map or list it comes
+  // to, each time it comes to one, and one for each reference it reads.
+  // Past it resolve raises `openapi_work`. No bound by default.
+  maxSteps?: number
+  // A check that can stop resolving: called every `checkEveryN` steps,
+  // 1,000 unless given, with the steps taken so far. When it returns
+  // false, resolve raises `openapi_cancel`. A caller keeps a deadline
+  // there.
+  onCheck?: (steps: number) => boolean | void
+  checkEveryN?: number
   // How the sites naming one target hold it: one value they all share
   // ('share', the default); a shallow copy each ('site'); the value at
   // the first site and the reference as written at the rest
@@ -131,10 +129,6 @@ type ResolveOptions = {
   compat?: 'apidef'
 }
 
-// The kind of a site: what the object model says its position holds, or
-// data for a site that `slots` or `extensions` made one.
-type Kind = 'reference' | 'schema' | 'pathItem' | 'data'
-
 // What a site's place in the tree holds: its target's value, the
 // reference as written because it names nothing or closes a cycle, or the
 // reference as written because 'inline-once' put the value at an earlier
@@ -153,6 +147,18 @@ type Provenance = {
   type: string | null
   // The location it names, when it names one in this document.
   target: string | null
+  // The location it lands on, read on the document as it is written:
+  // `target`, unless a step of the pointer was missing at a reference and
+  // was read in what that reference names. Null when it lands nowhere
+  // here, and under `refs: 'pointer'`, which reads a pointer otherwise.
+  landing: string | null
+  // The references the pointer was read through to land there, when
+  // there are any.
+  through?: string[]
+  // For a reference into another document: that document's URI, and the
+  // fragment of the reference when it has one.
+  uri?: string
+  fragment?: string
   status: Status
   row?: number
   col?: number
@@ -198,20 +204,8 @@ function quoted(value: unknown): string {
   return 60 < text.length ? text.slice(0, 57) + '...' : text
 }
 
-// JSON Schema identifiers ($id, $anchor, $dynamicAnchor) exist in OpenAPI
-// from 3.1, and $self from 3.2.
-const hasIds = (v: ModelVersion) => '3.1' === v || '3.2' === v
+// $self exists in OpenAPI from 3.2.
 const hasSelf = (v: ModelVersion) => '3.2' === v
-
-// The schema dialects whose `$ref` semantics the resolver applies: the
-// OpenAPI dialects of 3.1 and 3.2, and JSON Schema 2020-12 itself.
-function supportedDialect(dialect: string): boolean {
-  return (
-    dialect.startsWith('https://spec.openapis.org/oas/3.1/dialect/') ||
-    dialect.startsWith('https://spec.openapis.org/oas/3.2/dialect/') ||
-    'https://json-schema.org/draft/2020-12/schema' === dialect
-  )
-}
 
 const DEFAULT_DIALECT: Record<string, string> = {
   '3.1': 'https://spec.openapis.org/oas/3.1/dialect/base',
@@ -264,8 +258,9 @@ const CHOICES: Record<string, string[]> = {
   refs: ['uri', 'pointer'],
 }
 
-type Settled = Required<Omit<ResolveOptions, 'positions' | 'maxDepth' | 'budget' | 'retrievalUri' | 'compat'>> &
-  Pick<ResolveOptions, 'positions' | 'maxDepth' | 'budget' | 'retrievalUri' | 'compat'>
+type Loose = 'positions' | 'maxDepth' | 'maxSteps' | 'onCheck' | 'checkEveryN' | 'budget' | 'retrievalUri' | 'compat'
+
+type Settled = Required<Omit<ResolveOptions, Loose>> & Pick<ResolveOptions, Loose>
 
 // The options in force: the preset, then what was given, then the
 // defaults, each choice checked.
@@ -306,28 +301,46 @@ function settle(options: ResolveOptions): Settled {
   if ('copy' === o.sharing && !(Number.isFinite(o.budget) && 0 <= (o.budget as number))) {
     throw new ResolveError('openapi_budget', 'resolve: sharing copy needs a budget, the most bytes it may make')
   }
+  for (const name of ['maxDepth', 'maxSteps', 'checkEveryN'] as const) {
+    const v = o[name]
+    if (undefined !== v && !(('number' === typeof v && Number.isInteger(v) && 0 < v) || Infinity === v)) {
+      throw new TypeError(`resolve: ${name} must be a whole number above 0, not ${quoted(v)}`)
+    }
+  }
+  if (undefined !== o.onCheck && 'function' !== typeof o.onCheck) {
+    throw new TypeError('resolve: onCheck must be a function, not ' + quoted(o.onCheck))
+  }
   return o
 }
 
-// The `$id`, `$anchor` and `$dynamicAnchor` targets of the document, in
-// Schema Object positions only (an `$anchor` inside example data is data),
-// and only in the versions that have them.
-function indexIds(root: any, docUri: string, mv: ModelVersion): Map<string, Path> {
-  const ids = new Map<string, Path>()
-  if (!hasIds(mv)) return ids
-  walkModel<string>(mv, root, docUri, (node, path, state, base) => {
-    if (!isMap(node) || 'schema' !== slot(mv, state).kind) return base
-    let mine = base
-    if ('string' === typeof node.$id) {
-      mine = resolveUri(base, node.$id)
-      ids.set(withoutFragment(mine), path)
+// What this resolver asks of @tabnas/expr's fold that its releases up to
+// 0.6.3 do not have: a step budget, and a site that reads a location as
+// the document is written. They arrived together, so one probe finds
+// both: a fold of two maps under a budget of one step. Run once, and
+// only when one of the two is needed.
+let foldIsNewEnough: boolean | undefined
+function checkFold(): void {
+  if (undefined === foldIsNewEnough) {
+    foldIsNewEnough = false
+    try {
+      fold({ a: {} }, { evaluate: (_site, _op, terms) => terms, budget: { steps: 1 } })
+    } catch (err: any) {
+      foldIsNewEnough = err instanceof FoldError && 'fold_budget' === err.code
     }
-    for (const a of ['$anchor', '$dynamicAnchor']) {
-      if ('string' === typeof node[a]) ids.set(withoutFragment(mine) + '#' + node[a], path)
-    }
-    return mine
-  })
-  return ids
+  }
+  if (!foldIsNewEnough) {
+    throw new TypeError(
+      'resolve: the installed @tabnas/expr is too old. Its fold has no step budget and no site.written, ' +
+        'which @tabnas/openapi needs: install a release after 0.6.3',
+    )
+  }
+}
+
+// The fold's own errors that are this package's to name.
+const FOLD_CODES: Record<string, string> = {
+  fold_depth: 'openapi_depth',
+  fold_budget: 'openapi_work',
+  fold_cancel: 'openapi_cancel',
 }
 
 // The UTF-8 length of a string.
@@ -351,14 +364,18 @@ const OPS = {
   dynamicRef: { key: true, src: '$dynamicRef', dynamic: true },
 }
 
-// One site, from the moment the walk first meets it.
+// One site, from the moment the walk first meets it. `row` is what the
+// index knows of it, which the walk does not change.
 type SiteInfo = {
   seq: number
+  row: SiteFacts
   at: string
   kind: Kind
   type: string | null
   ref: unknown
   target?: Path
+  // What 'inline-once' counts as one target: where the reference lands.
+  key?: string
   // Why it cannot resolve, when that is known before its target is
   // folded.
   why?: Why
@@ -395,9 +412,46 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     hasIds(mv) && isMap(raw) && 'string' === typeof raw.jsonSchemaDialect
       ? raw.jsonSchemaDialect
       : (DEFAULT_DIALECT[mv] ?? '')
-  const ids = indexIds(raw, entry, mv)
+  const limit = o.maxDepth ?? 1000
+  const pointers = 'pointer' === o.refs
 
-  const infos = new Map<string, SiteInfo>()
+  // The steps taken, the index's and then the fold's, for `maxSteps` and
+  // `onCheck`.
+  const maxSteps = o.maxSteps ?? Infinity
+  const onCheck = o.onCheck
+  const checkEveryN = undefined === onCheck ? 0 : (o.checkEveryN ?? 1000)
+  let steps = 0
+  const counting = Infinity !== maxSteps || undefined !== onCheck
+
+  // Under `refs: 'pointer'` a pointer is read by `site.at`, which every
+  // fold has. Anything else reads a landing as written, and a count of
+  // steps is kept through the fold's budget.
+  if (!pointers || counting) checkFold()
+  const tick = () => {
+    steps++
+    if (maxSteps < steps) throw new ResolveError('openapi_work', `resolve: more than ${maxSteps} steps`)
+    if (0 < checkEveryN && 0 === steps % checkEveryN && false === onCheck!(steps)) {
+      throw new ResolveError('openapi_cancel', `resolve: stopped by onCheck after ${steps} steps`)
+    }
+  }
+
+  const index = buildIndex(raw, {
+    mv,
+    docBase,
+    entry,
+    retrieved,
+    rootDialect,
+    slots: o.slots,
+    extensions,
+    pointers,
+    maxDepth: limit,
+    refuse: (code, message, at) => {
+      throw new ResolveError(code, `resolve: ${message}` + ('' === at ? '' : ` at ${quoted(at)}`), at)
+    },
+    tick: counting ? tick : undefined,
+  })
+
+  const infos = new Map<SiteFacts, SiteInfo>()
   const sites: SiteInfo[] = []
   const unresolvedRows: [number, Unresolved][] = []
   const cutRows: [number, Cut][] = []
@@ -413,48 +467,10 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   // Under 'keep', the placeholder each site holds until the fold is done.
   const deferred = new Map<object, { info: SiteInfo; siblings: any; plain: any }>()
   let seq = 0
-  let dataSlots = 0
 
-  // Under `refs: 'pointer'`, a root that is itself a reference is followed
-  // before any pointer is read, and following it needs the root again: no
-  // pointer names anything in such a document.
-  const pointers = 'pointer' === o.refs
-  const rootIsReference = pointers && isMap(raw) && 'string' === typeof raw.$ref
   // The preset's two details that no option names: see `settleSite` and
   // `orderAsWalked`.
   const asApidef = 'apidef' === o.compat
-
-  // A reference read as a pointer into this document and nothing else:
-  // `#/…`, from the root, with `~1` and `~0` and no percent-decoding.
-  const locatePointer = (ref: string): { target?: Path; why?: Why } => {
-    if (!ref.startsWith('#/')) return { why: ref.startsWith('#') ? 'bad-fragment' : 'external' }
-    if (rootIsReference) return { why: 'not-found' }
-    return { target: ref.slice(2).split('/').map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~')) }
-  }
-
-  // A URI reference, against a base: the location it names in this
-  // document, or why it names none here.
-  const locateUri = (ref: string, base: string): { target?: Path; why?: Why } => {
-    const abs = resolveUri(base, ref)
-    const doc = withoutFragment(abs)
-    const fragment = fragmentOf(abs)
-    let start: Path
-    if (ids.has(doc)) start = ids.get(doc)!
-    else if (doc === entry || doc === retrieved) start = []
-    else return { why: 'external' }
-    if (undefined === fragment || '' === fragment) return { target: start }
-    if (fragment.startsWith('/') || /^%2f/i.test(fragment)) {
-      const parts = pointerParts(fragment)
-      return null == parts ? { why: 'bad-fragment' } : { target: [...start, ...parts] }
-    }
-    if (hasIds(mv) && ANCHOR.test(fragment)) {
-      const named = ids.get(doc + '#' + fragment)
-      return null == named ? { why: 'no-anchor' } : { target: named }
-    }
-    return { why: 'bad-fragment' }
-  }
-
-  const locate = (ref: string, base: string) => (pointers ? locatePointer(ref) : locateUri(ref, base))
 
   // The first reference left as written that the walk to a location
   // passes through, if any. Under `refs: 'pointer'` such a walk ends
@@ -465,8 +481,11 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   // this, where the references left as written are known by their values.
   const throughLeft = (target: Path): Left | undefined => {
     const ended = (why: Left): Left => (why.cut ? { cut: true } : { cut: false, why: 'not-found' })
+    let loc: Loc | undefined = index.root
     for (let i = 1; i < target.length; i++) {
-      const via = infos.get(pointer(target.slice(0, i)))
+      loc = undefined === loc ? undefined : index.child(loc, target[i - 1])
+      if (undefined === loc) return undefined
+      const via = undefined === loc.site ? undefined : infos.get(loc.site)
       if (null == via || 'not-a-string' === via.why) continue
       if ('cut' === via.status) return { cut: true }
       if (null != via.why || 'unresolved' === via.status) return { cut: false, why: 'not-found' }
@@ -481,14 +500,6 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       return undefined
     }
     return undefined
-  }
-
-  const kindOf = (state: string): Kind | null => {
-    const s = slot(mv, state)
-    if ('schema' === s.kind) return 'schema'
-    if ('refable' === s.kind || 'reference' === state) return 'reference'
-    if ('object' === s.kind && 'pathItem' === s.type) return 'pathItem'
-    return null
   }
 
   const unresolvedHere = (info: SiteInfo, why: Why) => {
@@ -574,7 +585,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       unresolvedHere(info, 'non-object-target')
       return asWritten(plain, info, { cut: false, why: 'non-object-target' })
     }
-    if ('inline-once' === o.sharing && firstFor.get(pointer(info.target!)) !== info.seq) {
+    if ('inline-once' === o.sharing && firstFor.get(info.key!) !== info.seq) {
       info.status = 'kept'
       return asWritten(plain, info)
     }
@@ -603,81 +614,73 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     return out
   }
 
+  // A site's landing as a pointer: the target's own text, unless the
+  // pointer was read through a reference.
+  const landingAt = (row: SiteFacts): string | null => {
+    const land = row.landing
+    if (undefined === land || !land.found) return null
+    return undefined === land.through ? pointer(row.target!) : pointer(land.path!)
+  }
+
+  // A pointer with a step missing as written, read on in what a reference
+  // names, is found only by this package's lenient rule: RFC 6901 finds
+  // nothing there, and `strict` holds to that.
+  const readThrough = (info: SiteInfo): boolean => !strict || undefined === info.row.landing!.through
+  const MISSING = { found: false, cycle: false, value: undefined }
+
   const opts: FoldOptions = {
     op: OPS,
     doc: entry,
     positions: o.positions,
-    maxDepth: o.maxDepth,
-    k: { state: null, depth: 0, base: docBase, dialect: rootDialect, ext: false },
+    maxDepth: limit,
+    // The bag of every map is its location in the index, which has its
+    // state in the object model, its base URI, its schema dialect, and
+    // whether it is inside an extension the caller named. The starting
+    // bag is no location, so the root is found from there.
+    k: {},
 
-    // The bag each map passes down: its state in the object model, the
-    // depth it was worked out at, its base URI, its schema dialect, and
-    // whether it is inside an extension the caller named. Worked out from
-    // the map's own ancestors, whatever reached it first.
-    inherit: (site, node, k) => {
-      const from = 0 === site.path.length || null == k.state ? 0 : k.depth
-      let state: string = 0 === from ? rootState() : k.state
-      let ext: boolean = 0 === from ? false : k.ext
-      for (const m of site.path.slice(from)) {
-        state = step(mv, state, m)
-        if (!ext && extensions.has(String(m))) ext = true
-      }
-      let base: string = k.base
-      let dialect: string = k.dialect
-      if (hasIds(mv) && 'schema' === slot(mv, state).kind && isMap(node)) {
-        if ('string' === typeof node.$schema) dialect = node.$schema
-        if ('string' === typeof node.$id) base = resolveUri(base, node.$id)
-      }
-      return { state, depth: site.path.length, base, dialect, ext }
+    // The fold asks for the bag of each map on a path it needs, from the
+    // root down, and gives the bag of the nearest map above it. A list
+    // between the two has a location and no bag of its own.
+    inherit: (site, _node, k) => {
+      const path = site.path
+      let loc: Loc | undefined = k instanceof Loc ? k : index.root
+      for (let i = loc.depth; i < path.length && undefined !== loc; i++) loc = index.child(loc, path[i])
+      if (undefined === loc) throw new Error('resolve: no location in the index for ' + quoted(pointer(path)))
+      return loc as any
     },
 
     // A map that owns `$ref` is a site where the object model puts a
     // Reference Object, a Schema Object or a Path Item. In data, or as a
     // name in a map of names, it is data, unless `slots` or `extensions`
-    // say otherwise and its `$ref` is a string. Called once per location,
-    // in walk order, so each site's record is made here.
+    // say otherwise and its `$ref` is a string. The index has decided
+    // that for every map. This is called once per location, in walk
+    // order, so each site's record of what became of it is made here.
     recognise: (site: Site, op: Op) => {
-      const kind = kindOf(site.k.state)
-      if ('$dynamicRef' === op.src) return !pointers && 'schema' === kind && hasIds(mv)
-      const ref = (site.node as any).$ref
-      let k: Kind | null = kind
-      if (null == k) {
-        dataSlots++
-        if ('string' !== typeof ref || ('all' !== o.slots && true !== site.k.ext)) return false
-        k = 'data'
-      }
-      // Under `refs: 'pointer'` the root is where pointers start, never a
-      // site of its own.
-      if (pointers && 0 === site.path.length) return false
-      const s = slot(mv, site.k.state)
-      const info: SiteInfo = {
-        seq: seq++,
-        at: pointer(site.path),
-        kind: k,
-        type: 'reference' === k ? s.type : 'pathItem' === k || 'schema' === k ? k : null,
-        ref,
-        status: 'resolved',
-      }
+      const loc = site.k as unknown as Loc
+      if ('$dynamicRef' === op.src) return loc.dynamic
+      const row = loc.site
+      if (undefined === row) return false
+      const info: SiteInfo = { seq: seq++, row, at: row.at, kind: row.kind, type: row.type, ref: row.ref, status: 'resolved' }
       if (null != site.token) info.token = site.token
-      if ('string' !== typeof ref) info.why = 'not-a-string'
-      else if (!pointers && 'schema' === k && hasIds(mv) && !supportedDialect(site.k.dialect)) info.why = 'unsupported-dialect'
+      if (undefined !== row.why) info.why = row.why
       else {
-        const where = locate(ref, site.k.base)
-        if (null != where.why) info.why = where.why
-        else {
-          info.target = where.target
-          const key = pointer(where.target!)
-          if ('inline-once' === o.sharing && !firstFor.has(key)) firstFor.set(key, info.seq)
+        info.target = row.target
+        if ('inline-once' === o.sharing) {
+          // Two references that land on one location name one target,
+          // however each is written.
+          info.key = (pointers ? null : landingAt(row)) ?? pointer(row.target!)
+          if (!firstFor.has(info.key)) firstFor.set(info.key, info.seq)
         }
       }
-      infos.set(info.at, info)
+      infos.set(row, info)
       sites.push(info)
       return true
     },
 
     evaluate: (site, _op: Op, terms: any[]) => {
       const siblings = terms[1]
-      const info = infos.get(pointer(site.path))!
+      const info = infos.get((site.k as unknown as Loc).site!)!
       if ('not-a-string' === info.why) {
         unresolvedHere(info, 'not-a-string')
         return site.plain()
@@ -694,18 +697,54 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
         deferred.set(placeholder, { info, siblings, plain: site.plain() })
         return placeholder
       }
-      const hit = site.at(info.target!)
-      const via = pointers && !hit.cycle ? throughLeft(info.target!) : undefined
-      if (hit.cycle || true === via?.cut) {
+      // Under `refs: 'pointer'` the pointer is read as apidef reads it:
+      // through each reference on its way, and no further than one left
+      // as written.
+      if (pointers) {
+        const hit = site.at(info.target!)
+        const via = hit.cycle ? undefined : throughLeft(info.target!)
+        if (hit.cycle || true === via?.cut) {
+          cutHere(info)
+          return asWritten(site.plain(), info, { cut: true })
+        }
+        if (!hit.found || null != via) {
+          unresolvedHere(info, 'not-found')
+          return asWritten(site.plain(), info, { cut: false, why: 'not-found' })
+        }
+        return settleSite(info, hit.value, siblings, site.plain())
+      }
+      // Otherwise the index has read the pointer, on the document as
+      // written, and the fold gives the value at the landing. A pointer
+      // that comes back to a reference it is read through names nothing
+      // but itself, and is cut as a cycle is.
+      const land = info.row.landing!
+      if (true === land.loop) {
         cutHere(info)
         return asWritten(site.plain(), info, { cut: true })
       }
-      if (!hit.found || null != via) {
+      const hit = !land.found || !readThrough(info) ? MISSING : site.written(land.path!)
+      if (hit.cycle) {
+        cutHere(info)
+        return asWritten(site.plain(), info, { cut: true })
+      }
+      if (!hit.found) {
         unresolvedHere(info, 'not-found')
         return asWritten(site.plain(), info, { cut: false, why: 'not-found' })
       }
       return settleSite(info, hit.value, siblings, site.plain())
     },
+  }
+  if (counting) {
+    // The fold's steps follow the index's, and are held to the same bound
+    // and the same check: it reports each step before it takes it.
+    const before = steps
+    opts.budget = {
+      checkEveryN: 1,
+      onCheck: (n: number) => {
+        steps = before + n - 1
+        tick()
+      },
+    }
   }
 
   // Under 'keep' every site held a placeholder while the fold ran, so the
@@ -714,37 +753,40 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   // becomes its site's value, in place, which makes the tree a graph
   // where a reference closes a cycle.
   //
-  // A site's landing is read on the finished tree, from the root as
-  // written, one member at a time. A placeholder met on the way, or
-  // landed on, is settled first, so a reference is followed before the
-  // next member is read. One met again while it is being settled is a
-  // loop of references with no value in it, and is cut, as is any
-  // reference to an edge that was cut, or through one to something that
-  // is there. A site left as written is read through as written, except
-  // under `refs: 'pointer'`, where the walk ends there.
+  // Where a site lands is the index's: the finished tree is walked along
+  // the landing's path, and a site on the way is stepped through as the
+  // map it is written as. A placeholder landed on is settled first. One
+  // met again while it is being settled is a loop of references with no
+  // value in it, and is cut.
+  //
+  // Under `refs: 'pointer'` the pointer is read as apidef reads it: from
+  // the root as written, one member at a time, with a placeholder met on
+  // the way settled first, so a reference is followed before the next
+  // member is read. A reference to an edge that was cut is cut, as is one
+  // through such an edge to something that is there, and the walk ends at
+  // a site left as written.
   //
   // (The fold can follow references itself, and under 'cut' it does. It
-  // is not used for that here because of a defect in it: a container
-  // first reached through a reference is still being folded when the fold
-  // of its own target comes to it as a member, and the fold then gives
-  // that member the map as written, unresolved and unreported.)
+  // is not used for that here because a graph cannot be read off a tree
+  // that is still being built: a container reached through a reference
+  // while it is being folded has no value yet to share.)
   function keepCycles(root: any): any {
     const finals = new Map<object, any>()
     const busy = new Set<object>()
     const LOOP = Symbol('loop')
-    const limit = o.maxDepth ?? 1000
     // Where every walk starts: the root's own map, whatever `$ref` the
     // root has itself.
     const start = deferred.has(root) ? deferred.get(root)!.plain : root
 
     const finalOf = (ph: object): any => {
       if (finals.has(ph)) return finals.get(ph)
-      // The fold's own error, as it raises under 'cut' for a chain of
-      // references this deep.
+      // As the fold raises under 'cut' for a chain of references this
+      // deep.
       if (limit <= busy.size) {
         const at = deferred.get(ph)!.info.at
-        throw new FoldError('fold_depth', `references deeper than ${limit} at ${quoted(at)}`, { doc: entry, at })
+        throw new ResolveError('openapi_depth', `resolve: references deeper than ${limit} at ${quoted(at)}`, at)
       }
+      if (counting) tick()
       const d = deferred.get(ph)!
       busy.add(ph)
       let node: any = start
@@ -753,13 +795,27 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       const land = () => {
         if (deferred.has(node)) node = busy.has(node) ? LOOP : finalOf(node)
       }
+      const landing = d.info.row.landing
+      if (!pointers) {
+        if (true === landing!.loop) node = LOOP
+        else if (!landing!.found || !readThrough(d.info)) node = NOTHING
+        else {
+          if (0 === landing!.path!.length) node = root
+          for (const seg of landing!.path!) {
+            if (deferred.has(node)) node = deferred.get(node)!.plain
+            node = stepInto(node, seg)
+            if (NOTHING === node) break
+          }
+          land()
+        }
+      }
       // A reference to the whole document lands on the root itself, which
       // may be a site.
-      if (0 === d.info.target!.length) {
+      if (pointers && 0 === d.info.target!.length) {
         node = root
         land()
       }
-      for (const seg of d.info.target!) {
+      for (const seg of pointers ? d.info.target! : []) {
         if (LOOP === node || NOTHING === node) break
         // The walk has come to a site left as written. The root is where
         // it starts, and is not on its way.
@@ -875,14 +931,24 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     }
   }
 
-  let tree = fold(raw, opts)
-  if ('keep' === o.cycles) tree = keepCycles(tree)
+  let tree: any
+  try {
+    tree = fold(raw, opts)
+    if ('keep' === o.cycles) tree = keepCycles(tree)
+  } catch (err: any) {
+    // The fold's bounds are this package's to name: nesting and
+    // references past `maxDepth`, and its budget.
+    const code = err instanceof FoldError ? FOLD_CODES[err.code] : undefined
+    if (undefined === code) throw err
+    const at = 'string' === typeof (err as any).at ? (err as any).at : ''
+    throw new ResolveError(code, 'resolve: ' + String(err.message).replace(/^expr fold: /, ''), at)
+  }
   if (asApidef && o.xref) orderAsWalked(tree)
 
   const connections = [
-    ...connectionsOf(raw, tree, mv, docBase, locateUri, hasIds(mv)),
+    ...connectionsOf(raw, mv, index, hasIds(mv)),
     ...mergeRows.sort((a, b) => a[0] - b[0]).map((r) => r[1]),
-    ...reuseOf(tree, mv),
+    ...reuseOf(raw, mv, index),
   ]
 
   if ('copy' === o.sharing || 'inline-once' === o.sharing) {
@@ -890,13 +956,22 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   }
 
   const provenance: Provenance[] = sites.map((info) => {
+    const row = info.row
+    const target = null == info.target ? null : pointer(info.target)
+    const land = pointers ? undefined : row.landing
     const p: Provenance = {
       at: info.at,
       ref: info.ref,
       kind: info.kind,
       type: info.type,
-      target: null == info.target ? null : pointer(info.target),
+      target,
+      landing: undefined === land || !land.found ? null : undefined === land.through ? target : pointer(land.path!),
       status: info.status,
+    }
+    if (undefined !== land && undefined !== land.through) p.through = land.through.slice()
+    if (undefined !== row.uri) {
+      p.uri = row.uri
+      if (undefined !== row.fragment) p.fragment = row.fragment
     }
     if (null != info.token) {
       p.row = info.token.rI
@@ -914,7 +989,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     provenance,
     cuts: bySeq(cutRows),
     connections,
-    dataSlots,
+    dataSlots: index.dataSlots,
   }
 
 }

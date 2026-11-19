@@ -143,7 +143,7 @@ default that a shared row pins changes until porting starts.
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
 | T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
 | T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger is 5 rows where it was 190, three of them accepted and two the descriptions refused for their size, and under the base reading it is 235 where it was 254. The rule history is measured, and turning it on is Decision 34 |
-| T3 | the site index, and `resolve` on it | begun. Item 1, the prototype E12, is done and changes no source: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). The index and today's fold agree on every site of the corpus, and what moves with it is eight descriptions in the shapes the plan names. Item 2 is begun: its three changes in `expr` are merged as tabnas/expr#117 and in no release yet, the sweep counts a site reported resolved that holds its map as written, and the test of W10 expects the repaired fold, so it fails on an install from the registry until `expr` is released. The index and `resolve` on it are not begun. Items 3 to 5 are not begun |
+| T3 | the site index, and `resolve` on it | items 1 and 2 built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. It needs what tabnas/expr#117 added to the fold, which is on `expr`'s `main` and in no release: until one carries it, `resolve` runs in CI and in the linked model only, and the corpus baselines stay as swept on the released packages. W4 and W5 are item 3's. Items 3 to 5 are not begun |
 | T4 to T6 | several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -288,51 +288,87 @@ in `test/pending/` and its other tests in `ts/test/openapi.test.ts` and
 
 ### The resolver
 
-`resolve(raw, options)` in `ts/src/resolve.ts` is `fold` from
-`@tabnas/expr` with the OpenAPI vocabulary in its callbacks, as
-prototype E6 sketched:
+`resolve(raw, options)` in `ts/src/resolve.ts` works in two parts, as
+section 3 of the plan has it and prototype E12 measured.
 
-- `inherit` passes each map's object-model state, base URI, schema
-  dialect, and whether it is inside an extension named in `extensions`,
-  down the tree.
-- `recognise` makes a `$ref` map a site where the model puts a Reference
-  Object, a Schema Object or a Path Item (and, under `slots: 'all'` or
-  inside a named extension, any map whose `$ref` is a string). It is
-  called once per location, in walk order, so it also makes each site's
-  record: its sequence number, kind, and target or the reason it has
-  none. Report arrays sort by that number, which is the plan's pre-order
-  with a target entered at its first reference; `evaluate` runs in
-  post-order, so do not let its order leak into a report. Under
-  `cycles: 'keep'` no target is entered early, so the number is plain
-  document order.
-- `evaluate` finds the site's target and hands it to `settleSite`, which
-  applies the chain rule (a site naming a site left as written is left
-  as written, reported as that one is), the sibling rule by version and
-  kind, and the output shape. Under `cycles: 'cut'` it reads the target
-  through `site.at`. Under `cycles: 'keep'` it reads nothing: see below.
+**The site index** (`ts/src/site-index.ts`) is built first, and owns
+every fact about the document:
+
+- A location for every map and list, with the state the object model
+  gives it, its base URI, its schema dialect, and whether it is inside an
+  extension named in `extensions`.
+- The sites: a `$ref` map where the model puts a Reference Object, a
+  Schema Object or a Path Item, and, under `slots: 'all'` or inside a
+  named extension, any map whose `$ref` is a string. Each has its kind
+  and type, and what its reference names: `locateUri` reads a URI
+  reference, and under `refs: 'pointer'` `locatePointer` reads a
+  pointer.
+- The `$id`, `$anchor` and `$dynamicAnchor` index.
+- Each site's landing: its pointer read on the document as it is
+  written (Decision 27). Where a step is missing at a site, the walk
+  goes on in what that site names, and the landing lists that site in
+  `through`. A pointer that comes back to a site it is being read
+  through is a loop.
+- The regions the model gives no state, typed by the first reference to
+  land on each (Decision 28), in rounds: a region's own sites are of
+  the next round. A round carries the index forward. It surveys only
+  what the new region changes, and reads again only the sites whose
+  facts moved. `incremental: false` works every round out from nothing,
+  and `ts/test/site-index.test.ts` holds the two to each other.
+
+The index refuses three things with a code: nesting past `maxDepth`
+and a pointer read through more sites than that (`openapi_depth`), and
+rounds or lenient steps that take more than sixteen times the work of
+one pass over the document (`openapi_work`). `model.ts`'s `stepper` is
+the one statement of a step in the model, and tells the index how each
+was decided, which is how a region with no state is told from data.
+
+**The fold** is `fold` from `@tabnas/expr`, and keeps what depends on
+the tree being built: the values, what is shared, and which edge of a
+cycle is cut.
+
+- `inherit` gives each map its location in the index as its bag.
+- `recognise` looks the site up there. It is called once per location,
+  in walk order, so it also makes each site's record of what became of
+  it: its sequence number and status. Report arrays sort by that
+  number, which is the plan's pre-order with a landing entered at its
+  first reference. A site that a pointer only passes is not entered
+  then. `evaluate` runs in post-order, so do not let its order leak into
+  a report. Under `cycles: 'keep'` no landing is entered early, so the
+  number is plain document order.
+- `evaluate` hands the site's landing to `settleSite`, which applies
+  the chain rule (a site naming a site left as written is left as
+  written, reported as that one is), the sibling rule by version and
+  kind, and the output shape. Under `cycles: 'cut'` it reads the
+  landing through `site.written`, which folds that location and reads
+  through no site above it. Under `cycles: 'keep'` it reads nothing: see
+  below. Under `strict` a landing with a `through` is not found, since
+  RFC 6901 has no such step.
 
 Sharing (one result per location) is the fold's, and under
 `cycles: 'cut'` so is cycle detection. Under `cycles: 'keep'` the fold
 follows no reference at all. Every site holds a placeholder until the
 fold is done, and `keepCycles` then settles each one, in document
-order, in place: it reads
-the target on the finished tree, from the root's own map, a member at a
-time, and settles any placeholder it meets on the way first. A
-placeholder met again while it is being settled is a loop of
-references, which is cut, and so is a walk through a site that was cut,
-where it comes to something. Every placeholder is settled, the ones in
-members that a resolved site dropped included, so that each site is
-reported as what it is.
+order, in place: it walks the finished tree along the landing's path,
+stepping through a site on the way as the map it is written as, and
+settles a placeholder it lands on first. A placeholder met again while
+it is being settled is a loop of references, which is cut. Every
+placeholder is settled, the ones in members that a resolved site
+dropped included, so that each site is reported as what it is.
 
-That is deliberate, and it is not to be folded back into `site.at`. A
-graph cannot be read off a tree that is still being built. The fold, as
-released, also has a defect there: when it follows a reference into a
-container that is still being folded, it hands back the map as written,
-unresolved and unreported. Section 2.3 of the plan records that defect
-as W10, and it reaches `cycles: 'cut'` too. Its repair is merged in
-`expr` and in no release yet. `ts/test/resolve.test.ts` expects the
-repaired fold under `cycles: 'cut'`, so that one test fails on an
-install from the registry until `expr` is released.
+That is deliberate, and it is not to be folded back into the fold. A
+graph cannot be read off a tree that is still being built: a container
+reached through a reference while it is being folded has no value yet
+to share.
+
+`maxSteps` and `onCheck` count one run of steps, the index's and then
+the fold's, through the fold's `budget`, and `keepCycles` counts each
+reference it reads. The fold's own codes for its bounds are renamed on
+the way out (`FOLD_CODES`). `checkFold` probes once for the fold this
+needs: a step budget and `site.written` arrived together in `expr`,
+after 0.6.3, and `resolve` throws a `TypeError` on an older one. Under
+`refs: 'pointer'` with no step bound and no check it needs neither, and
+does not probe, so the preset reads on any fold.
 
 `inline-once` and `copy` deep-copy the finished graph, `copy` counting
 the compact JSON's UTF-8 bytes against `budget`. `xref` (apidef's
@@ -340,27 +376,32 @@ the compact JSON's UTF-8 bytes against `budget`. `xref` (apidef's
 the `x-ref` a chain's earlier link carried.
 
 `refs: 'pointer'` is apidef's reading of a reference, and it changes
-three things: `locatePointer` stands in for `locateUri`, `recognise`
-makes no site of the root, and a walk ends at a reference left as
+four things: `locatePointer` stands in for `locateUri`; the root is no
+site; no region is typed by a reference; and a pointer is read through
+each site on its way, by `site.at`, and ends at a reference left as
 written (in `keepCycles`, and by `throughLeft` under `cycles: 'cut'`).
+The index's landings are not used there.
 `compat: 'apidef'` is the seven options of `PRESETS.apidef`, with two
 details that no option names, both under `asApidef`: `settleSite` leaves
 out a `__proto__` member beside a `$ref`, and `orderAsWalked` puts each
 site's members in the order that apidef's resolving in place leaves.
 
-`ts/src/connections.ts` builds the `connections` report: one model walk
-over the raw tree for the names (operationId, operationRef, security
-requirement keys, tags, 3.2 tag parents, discriminator mappings,
-`$dynamicRef`), each checked against the resolved tree; Path Item merge
-conflicts come from `evaluate`; `operationIdReuse` walks routes through
-paths, webhooks and callbacks in the resolved graph. `ts/src/uri.ts`
-holds the RFC 3986 and RFC 6901 helpers both use.
+`ts/src/connections.ts` builds the `connections` report from the index:
+one walk of the typed locations for the names (operationId,
+operationRef, security requirement keys, tags, 3.2 tag parents,
+discriminator mappings, `$dynamicRef`), each URI judged by where it
+lands; Path Item merge conflicts come from `evaluate`;
+`operationIdReuse` walks routes through paths, webhooks and callbacks on
+the document, a reference on the way standing for its landing. None of
+it reads the resolved tree, so it does not depend on the shape asked
+for. `ts/src/uri.ts` holds the RFC 3986 and RFC 6901 helpers both use.
 
 A reference into another document is reported `external`: loading is
 Phase 3. `test/resolve/*.tsv` pins the resolver, with
-`ts/test/resolve-spec.test.ts` as the runner (optional `select` and
-`connections` columns); identity, cyclic graphs and the byte budget,
-which JSON cannot carry, are in `ts/test/resolve.test.ts`.
+`ts/test/resolve-spec.test.ts` as the runner (optional `select`,
+`connections` and `provenance` columns); identity, cyclic graphs, the
+byte budget and the step bound, which JSON cannot carry, are in
+`ts/test/resolve.test.ts`.
 
 `compat: 'apidef'` is held to apidef's own resolver by
 `tools/apidef-preset.cjs`, which runs both on one raw tree and compares
@@ -475,9 +516,13 @@ path, a `replace` or a `go.work`.
   one.** The maintainer instructed it on 2026-11-09 (the plan's
   Decision 7): a peer (`>=0`) mirrored as a `"*"` devDependency, for the
   resolver, which is built on expr's tree layer. That layer shipped in
-  expr 0.5.20, so `npm install` takes it from the registry as it takes
-  every other dependency, and `ci.yml` names `expr` in the shared
-  workflow's `deps`.
+  expr 0.5.20, and `ci.yml` names `expr` in the shared workflow's
+  `deps`. The resolver now needs what tabnas/expr#117 added to the fold,
+  a step budget and `site.written`, which are on `expr`'s `main` and in
+  no release yet. Until one carries them, `resolve` works in the linked
+  model and in CI. On an install from the registry it throws the
+  `TypeError` of `checkFold`, except under `refs: 'pointer'`, which the
+  preset sets.
 
   `tools/port-deps.json` records the difference between the ports, with
   its repair: Go and Rust take expr when they port the resolver.
@@ -858,7 +903,22 @@ no option given:
 | `openapi_work` | the text has taken more rule passes than a description of `maxBytes` takes (`{steps}`, `{limit}`) |
 | `openapi_encoding` | under strict, the bytes are not well-formed in their encoding (`{encoding}`) |
 
-Each of the first four is pinned by `ERROR:<code>` rows in
+`resolve` raises a `ResolveError`, with codes that are the TypeScript
+package's alone until the resolver is ported. `test/resolve/*.tsv` pins
+them as `ERROR:<code>` rows, and `ts/test/resolve.test.ts` holds the two
+that a caller's own function decides:
+
+| Code | Raised by `resolve` when |
+| --- | --- |
+| `openapi_unresolved` | under strict, a reference names nothing, an anchor nothing declares, another document, or under `targets: 'object'` a value that is not a map |
+| `openapi_pointer` | under strict, a reference's fragment is not a well-formed JSON Pointer |
+| `openapi_ref_type` | under strict, a `$ref` is not a string |
+| `openapi_budget` | `sharing: 'copy'` has no `budget`, or the copy passes it |
+| `openapi_depth` | the document nests, or references follow one another, deeper than `maxDepth` |
+| `openapi_work` | resolving takes more steps than `maxSteps`, or its typing rounds and lenient pointer steps take more than sixteen times one pass over the document |
+| `openapi_cancel` | the caller's `onCheck` returned `false` |
+
+Each of the first four of `parse` is pinned by `ERROR:<code>` rows in
 `test/spec/raw-errors.tsv` and `raw-versions.tsv`, which also pin the
 engine's codes the reference pages name. A member name in a message is document content: it is
 JSON-quoted and cut to 57 characters and `...` past 60. The descriptor

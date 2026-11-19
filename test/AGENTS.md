@@ -8,11 +8,15 @@ mind.
 `resolve/` holds the resolver's fixtures: an input description, the
 resolved tree, the references left as written (`at why`), the cut edges,
 and `resolve` options, or `ERROR:<code>` for an error `resolve` raises.
-Two columns are optional: `select`, a path whose value in the resolved
-tree is held to `expected` in place of the whole tree, and
-`connections`, the connections report as one `kind at -> target` line
-per row (`!why` for a target not found, then any flags). Report arrays
-are in walk order, so a row's order is part of what it pins.
+Three columns are optional: `select`, a path whose value in the resolved
+tree is held to `expected` in place of the whole tree; `connections`,
+the connections report as one `kind at -> target` line per row (`!why`
+for a target not found, then any flags); and `provenance`, one
+`at status -> landing` line for each reference (`-` for one that lands
+nowhere, then `through=`, `uri=` and `fragment=` where the row has
+them). Report arrays are in walk order, so a row's order is part of what
+it pins. `landings.tsv` holds the shapes the site index repaired, W1 to
+W3 of the plan, with the depth code of W6 and the reports' order.
 `apidef.tsv` is rows 2 to 25 of @voxgig/apidef's `parse-resolve.tsv`,
 under `compat: 'apidef'`, with apidef's own select paths and values;
 keep it in step with apidef's file rather than editing its expected

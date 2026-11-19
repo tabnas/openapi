@@ -3,11 +3,14 @@
 // The resolver against test/resolve/*.tsv. Each row parses its input,
 // resolves it with the row's options, and holds the resolved tree, the
 // references left as written (`at why`) and the cut edges to the row; an
-// `ERROR:<code>` row holds the code `resolve` raises. Two columns are
+// `ERROR:<code>` row holds the code `resolve` raises. Three columns are
 // optional: `select`, a path into the resolved tree whose value is held
-// to `expected` in place of the whole tree, and `connections`, the
+// to `expected` in place of the whole tree; `connections`, the
 // connections report, one `kind at -> target` line each (`!why` for a
-// target not found, then any flags). These fixtures live outside
+// target not found, then any flags); and `provenance`, one
+// `at status -> landing` line for each reference, in the order of the
+// report (`-` for one that lands nowhere, then `through=`, `uri=` and
+// `fragment=` where the row has them). These fixtures live outside
 // test/spec/ because the parity runners there read a parse, and because
 // the Go and Rust ports do not carry the resolver yet.
 
@@ -33,6 +36,15 @@ function line(c: any): string {
   for (const list of ['targets', 'fields', 'routes']) {
     if (undefined !== c[list]) out += ` ${list}=${c[list].join(',')}`
   }
+  return out
+}
+
+// One reference's provenance as a fixture writes it.
+function where(p: any): string {
+  let out = `${p.at} ${p.status} -> ${p.landing ?? '-'}`
+  if (undefined !== p.through) out += ' through=' + p.through.join(',')
+  if (undefined !== p.uri) out += ' uri=' + p.uri
+  if (undefined !== p.fragment) out += ' fragment=' + p.fragment
   return out
 }
 
@@ -81,6 +93,10 @@ for (const file of files) {
         const conns = row.named('connections').trim()
         if ('' !== conns) {
           assert.deepStrictEqual(out.connections.map(line), JSON.parse(conns), `${file}:${row.line} connections`)
+        }
+        const prov = row.named('provenance').trim()
+        if ('' !== prov) {
+          assert.deepStrictEqual(out.provenance.map(where), JSON.parse(prov), `${file}:${row.line} provenance`)
         }
       })
     }

@@ -272,6 +272,9 @@ type ResolveOptions = {
   strict?: boolean                                    // default false
   positions?: (node: object) => Token | undefined     // from recordPositions
   maxDepth?: number                                   // default 1000
+  maxSteps?: number                                   // default: no bound
+  onCheck?: (steps: number) => boolean | void         // false stops resolving
+  checkEveryN?: number                                // default 1000
   sharing?: 'share' | 'site' | 'inline-once' | 'copy' // default 'share'
   budget?: number                                     // bytes; copy needs it
   cycles?: 'cut' | 'keep'                             // default 'cut'
@@ -300,6 +303,10 @@ type Provenance = {
   kind: 'reference' | 'schema' | 'pathItem' | 'data'
   type: string | null           // what a Reference Object stands for
   target: string | null         // the location it names, when it names one here
+  landing: string | null        // the location it lands on, as the document is written
+  through?: string[]            // the references its pointer was read through
+  uri?: string                  // for a reference into another document: its URI
+  fragment?: string             // and its fragment, when it has one
   status: 'resolved' | 'unresolved' | 'cut' | 'kept'
   row?: number                  // with positions
   col?: number
@@ -318,15 +325,35 @@ written; `dataSlots` counts those. `slots: 'all'` also makes a site of
 every such map whose `$ref` is a string, of kind `data`. `extensions`
 does the same inside the extension members it names.
 
+A map the version gives no type at all takes the type of the first
+reference to land on it, in document order. Such a map is in an
+extension, under a member the version does not have, such as
+`definitions` in a 3.1 schema, or under a 3.0 component name that the
+specification's pattern refuses. The references inside it are then
+sites, and they can type further maps in turn. A reference of kind
+`data` types nothing.
+
 #### Targets
 
 A reference resolves against the nearest `$id` (3.1 and 3.2, its own
 map's included), else the document's `$self` (3.2), else
 `retrievalUri`. Its fragment is a JSON Pointer, percent-decoded first,
-or from 3.1 an anchor that a `$anchor` or `$dynamicAnchor` declares. A
-pointer that passes through another site reads that site's value. An
+or from 3.1 an anchor that a `$anchor` or `$dynamicAnchor` declares. An
 array index is `0`, or digits with no leading zero, in range. Only a
 map's own members are members.
+
+A pointer is read on the document as it is written, so a member that a
+reference has beside its `$ref` is the one a pointer through it names.
+Where a step is missing at a reference, the pointer is read on in what
+that reference names. `landing` is the location the pointer comes to,
+and `through` lists each reference it was read through. A reference
+into another document can't be read through, and neither can the
+root. A JSON Pointer has no such step of its own, and `strict` does not
+take it: the reference is `not-found`.
+
+For a reference into another document, `uri` is that document's URI,
+resolved against the same base, and `fragment` is the reference's
+fragment. Give `retrievalUri` for `uri` to be a real location.
 
 A reference to a site left as written is left as written too, and
 reported as that site is.
@@ -372,7 +399,7 @@ winning, at every site in every version. Every merge is shallow.
 |---|---|---|
 | `share` | its target's value, one value for every site naming that target | `cut` or `keep` |
 | `site` | a shallow copy of the value, its members shared | `cut` or `keep` |
-| `inline-once` | the value at the first site naming the target, in walk order; the reference as written at the rest, with status `kept` | `cut` |
+| `inline-once` | the value at the first site to land on the target, in walk order; the reference as written at the rest, with status `kept` | `cut` |
 | `copy` | a copy of the value all the way down, so nothing in the tree is shared | `cut` |
 
 `copy` needs `budget`: the most bytes, in UTF-8, of the compact JSON
@@ -384,9 +411,9 @@ closes a cycle. Under `cycles: 'cut'` it is left as written and listed
 in `cuts`, and so is a reference to it. Under `cycles: 'keep'` it holds
 its target's value once the walk is done, which makes the tree a cyclic
 graph that `JSON.stringify` refuses. A loop made of references alone has
-no value to hold, and is cut either way. Under `cycles: 'keep'` a
-reference to a member of such a loop is cut with it, and so is one whose
-pointer passes through a member of the loop to something that is there.
+no value to hold, and is cut either way, and so is a reference to a
+member of such a loop. A pointer that comes back to a reference it is
+being read through is cut in the same way.
 
 `xref: true` writes `x-ref`, the reference as written, in every site's
 value, resolved or not, except where the `$ref` is not a string. It is
@@ -397,15 +424,37 @@ there. Each site then holds a copy, as under `site`.
 written, with `why` set to `non-object-target`.
 
 The walk runs from the root in document order. Under `cycles: 'cut'` a
-target is entered at its first reference, and that order decides which
-edge of a cycle is cut and which site `inline-once` fills. It is also
-the order of `unresolved`, `cuts` and `provenance`. Under `cycles:
-'keep'` no target is entered early, and those three are in document
-order.
+reference's landing is entered at its first reference, and that order
+decides which edge of a cycle is cut and which site `inline-once`
+fills. It is also the order of `unresolved`, `cuts` and `provenance`. A
+reference that a pointer only passes is not entered then. Under
+`cycles: 'keep'` no landing is entered early, and those three are in
+document order.
 
-`maxDepth` bounds how deep the walk nests and how many references it
-follows at once. Past it, `resolve` throws an error named `FoldError`
-and coded `fold_depth`, with the place it stopped in `at`.
+Three options bound the work:
+
+- `maxDepth` bounds how deep the document nests and how many references
+  are followed one inside another, counted together. Past it, `resolve`
+  throws a `ResolveError` coded `openapi_depth`, with the place it
+  stopped in `at`.
+- `maxSteps` bounds the steps `resolve` takes: one for each map or list
+  it comes to, each time it comes to one, and one for each reference it
+  reads. Past it, `resolve` throws a `ResolveError` coded
+  `openapi_work`.
+- `onCheck` is called every `checkEveryN` steps with the number taken
+  so far. When it returns `false`, `resolve` throws a `ResolveError`
+  coded `openapi_cancel`. A caller keeps a deadline there.
+
+One bound needs no option. Typing maps by the references that land on
+them, and reading pointers on through references, can each cost more
+than one pass over the document. Together they are held to sixteen
+times the work of reading the document once, and 100,000 steps besides.
+No description of the 5,168 measured comes near that. Past it,
+`resolve` throws `openapi_work`.
+
+`resolve` needs a `@tabnas/expr` after 0.6.3. With an earlier one it
+throws a `TypeError` that says so, except under `refs: 'pointer'` with
+neither `maxSteps` nor `onCheck`, which asks nothing new of it.
 
 #### `compat: 'apidef'`
 
@@ -488,8 +537,12 @@ through `$ref`. Nothing in it is put into the tree.
 
 The rows come in document order, then the `pathItemMerge` rows in walk
 order, then the `operationIdReuse` rows. A name inside example data is
-data, and has no row. A target is looked for in the resolved tree, so a
-target reached through a `$ref` is found.
+data, and has no row. A name in a map that only a reference types has
+one. A target is looked for as a reference's is: on the document as
+written, and through a `$ref` where a step is missing, so a target
+reached through a `$ref` is found. A route is walked the same way, with
+a Path Item's own fields beside its `$ref`. None of the report depends
+on `sharing`, `cycles` or `siblings`.
 
 ### `version(tree)`
 
