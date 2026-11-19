@@ -90,7 +90,7 @@ function namesAt(raw: any, path: Path): Record<string, any> {
   return isMap(node) ? node : Object.create(null)
 }
 
-function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boolean): Connection[] {
+function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boolean, tick?: () => void): Connection[] {
   // A root that is neither a map nor a list names nothing.
   if (!Array.isArray(raw) && !isMap(raw)) return []
   const uses: Use[] = []
@@ -105,6 +105,7 @@ function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boo
   const stack: Frame[] = [{ node: raw, loc: index.root, at: '', state: 'root', base: '', last: '', depth: 0, holder: undefined }]
   while (0 < stack.length) {
     const f = stack.pop()!
+    if (undefined !== tick) tick()
     const node = f.node
     const loc = f.loc
     const state = undefined !== loc ? loc.state : f.state
@@ -264,13 +265,18 @@ function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boo
 // Every route through paths, webhooks and callbacks that reaches an
 // operation, grouped by operationId: an id that more than one route
 // reaches names more than one operation in the API. The routes are
-// walked on the document. A Reference Object or a Path Item `$ref` on the
-// way stands for what it lands on, so a path item reached through a
-// `$ref` counts once per route, and a Path Item's own fields beside its
-// `$ref` are walked with those of the Path Item it names. A reference
-// that lands nowhere is walked as it is written, and a route that comes
-// back to a value it is already in ends there.
-function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex): Connection[] {
+// walked on the document. A reference on the way stands for what it lands
+// on, so a path item reached through a `$ref` counts once per route, and
+// a Path Item's own fields beside its `$ref` are walked with those of the
+// Path Item it names. That holds for every site the index has: under
+// `slots: 'all'` a `$ref` where the model puts an operation is one. A
+// reference that lands nowhere is walked as it is written, and a route
+// that comes back to a value it is already in ends there.
+//
+// A value that two routes reach is walked once for each, so the walk can
+// be far longer than the document: every visit is a step of the caller's
+// count, where one is kept.
+function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex, tick?: () => void): Connection[] {
   const routes = new Map<string, string[]>()
   const onPath = new Set<any>()
   type Member = { value: any; loc: Loc | undefined }
@@ -283,6 +289,7 @@ function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex): Connection[] {
       continue
     }
     if (null == f.node || 'object' !== typeof f.node) continue
+    if (undefined !== tick) tick()
     const s = slot(mv, f.state)
     if ('schema' === s.kind) continue
     // What a reference here stands for, and the fields a Path Item has
@@ -291,7 +298,7 @@ function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex): Connection[] {
     let loc = f.loc
     let beside: Record<string, Member> | undefined
     const followed = new Set<Loc>()
-    while (undefined !== loc && undefined !== loc.site && ('reference' === loc.site.kind || 'pathItem' === loc.site.kind)) {
+    while (undefined !== loc && undefined !== loc.site) {
       const land: Landing = index.landing(loc.site)
       if (!land.found || followed.has(loc)) {
         // A reference that names nothing is as it is written, and so is

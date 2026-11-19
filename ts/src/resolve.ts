@@ -946,9 +946,9 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   if (asApidef && o.xref) orderAsWalked(tree)
 
   const connections = [
-    ...connectionsOf(raw, mv, index, hasIds(mv)),
+    ...connectionsOf(raw, mv, index, hasIds(mv), counting ? tick : undefined),
     ...mergeRows.sort((a, b) => a[0] - b[0]).map((r) => r[1]),
-    ...reuseOf(raw, mv, index),
+    ...reuseOf(raw, mv, index, counting ? tick : undefined),
   ]
 
   if ('copy' === o.sharing || 'inline-once' === o.sharing) {

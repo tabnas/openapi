@@ -580,6 +580,38 @@ describe('resolve', () => {
     }
   })
 
+  test('the routes of the connections report are steps too, so a bound or a check stops them', () => {
+    // Each level is a Path Item whose operation has two callbacks to the
+    // next level, so the routes double with every level: twelve levels
+    // are 4,094 routes to eleven operations, in a document of 97 maps.
+    const levels = 12
+    const pathItems: Record<string, unknown> = {}
+    for (let i = 0; i < levels; i++) {
+      const next = { $ref: '#/components/pathItems/L' + (i + 1) }
+      pathItems['L' + i] = {
+        post: {
+          operationId: 'op' + i,
+          responses: {},
+          callbacks: i + 1 < levels ? { a: { '{$url}': next }, b: { '{$url}': next } } : {},
+        },
+      }
+    }
+    const raw = parse(JSON.stringify({ openapi: '3.1.0', paths: { '/start': { $ref: '#/components/pathItems/L0' } }, components: { pathItems } }))
+    const out = resolve(raw)
+    const routes = out.connections.filter((c) => 'operationIdReuse' === c.kind).reduce((n, c) => n + c.routes!.length, 0)
+    assert.equal(routes, 4094)
+    let taken = 0
+    resolve(raw, { checkEveryN: 1, onCheck: (n) => void (taken = n) })
+    assert.ok(routes < taken, taken + ' steps for ' + routes + ' routes')
+    assert.throws(() => resolve(raw, { maxSteps: 2000 }), (e: any) => e instanceof ResolveError && 'openapi_work' === e.code)
+    let calls = 0
+    assert.throws(
+      () => resolve(raw, { checkEveryN: 1000, onCheck: () => 3 > ++calls }),
+      (e: any) => e instanceof ResolveError && 'openapi_cancel' === e.code,
+    )
+    assert.equal(calls, 3)
+  })
+
   test('nesting and references past maxDepth raise openapi_depth, whatever is asked of the tree', () => {
     const S = '#/components/schemas/'
     const chain = (n: number) => {
