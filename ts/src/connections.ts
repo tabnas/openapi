@@ -91,6 +91,8 @@ function namesAt(raw: any, path: Path): Record<string, any> {
 }
 
 function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boolean): Connection[] {
+  // A root that is neither a map nor a list names nothing.
+  if (!Array.isArray(raw) && !isMap(raw)) return []
   const uses: Use[] = []
   const declared = new Map<string, string[]>()
   const tags = new Map<string, { at: string; parent?: string }>()

@@ -602,6 +602,18 @@ describe('resolve', () => {
     }
   })
 
+  test('a root that is neither a map nor a list is given back as it is', () => {
+    for (const raw of [null, undefined, 5, 'text', true, [], [1, {}]]) {
+      for (const options of [{}, { cycles: 'keep' as const }, { compat: 'apidef' as const }]) {
+        const out = resolve(raw, options)
+        assert.deepEqual(out.tree, raw)
+        assert.deepEqual(out.provenance, [])
+        assert.deepEqual(out.connections, [])
+        assert.equal(out.dataSlots, 0)
+      }
+    }
+  })
+
   test('strict raises a ResolveError with the code, the site and the reference', () => {
     let err: any
     try {
