@@ -914,6 +914,16 @@ what the code does.
   moves nothing there. Thirty descriptions of 2.0 have 684 such names
   between them, generic types such as `Expression[Func[Account,Int64]]`,
   and 2.0 reads a definition under any name already.
+- **On generated documents that leniency is all that moves.** Item 3's
+  build and this one were run on 12,000 generated documents under four
+  sets of options. 635 of the 48,000 results differ, every one in a
+  description of 3.0 that names a component outside the pattern, which
+  311 of the documents do. Under the preset every `$ref` map was a site
+  already, so there the tree, the cuts and what is left as written do
+  not move. What moves is the report: 372 rows inside such components
+  are a schema's where they were data, and 11 maps there whose `$ref`
+  is no string are reported `not-a-string`, as they are in any other
+  component. apidef reads the tree alone.
 - **The other two leniencies of Decision 25 were already built.** A
   version this package does not know is read as the latest it does,
   3.2, and the result says `unknown`: that was so since Phase 2, and is
@@ -921,6 +931,33 @@ what the code does.
   `test/resolve/versions.tsv`. The text over the schema where they
   differ is item 3's, with Decision 30.
 - **The suite** is 887 tests and the 11 of the pages' style.
+- **T3's acceptance runs hold on the build that has all five items.**
+
+  | Run | Result |
+  |---|---|
+  | The suite, and the pull request's twelve checks | pass |
+  | apidef gate | passes: 2,477 of its 2,478 tests with one skipped, and all 57 definitions byte-identical |
+  | Preset comparison | no difference in 15,177 documents |
+  | Sweep, base reading | no ledger row moves. The ten figures item 2 moved, by the same amounts, and the count of the new connection kind: 8,232, none of them not found |
+  | Sweep, `reading: 'spec'` | the same ten figures by the same amounts, and 8,241 implicit mappings, since this reading reads twelve more descriptions. No ledger row moves |
+  | A reference not found whose target exists | none. The four reported not found are in a test document of the specification's own, which has no `components` |
+  | A site reported resolved that holds its map as written | none |
+  | Target check | each of 120,648 local pointers, in 600 descriptions, lands where its pointer says |
+  | The Stripe and GitHub censuses of `AGENTS.md` | unchanged but for GitHub's connections, 1,296 where it had 1,284: the 12 more are its implicit mappings |
+
+  Against item 3's sweeps, 237 documents' records differ under the
+  base reading and 240 under the other, each by the count of its
+  implicit mappings alone.
+- **Items 3 to 5 cost no time.** On 290 descriptions of the corpus,
+  each resolved three times in turn by both builds and the least time
+  of each kept, the build with all five items takes 2% less time than
+  item 2's under the defaults and 1% less under `cycles: 'keep'`. Item
+  3's build took 4% and 3% less, since a reference written as a
+  fragment alone is now located without resolving a URI, and the three
+  reports take about half of that back. Item 2's cost against the build
+  before the index stands: the Stripe description takes about 220 ms
+  where it took about 180, and GitHub's about 430 ms where it took
+  about 365, measured together on one machine.
 
 **Since acceptance**, as T3's fourth item was built:
 

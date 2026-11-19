@@ -567,16 +567,22 @@ Stripe's data figure is the plan's acceptance census: its data maps are
 values.
 
 `resolve` on the same descriptions, with the default options, measured
-on 2026-11-10 (the median of six warm runs, the connections report
-included):
+on 2026-11-19 on the build that has all of T3 (the median of six warm
+runs, every report included):
 
 | Description | Sites | Cuts | Unresolved | Connections | `resolve` time |
 |---|---|---|---|---|---|
-| Stripe | 3673 | 125 | 0 | 2, all found | about 210 ms |
-| GitHub REST | 10580 | 0 | 0 | 1284, all found | about 350 ms |
+| Stripe | 3673 | 125 | 0 | 2, all found | about 220 ms |
+| GitHub REST | 10580 | 0 | 0 | 1296, all found | about 430 ms |
 
-These are the plan's acceptance for Phase 2: nothing unresolved, and the
-cut count stable. Under `compat: 'apidef'` every one of the `$ref` maps
+The counts are those of 2026-11-10, before the site index, but for
+GitHub's connections, which were 1284: the 12 more are the implicit
+mappings of its five discriminators. On the same machine the build
+before the index takes about 180 ms and 365 ms, since the index types
+every map before the fold asks.
+
+These are the plan's acceptance for Phase 2, and T3's holds them:
+nothing unresolved, and the cut count stable. Under `compat: 'apidef'` every one of the `$ref` maps
 in the census resolves (4062 and 10899), with no cuts, since apidef
 keeps cycles.
 

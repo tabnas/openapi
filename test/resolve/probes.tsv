@@ -45,6 +45,11 @@ input	expected	unresolved	cuts	opts	select	provenance	dialects
 # have is read as any other, as it is in 3.1.
 {"openapi":"3.0.3","components":{"schemas":{"A":{"type":"string"},"B C":{"properties":{"p":{"$ref":"#/components/schemas/A"}}}}}}	{"properties":{"p":{"type":"string"}}}	[]	[]		["components","schemas","B C"]		
 {"openapi":"3.1.0","components":{"schemas":{"A":{"type":"string"},"B C":{"properties":{"p":{"$ref":"#/components/schemas/A"}}}}}}	{"properties":{"p":{"type":"string"}}}	[]	[]		["components","schemas","B C"]		
+# Under the preset every `$ref` map was a site already, so the tree is
+# as it was. What moves there is the report: a reference in such a
+# component is a schema's and no longer data, and a `$ref` that is no
+# string is reported, as it is in any other component.
+{"openapi":"3.0.3","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"A":{"type":"string"},"B C":{"properties":{"p":{"$ref":"#/components/schemas/A"},"q":{"$ref":1}}},"D":{"$ref":1}}}}	{"A":{"type":"string"},"B C":{"properties":{"p":{"type":"string","x-ref":"#/components/schemas/A"},"q":{"$ref":1}}},"D":{"$ref":1}}	["/components/schemas/B C/properties/q not-a-string","/components/schemas/D not-a-string"]	[]	{"compat":"apidef"}	["components","schemas"]	["/components/schemas/B C/properties/p resolved -> -","/components/schemas/B C/properties/q unresolved -> -","/components/schemas/D unresolved -> -"]	
 # Probe 3.8. A schema that declares a dialect is read by it: draft-07,
 # where a `$ref` stands alone; 2020-12 written with an empty fragment;
 # and 2019-09. A dialect this package does not know is read as 2020-12,
