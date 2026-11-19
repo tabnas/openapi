@@ -882,6 +882,25 @@ what the code does.
 - **The apidef gate passes on this build**, with the three diffs at
   apidef's 3b24341: 2,477 of 2,478 tests, none failing, one skipped as
   on apidef's `main`, and 57 of 57 definitions byte-identical.
+- **The preset comparison is unmoved**: no difference in the 15,177
+  documents it runs.
+- **The sweep moves in 31 descriptions, each of them named before it
+  ran, and in no other.** Both readings were swept afresh on this
+  build, with `expr`'s `main` linked, and held to the baselines, which
+  were swept on the released packages. Ten figures move, by the same
+  amounts under both readings, and no ledger row does. The 23 Azure
+  descriptions of W10 hold nothing as written, where they held 180
+  sites, and nine of them have one or two cuts more, 14 in all. The
+  seven codat.io descriptions of W3 gain 196 sites that were `$ref`
+  maps read as data. Three of those have a cut more and one has three
+  fewer. dnd5eapi.co, of W1, has two cuts where it had five. So T3's
+  acceptance holds for this item. No site is reported resolved and
+  held as written. The four references the sweep reports `not-found`
+  are in one of the specification's own test documents, which has no
+  `components` at all. The target check finds each of 113,524 local
+  pointers, in 600 descriptions, where its pointer says. The baselines
+  are not rewritten: each names its dependencies by version, and no
+  released `expr` gives these figures yet.
 - **Decisions 27 and 28 are built on their defaults**, and each is
   stated once in the index: the lenient step in the walk of a pointer,
   which `strict` refuses, and the order of a round in one sort.
