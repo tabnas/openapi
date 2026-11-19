@@ -116,16 +116,6 @@ const CLASSES = [
     test: (d) => true === d.presetBare,
   },
   {
-    id: 'unsupported-dialect',
-    kind: 'content',
-    title: 'a schema $ref under a dialect the package does not support',
-    apidef: 'ignores dialects: resolved',
-    lines: '392-405 (resolvePointer knows no $schema or jsonSchemaDialect)',
-    other: 'a schema $ref under a dialect the package does not read is left as written, `unsupported-dialect`',
-    where: '`recognise` reads no dialect under `refs: \'pointer\'`',
-    test: (d) => / \(unsupported-dialect\)/.test(d.preset),
-  },
-  {
     id: 'proto-sibling',
     kind: 'content',
     title: 'a member named __proto__ beside a $ref',

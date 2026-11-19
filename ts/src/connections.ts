@@ -32,6 +32,7 @@ type ConnectionKind =
   | 'mapping'
   | 'defaultMapping'
   | 'dynamicRef'
+  | 'recursiveRef'
   | 'pathItemMerge'
   | 'operationIdReuse'
 
@@ -60,7 +61,8 @@ type Connection = {
   // A 3.2 tag whose chain of parents loops.
   cycle?: boolean
   // A `$dynamicRef` whose initial target has a `$dynamicAnchor` of the
-  // fragment's name.
+  // fragment's name, or a `$recursiveRef` whose initial target has
+  // `$recursiveAnchor: true`.
   anchor?: boolean
   // A Path Item `$ref`'s fields that are also in the Path Item it names,
   // where the specification leaves the merge undefined.
@@ -111,8 +113,16 @@ function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boo
     const state = undefined !== loc ? loc.state : f.state
     if ('data' !== state) {
       const s = slot(mv, state)
-      if ('schema' === s.kind && hasIds && isMap(node) && 'string' === typeof node.$dynamicRef) {
-        uses.push({ kind: 'dynamicRef', at: f.at, name: node.$dynamicRef, base: loc!.base })
+      // The reference a schema's dialect leaves to evaluation: 2020-12's
+      // `$dynamicRef`, or 2019-09's `$recursiveRef`.
+      const dynamic = hasIds && 'schema' === s.kind && isMap(node) ? loc?.rules?.dynamic : undefined
+      if (null != dynamic && 'string' === typeof node[dynamic]) {
+        uses.push({
+          kind: '$dynamicRef' === dynamic ? 'dynamicRef' : 'recursiveRef',
+          at: f.at,
+          name: node[dynamic],
+          base: loc!.base,
+        })
       }
       if ('string' === typeof node) {
         if ('connection:operationId' === state) {
@@ -196,7 +206,7 @@ function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boo
         row.target = decl[0]
         if (1 < decl.length) row.targets = decl
       }
-    } else if ('operationRef' === use.kind || 'dynamicRef' === use.kind) {
+    } else if ('operationRef' === use.kind || 'dynamicRef' === use.kind || 'recursiveRef' === use.kind) {
       const u = byUri(use.name, use.base)
       row.found = u.found
       row.target = u.target
@@ -207,6 +217,7 @@ function connectionsOf(raw: any, mv: ModelVersion, index: SiteIndex, hasIds: boo
         const node = u.node
         row.anchor = null != fragment && ANCHOR.test(fragment) && isMap(node) && fragment === node.$dynamicAnchor
       }
+      if ('recursiveRef' === use.kind) row.anchor = isMap(u.node) && true === u.node.$recursiveAnchor
     } else if ('securityScheme' === use.kind) {
       if (own(schemes, use.name)) {
         row.found = true

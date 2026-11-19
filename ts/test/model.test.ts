@@ -140,4 +140,21 @@ describe('object model generator gates', () => {
     delete applicators.dialects['wright-00']
     assert.throws(() => Gen.generate({ applicators }), /no applicator list for dialect wright-00/)
   })
+
+  test("a declared dialect that is a version's own, or that holds a schema where the version holds a value, is refused", () => {
+    const applicators = () => JSON.parse(readFileSync(join(REPO, 'model', 'applicators.json'), 'utf8'))
+    const twice = applicators()
+    twice.declared.dialects['2020-12'] = twice.declared.dialects['2019-09']
+    assert.throws(() => Gen.generate({ applicators: twice }), /the dialect 2020-12 is declared twice/)
+    const data = applicators()
+    data.declared.dialects['draft-07'].schema.push('example')
+    assert.throws(() => Gen.generate({ applicators: data }), /draft-07 holds a schema at example, which is data in 2020-12/)
+    const object = applicators()
+    object.declared.dialects['draft-07'].schemaMap.push('discriminator')
+    assert.throws(() => Gen.generate({ applicators: object }), /draft-07 holds a schema at discriminator, which is an object in 2020-12/)
+    // Without the declared dialects the model has each version's own alone.
+    const none = applicators()
+    delete none.declared
+    assert.equal(Gen.generate({ applicators: none }).versions['3.1'].dialects, undefined)
+  })
 })

@@ -294,6 +294,26 @@ yaml grammar, and reached this package with that grammar's release,
 the site index of section 3. Each has rows in
 `test/resolve/landings.tsv`. W4 and W5 are item 3's.
 
+**Repaired in T3, item 3**: W4 and W5, in this repository. A schema of
+3.1 or 3.2 is read by the dialect it declares, and URIs are compared in
+their normal form. `test/resolve/dialects.tsv` and
+`test/resolve/uris.tsv` have the rows.
+
+**Found in T3, item 3: W13.** An `$id` written as a fragment alone, as
+in `$id: '#name'`, was read in a 2020-12 schema as naming a resource:
+the one it is in, since a fragment is dropped from an identifier. That
+schema then stood in the index where the document stood, or the
+resource around it, and every reference into that resource was read
+from the schema. One such `$id` in a 3.1 description left every
+`#/components/…` reference of the document `not-found`. It is how
+draft-06 and draft-07 name an anchor, so a schema pasted from either
+has it. No description of the corpus does. It is repaired with the
+dialects: such an identifier is an anchor where its dialect has that,
+and names nothing where it does not. The same holds for any identifier
+that is the URI of the resource it is in, such as `id: '#'` at the top
+of a schema pasted from draft-04, or the document's own URI: it names
+nothing new, and the document stays where it is.
+
 **Found in T2b.** Four shapes were read, each wrongly, and are refused
 by that change. No document of the corpus has one. The first three are
 not YAML, and the reference parser refuses them as well. The fourth is
@@ -612,7 +632,13 @@ the index is `ts/src/site-index.ts`, with `resolve` and the
 `connections` report built on it, and section 11 has what it was held
 to. Until `expr` is released, `resolve` runs in CI and with the
 siblings linked, and the corpus baselines stay as swept on the released
-packages. Items 3 to 5 are not begun.
+packages.
+
+Item 3 is built, on the defaults of Decisions 29 and 30, and section 11
+has its record. The rules of each dialect are in `ts/src/dialect.ts`,
+the members that hold schemas in each are in `model/applicators.json`,
+and the index reads both. It asks nothing more of `expr`. Items 4 and 5
+are not begun.
 
 ### T4: several documents (L)
 
@@ -809,6 +835,96 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T3's third item was built:
+
+- **Five dialects are read, each by its own rules.** `ts/src/dialect.ts`
+  has what resolving needs of each: draft-04 names a schema resource
+  with `id` and the rest with `$id`; that member written as a fragment
+  alone is an anchor in draft-04 to draft-07, where 2019-09 has
+  `$anchor` and 2020-12 `$dynamicAnchor` as well; a `$ref` stands alone
+  in draft-04 to draft-07, so the members beside it are not read, an
+  identifier among them; and 2019-09 leaves `$recursiveRef` to
+  evaluation as 2020-12 leaves `$dynamicRef`. Which members hold schemas
+  is the object model's, in `model/applicators.json`, and the generator
+  makes a state of the Schema Object for each dialect a 3.1 or 3.2
+  schema may declare.
+- **A schema is read by the dialect in force where it is.** That is its
+  own `$schema`, else its parent's, else `jsonSchemaDialect`, else the
+  version's own. `$schema` is read at any Schema Object, as it was, and
+  it is read first: beside a `$ref` that stands alone it still says how
+  the schema is read. A region that a reference types as a schema is
+  read by the dialect in force at the region, not at the reference.
+- **What OpenAPI adds to a Schema Object is read in every dialect.**
+  `discriminator`, `xml`, `externalDocs` and `example` are OpenAPI's,
+  not a dialect's, and a schema in a description keeps them whatever it
+  declares. The other course drops them under a declared draft, and
+  with them a discriminator's mapping from the `connections` report.
+- **An unknown dialect is read as 2020-12 and reported**, in a new
+  report of the result, `dialects`. It lists every dialect the
+  description declares, the root's first, with the dialect each is read
+  by and whether this package knows it. It is no error, under `strict`
+  or otherwise. `unsupported-dialect` is no longer a reason a reference
+  is left as written, since none is.
+- **An identifier of a dialect is compared in its normal form**, with
+  or without the empty fragment, under `http` or `https`. The
+  hyper-schema dialect of each draft is read as the draft, since it
+  reads references as the draft does. The OpenAPI dialects of 3.1 and
+  3.2 are read as 2020-12 whatever their date.
+- **`$recursiveRef` is reported as `$dynamicRef` is**, in the
+  `connections` report, as a row of kind `recursiveRef` with its first
+  target and whether that has `$recursiveAnchor: true`. Neither is
+  followed.
+- **W13**, found here and in section 2.3: an identifier that names the
+  resource it is in, with or without a fragment its dialect does not
+  read as an anchor, names nothing new. An identifier of another
+  resource names that resource, and a fragment on it that is no anchor
+  is dropped, as it was.
+- **A plain name may hold a colon**, as the names of draft-04 to 2019-09
+  may. So a fragment such as `#a:b` that nothing declares is `no-anchor`
+  where it was `bad-fragment`.
+- **URIs are compared in their normal form**, which is W5: the scheme
+  and the host in lower case, an empty port and a scheme's own dropped,
+  a percent-encoded unreserved character decoded and the hex digits of
+  any other in upper case, dot segments removed, and `/` for an empty
+  path beside an authority. The case of a path is kept. Every base the
+  index holds is in that form with no fragment, and the `uri` of a
+  `provenance` row is in it.
+- **The object model follows the latest texts and schemas**, which is
+  Decision 30. The Initiative has published 3.2.1, and newer validation
+  schemas than the ones vendored: 3.1 of 2026-11-05, 3.2 of 2026-11-12,
+  and the 3.2 dialect's meta-schema of 2026-02-26. They are vendored in
+  place of the older ones. One member of the model moves: the 3.2 Media
+  Type Object loses `description`, which the older schema gave it and
+  the text never had. `resolve` had taken that member from the schema
+  as one a Reference Object overrides, which the audit found, and no
+  longer does. The field
+  tables of the 3.1.2 and 3.2.1 texts were then held to the model,
+  object by object: every fixed field of all 30 objects of each is in
+  the model, and the model has none the text lacks. Between 3.2.0 and
+  3.2.1 no field table differs, and between 3.1.1 and 3.1.2 one cell
+  does, the type of a Header Object's `schema`.
+- **Nothing in the corpus moves.** The build before this item and this
+  one give one result, the tree and every report row, on all 5,213
+  documents, under the defaults, under `slots: 'all'` and under the
+  preset. Three documents of the corpus declare a dialect where one is
+  read. All three are the Initiative's own test documents and declare
+  an OpenAPI dialect, one of them of 3.3, which is reported as unknown.
+  So W4, W5 and W13 are shapes the specification allows and the corpus
+  does not have, as section 2.3 said of W4 and W5. The sweep does not
+  count the `dialects` report.
+- **On generated documents, only the dialects move.** The build before
+  this item and this one were run on 12,000 generated documents under
+  four sets of options. 600 of the 48,000 results differ, every one in
+  a document that declares a dialect other than 2020-12 or OpenAPI's,
+  which the build before left as written. None differs under the
+  preset.
+- **The preset reads no dialect**, as before, and a test holds it to
+  that: a declaration changes nothing in what the preset gives but its
+  own member.
+- **The suite** is 773 tests and the 11 of the pages' style. 41
+  deliberate faults in the new code are each caught by one.
+- **Decisions 29 and 30 are built on their defaults.**
 
 **Since acceptance**, as T3's second item was built:
 

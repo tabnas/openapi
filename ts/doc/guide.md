@@ -249,6 +249,42 @@ out.tree.components.schemas.Name // => { type: 'string' }
 
 Under `strict` that step is not taken, and the reference is not found.
 
+## Read schemas written in an older dialect
+
+A schema of OpenAPI 3.1 or 3.2 says which JSON Schema dialect it is
+written in with `$schema`, and `resolve` reads it by that dialect's
+rules. `dialects` lists what the description declares:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+components:
+  schemas:
+    Legacy:
+      $schema: http://json-schema.org/draft-07/schema#
+      definitions:
+        Id: {type: integer}
+      properties:
+        id: {$ref: '#/components/schemas/Legacy/definitions/Id', description: an id}
+`)
+const out = resolve(raw)
+out.tree.components.schemas.Legacy.properties.id // => { type: 'integer' }
+out.dialects[0].at // => '/components/schemas/Legacy/$schema'
+out.dialects[0].as // => 'draft-07'
+out.dialects[0].known // => true
+```
+
+In draft-07 `definitions` holds schemas, and a `$ref` stands alone, so
+the `description` beside it is not kept. Without the `$schema` line the
+schema is read as 2020-12, which has `$defs` in that place and keeps the
+`description`.
+
+A dialect this package does not know is read as 2020-12 and has
+`known: false` in the list. The
+[reference](reference.md#dialects) has what each dialect changes.
+
 ## Bound the work of resolving, or stop it
 
 `maxSteps` is the most steps a resolve may take. Past it, `resolve`

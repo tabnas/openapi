@@ -3,14 +3,16 @@
 // The resolver against test/resolve/*.tsv. Each row parses its input,
 // resolves it with the row's options, and holds the resolved tree, the
 // references left as written (`at why`) and the cut edges to the row; an
-// `ERROR:<code>` row holds the code `resolve` raises. Three columns are
+// `ERROR:<code>` row holds the code `resolve` raises. Four columns are
 // optional: `select`, a path into the resolved tree whose value is held
 // to `expected` in place of the whole tree; `connections`, the
 // connections report, one `kind at -> target` line each (`!why` for a
-// target not found, then any flags); and `provenance`, one
+// target not found, then any flags); `provenance`, one
 // `at status -> landing` line for each reference, in the order of the
 // report (`-` for one that lands nowhere, then `through=`, `uri=` and
-// `fragment=` where the row has them). These fixtures live outside
+// `fragment=` where the row has them); and `dialects`, one
+// `at dialect as name` line for each dialect the description declares
+// (then ` unknown` for one this package does not know). These fixtures live outside
 // test/spec/ because the parity runners there read a parse, and because
 // the Go and Rust ports do not carry the resolver yet.
 
@@ -46,6 +48,11 @@ function where(p: any): string {
   if (undefined !== p.uri) out += ' uri=' + p.uri
   if (undefined !== p.fragment) out += ' fragment=' + p.fragment
   return out
+}
+
+// One declared dialect as a fixture writes it.
+function spoken(d: any): string {
+  return `${d.at} ${d.dialect} as ${d.as}` + (d.known ? '' : ' unknown')
 }
 
 const files = readdirSync(DIR).filter((f) => f.endsWith('.tsv')).sort()
@@ -97,6 +104,10 @@ for (const file of files) {
         const prov = row.named('provenance').trim()
         if ('' !== prov) {
           assert.deepStrictEqual(out.provenance.map(where), JSON.parse(prov), `${file}:${row.line} provenance`)
+        }
+        const said = row.named('dialects').trim()
+        if ('' !== said) {
+          assert.deepStrictEqual(out.dialects.map(spoken), JSON.parse(said), `${file}:${row.line} dialects`)
         }
       })
     }

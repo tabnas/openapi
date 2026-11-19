@@ -27,7 +27,6 @@ function config(raw: any, over: Partial<IndexConfig> = {}): IndexConfig {
   const mv = (v.startsWith('2') ? '2.0' : v.startsWith('3.0') ? '3.0' : v.startsWith('3.1') ? '3.1' : '3.2') as IndexConfig['mv']
   return {
     mv,
-    docBase: DOC,
     entry: DOC,
     retrieved: DOC,
     rootDialect: DIALECT[mv] ?? '',
@@ -67,6 +66,7 @@ function answer(index: SiteIndex): string {
       loc.known,
       loc.base,
       loc.dialect,
+      loc.rules?.name ?? null,
       loc.ext,
       loc.dynamic,
       loc.slot,
@@ -83,6 +83,7 @@ function answer(index: SiteIndex): string {
     r.round,
     r.base,
     r.dialect,
+    r.alone,
     r.why ?? null,
     undefined === r.target ? null : pointer(r.target),
     r.uri ?? null,
@@ -91,7 +92,13 @@ function answer(index: SiteIndex): string {
     r.landing?.through ?? null,
   ])
   const byAt = (a: any[], b: any[]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
-  return JSON.stringify({ rounds: index.rounds, dataSlots: index.dataSlots, locs: locs.sort(byAt), sites: sites.sort(byAt) })
+  return JSON.stringify({
+    rounds: index.rounds,
+    dataSlots: index.dataSlots,
+    locs: locs.sort(byAt),
+    sites: sites.sort(byAt),
+    dialects: index.dialects(),
+  })
 }
 
 // The regions a reference typed, as `at state by round`.
@@ -192,6 +199,16 @@ const ROUNDS: [string, boolean, number, number, any][] = [
 
 const copy = (v: any) => JSON.parse(JSON.stringify(v))
 
+// A dialect of each kind this package reads, and one it does not know.
+const DIALECTS = [
+  'http://json-schema.org/draft-04/schema#',
+  'http://json-schema.org/draft-06/schema#',
+  'http://json-schema.org/draft-07/schema#',
+  'https://json-schema.org/draft/2019-09/schema',
+  'https://json-schema.org/draft/2020-12/schema',
+  'https://example.com/a-dialect',
+]
+
 // A document of regions the model does not type, nested in each other
 // and typed by references, with identifiers and anchors in them: what
 // the index has to carry from one round to the next.
@@ -210,6 +227,12 @@ function regionsDoc(seed: number): any {
     if (v31 && 0 === pick(3)) region.$id = 0 === pick(2) ? `https://example.com/r${i}` : `r${i}/`
     if (v31 && 0 === pick(3)) region.$anchor = 'a' + i
     if (0 === pick(4)) region.definitions = { D: { type: 'string' }, E: { $ref: '#/components/schemas/S0' } }
+    // A region may declare its dialect, which decides whether `id` or
+    // `$id` names it, what an anchor is, and whether `definitions` and a
+    // list of `items` hold schemas.
+    if (v31 && 0 === pick(3)) region.$schema = DIALECTS[pick(DIALECTS.length)]
+    if (v31 && 0 === pick(4)) region.id = 0 === pick(2) ? `https://example.com/q${i}` : '#n' + i
+    if (v31 && 0 === pick(5)) region.items = [{ $ref: '#/components/schemas/S0' }, { $recursiveRef: '#' }]
     const key = 'x-r' + i
     if (-1 === inside) {
       doc[key] = { T: region }
@@ -338,10 +361,10 @@ describe('site index', () => {
     assert.equal(answer(index), answer(indexOf(doc, { incremental: false })))
   })
 
-  test('a site that a later round types as a schema is judged again by its dialect', () => {
+  test('a site that a later round types as a schema is read by the dialect in force there', () => {
     // Under `slots: 'all'` the reference in the region is a site from the
-    // start, as data. Once the region is typed it is a schema's, and the
-    // region declares a dialect this package does not read.
+    // start, as data. Once the region is typed it is a schema's, of the
+    // dialect the region declares: draft-07, whose `$ref` stands alone.
     const doc = {
       openapi: '3.1.0', info, paths: {},
       components: { schemas: { S: { $ref: '#/x-o/T' }, Z: { type: 'string' } } },
@@ -351,15 +374,86 @@ describe('site index', () => {
     const a = index.sites.find((r) => '/x-o/T/properties/a' === r.at)!
     assert.equal(a.round, 0)
     assert.equal(a.kind, 'schema')
-    assert.equal(a.why, 'unsupported-dialect')
-    assert.equal(a.target, undefined)
+    assert.equal(a.state, 'schema@draft-07')
+    assert.equal(a.dialect, 'http://json-schema.org/draft-07/schema#')
+    assert.equal(a.alone, true)
+    assert.equal(a.why, undefined)
+    assert.equal(pointer(a.target!), '/components/schemas/Z')
     assert.equal(answer(index), answer(indexOf(doc, { slots: 'all', incremental: false })))
   })
 
-  test('a reference that a later round stops reading stops what was read through it', () => {
+  test('a region typed in a later round is read by the dialect it declares', () => {
+    // `definitions` holds schemas in draft-07 and is no keyword of
+    // 2020-12. The reference in it is found by where it is once the
+    // region is a schema, in the round that types the region.
+    const region = (dialect: string | undefined) => ({
+      openapi: '3.1.0', info, paths: {},
+      components: { schemas: { S: { $ref: '#/x-o/T' }, Z: { type: 'string' } } },
+      'x-o': { T: { ...(undefined === dialect ? {} : { $schema: dialect }), definitions: { D: { $ref: '#/components/schemas/Z' } } } },
+    })
+    const old = region('http://json-schema.org/draft-07/schema#')
+    const index = indexOf(old)
+    const d = index.sites.find((r) => '/x-o/T/definitions/D' === r.at)!
+    assert.equal(d.round, 1)
+    assert.equal(d.state, 'schema@draft-07')
+    assert.equal(d.alone, true)
+    assert.deepEqual(index.dialects(), [
+      { at: '/x-o/T/$schema', dialect: 'http://json-schema.org/draft-07/schema#', as: 'draft-07', known: true },
+    ])
+    assert.equal(answer(index), answer(indexOf(old, { incremental: false })))
+    // Without the declaration the region is a 2020-12 schema, and what
+    // `definitions` holds is not read.
+    const now = indexOf(region(undefined))
+    assert.equal(now.sites.find((r) => '/x-o/T/definitions/D' === r.at), undefined)
+    assert.deepEqual(now.dialects(), [])
+  })
+
+  test('a location has the rules of its dialect, and is dynamic where that dialect leaves a reference to evaluation', () => {
+    const D = (name: string) =>
+      name.startsWith('20') ? `https://json-schema.org/draft/${name}/schema` : `http://json-schema.org/${name}/schema#`
+    const schemas: any = {}
+    for (const name of ['draft-04', 'draft-06', 'draft-07', '2019-09', '2020-12']) {
+      schemas[name] = {
+        $schema: D(name),
+        properties: { r: { $recursiveRef: '#' }, d: { $dynamicRef: '#x' }, both: { $ref: '#/x', $dynamicRef: '#x', $recursiveRef: '#' } },
+      }
+    }
+    const doc = { openapi: '3.1.0', info, paths: {}, components: { schemas }, 'x-data': { $dynamicRef: '#x' } }
+    const at = (index: SiteIndex, path: (string | number)[]): Loc => {
+      let loc: Loc | undefined = index.root
+      for (const seg of path) loc = index.child(loc!, seg)
+      return loc!
+    }
+    const index = indexOf(doc)
+    const facts = (name: string) => {
+      const p = ['components', 'schemas', name]
+      return [at(index, p).rules?.name, at(index, [...p, 'properties', 'r']).dynamic, at(index, [...p, 'properties', 'd']).dynamic]
+    }
+    assert.deepEqual(facts('draft-04'), ['draft-04', false, false])
+    assert.deepEqual(facts('draft-06'), ['draft-06', false, false])
+    assert.deepEqual(facts('draft-07'), ['draft-07', false, false])
+    assert.deepEqual(facts('2019-09'), ['2019-09', true, false])
+    assert.deepEqual(facts('2020-12'), ['2020-12', false, true])
+    // A `$ref` is the reference where a map has both, and what is not a
+    // schema has no rules.
+    assert.equal(at(index, ['components', 'schemas', '2020-12', 'properties', 'both']).dynamic, false)
+    assert.equal(at(index, ['components', 'schemas', '2019-09', 'properties', 'both']).dynamic, false)
+    assert.equal(at(index, ['x-data']).rules, undefined)
+    assert.equal(at(index, ['x-data']).dynamic, false)
+    assert.equal(at(index, ['components']).rules, undefined)
+    // Under `refs: 'pointer'` no dialect is read and nothing is dynamic.
+    const plain = indexOf(doc, { pointers: true })
+    assert.equal(at(plain, ['components', 'schemas', 'draft-04']).rules?.name, '2020-12')
+    assert.equal(at(plain, ['components', 'schemas', 'draft-04']).state, 'schema')
+    assert.equal(at(plain, ['components', 'schemas', '2020-12', 'properties', 'd']).dynamic, false)
+    assert.deepEqual(plain.dialects(), [])
+  })
+
+  test('a reference that a later round reads against another base stops what was read through it', () => {
     // X is read through `p` to a member of Z. Then the region around `p`
-    // is typed, and it declares a dialect this package does not read, so
-    // `p` is no longer followed, and nothing is read through it.
+    // is typed, and it names itself with an `$id`: `p` is read against
+    // that from then on, and names nothing there, so nothing is read
+    // through it.
     const doc = {
       openapi: '3.1.0', info, paths: {},
       components: {
@@ -371,14 +465,17 @@ describe('site index', () => {
       },
       'x-o': {
         T: {
-          $schema: 'http://json-schema.org/draft-07/schema#',
-          'x-i': { T: { properties: { up: { $ref: '#/x-o/T' }, p: { $ref: '#/components/schemas/Z' } } } },
+          $id: 'https://other.example/t',
+          'x-i': { T: { properties: { up: { $ref: DOC + '#/x-o/T' }, p: { $ref: '#/components/schemas/Z' } } } },
         },
       },
     }
     const index = indexOf(doc)
     const site = (at: string) => index.sites.find((r) => r.at === at)!
-    assert.equal(site('/x-o/T/x-i/T/properties/p').why, 'unsupported-dialect')
+    const p = site('/x-o/T/x-i/T/properties/p')
+    assert.equal(p.base, 'https://other.example/t')
+    assert.equal(pointer(p.target!), '/x-o/T/components/schemas/Z')
+    assert.equal(p.landing!.found, false)
     assert.equal(site('/components/schemas/X').landing!.found, false)
     assert.equal(answer(index), answer(indexOf(doc, { incremental: false })))
   })

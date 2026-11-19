@@ -642,8 +642,111 @@ describe('resolve', () => {
         assert.deepEqual(out.provenance, [])
         assert.deepEqual(out.connections, [])
         assert.equal(out.dataSlots, 0)
+        assert.deepEqual(out.dialects, [])
       }
     }
+  })
+
+  test('reports the dialects a description declares, and the one each is read by', () => {
+    const D7 = 'http://json-schema.org/draft-07/schema#'
+    const doc = {
+      openapi: '3.1.0',
+      jsonSchemaDialect: 'https://example.com/a-dialect',
+      components: {
+        schemas: {
+          T: { type: 'string' },
+          Old: { $schema: D7, definitions: { D: { $ref: '#/components/schemas/T' } } },
+          Odd: { $schema: 7, properties: { p: { $schema: 'https://json-schema.org/draft/2019-09/schema' } } },
+        },
+      },
+      // A `$schema` that is not a schema's declares nothing.
+      'x-data': { $schema: D7 },
+      info: { title: 't', version: '1', $schema: D7 },
+    }
+    const out = resolve(C(doc))
+    assert.deepEqual(out.dialects, [
+      { at: '/jsonSchemaDialect', dialect: 'https://example.com/a-dialect', as: '2020-12', known: false },
+      { at: '/components/schemas/Old/$schema', dialect: D7, as: 'draft-07', known: true },
+      {
+        at: '/components/schemas/Odd/properties/p/$schema',
+        dialect: 'https://json-schema.org/draft/2019-09/schema',
+        as: '2019-09',
+        known: true,
+      },
+    ])
+    assert.deepEqual(out.tree.components.schemas.Old.definitions.D, { type: 'string' })
+    // A dialect this package does not know is no error, strict or not.
+    assert.deepEqual(resolve(C(doc), { strict: true }).dialects, out.dialects)
+    // The shape the tree is asked in does not change what is declared.
+    for (const options of [{ cycles: 'keep' as const }, { slots: 'all' as const }, { sharing: 'copy' as const, budget: 1e6 }]) {
+      assert.deepEqual(resolve(C(doc), options).dialects, out.dialects)
+    }
+    // 2.0 and 3.0 have no dialects, and `refs: 'pointer'` reads none.
+    assert.deepEqual(resolve({ ...C(doc), openapi: '3.0.3' }).dialects, [])
+    assert.deepEqual(resolve({ swagger: '2.0', definitions: { S: { $schema: D7 } } }).dialects, [])
+    assert.deepEqual(resolve(C(doc), { refs: 'pointer' }).dialects, [])
+    assert.deepEqual(resolve(C(doc), { compat: 'apidef' }).dialects, [])
+  })
+
+  test('the apidef preset reads no dialect: a declaration changes nothing but its own member', () => {
+    const D4 = 'http://json-schema.org/draft-04/schema#'
+    const schemas = (declare: boolean) => ({
+      S: {
+        ...(declare ? { $schema: D4 } : {}),
+        id: 'https://x.example/s.json',
+        $id: 'https://x.example/dollar.json',
+        definitions: { D: { type: 'integer' } },
+        properties: {
+          p: { $ref: '#/definitions/D', description: 'd' },
+          q: { $ref: '#/components/schemas/S/definitions/D', description: 'd' },
+        },
+        // The report reads these as URIs, under the preset too, and
+        // there by `$id`, which is 2020-12's.
+        discriminator: {
+          propertyName: 'k',
+          mapping: { a: 'https://x.example/dollar.json', b: 'https://x.example/s.json#/definitions/D' },
+        },
+      },
+    })
+    const doc = (declare: boolean) => ({ openapi: '3.1.0', info: { title: 't', version: '1' }, paths: {}, components: { schemas: schemas(declare) } })
+    const plain = resolve(doc(false), { compat: 'apidef' })
+    const declared = resolve(doc(true), { compat: 'apidef' })
+    const without = C(declared.tree)
+    delete without.components.schemas.S.$schema
+    assert.deepEqual(without, C(plain.tree))
+    assert.deepEqual(declared.unresolved, plain.unresolved)
+    assert.deepEqual(declared.provenance, plain.provenance)
+    assert.deepEqual(declared.connections, plain.connections)
+    assert.deepEqual(
+      plain.connections.map((c) => [c.kind, c.found, c.target]),
+      [
+        ['mapping', true, '/components/schemas/S'],
+        ['mapping', false, null],
+      ],
+    )
+    assert.deepEqual(plain.unresolved.map((u) => u.at), ['/components/schemas/S/properties/p'])
+    // Read as the specification has it, the declaration decides. In
+    // draft-04 `id` names the schema, so `#/definitions/D` is found in it
+    // and a pointer from the document's root is not, and a `$ref` stands
+    // alone.
+    const spec = resolve(doc(true))
+    assert.deepEqual(C(spec.tree.components.schemas.S.properties.p), { type: 'integer' })
+    assert.deepEqual(spec.unresolved.map((u) => u.at), ['/components/schemas/S/properties/q'])
+    // Its report finds the mapping by `id`, and not by `$id`, which
+    // draft-04 does not have.
+    assert.deepEqual(spec.connections.map((c) => [c.kind, c.found, c.target]), [
+      ['mapping', false, null],
+      ['mapping', true, '/components/schemas/S/definitions/D'],
+    ])
+    // Without it the schema is of 2020-12, where `id` is a member like
+    // any, `$id` names the schema, and the members beside a `$ref` apply.
+    const now = resolve(doc(false))
+    assert.deepEqual(C(now.tree.components.schemas.S.properties.p), {
+      allOf: [{ type: 'integer' }],
+      description: 'd',
+    })
+    assert.deepEqual(now.unresolved.map((u) => u.at), ['/components/schemas/S/properties/q'])
+    assert.deepEqual(now.connections.map((c) => [c.kind, c.found]), [['mapping', true], ['mapping', false]])
   })
 
   test('strict raises a ResolveError with the code, the site and the reference', () => {

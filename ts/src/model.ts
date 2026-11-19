@@ -187,6 +187,17 @@ function kindFrom(version: ModelVersion, state: string): SlotKind {
   return s.kind
 }
 
+// The state of a Schema Object, by the name of the dialect it is read
+// by: the version's own, and for 3.1 and 3.2 the dialects a schema may
+// declare (model/applicators.json).
+function schemaStates(version: ModelVersion): Record<string, string> {
+  const v = (OBJECT_MODEL.versions as any)[version]
+  if (null == v) {
+    throw new Error('model: no object model for version ' + JSON.stringify(version))
+  }
+  return v.dialects ?? { [v.dialect]: 'schema' }
+}
+
 // What a state is.
 function slot(version: ModelVersion, state: string): Slot {
   const s = table(version)[state]
@@ -232,6 +243,6 @@ function walkModel<T>(
   }
 }
 
-export { VERSIONS as MODEL_VERSIONS, classify, kindFrom, rootState, slot, step, stepper, walkModel }
+export { VERSIONS as MODEL_VERSIONS, classify, kindFrom, rootState, schemaStates, slot, step, stepper, walkModel }
 
 export type { How, ModelVersion, Slot, SlotKind }

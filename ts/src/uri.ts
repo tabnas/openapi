@@ -34,6 +34,11 @@ function pointerParts(fragment: string): string[] | null {
 // A plain-name fragment, as JSON Schema 2020-12 defines an anchor.
 const ANCHOR = /^[A-Za-z_][-A-Za-z0-9._]*$/
 
+// A plain-name fragment in any dialect this package reads: the anchor of
+// 2020-12, and the names of 2019-09 and of draft-04 to draft-07, which
+// may also hold a colon.
+const PLAIN_NAME = /^[A-Za-z_][-A-Za-z0-9._:]*$/
+
 // RFC 3986 section 5.2: reference resolution against a base URI.
 type Uri = {
   scheme?: string
@@ -109,6 +114,62 @@ function resolveUri(base: string, ref: string): string {
   )
 }
 
+// The port a scheme uses when a URI names none.
+const DEFAULT_PORT: Record<string, string> = { http: '80', https: '443', ws: '80', wss: '443', ftp: '21' }
+
+// RFC 3986 section 6.2.2.2: a percent-encoded unreserved character
+// (a letter, a digit, `-`, `.`, `_` or `~`) is that character, and the hex
+// digits of any other percent-encoding are upper case.
+function normalizeEncoding(part: string): string {
+  if (!part.includes('%')) return part
+  return part.replace(/%([0-9A-Fa-f]{2})/g, (_all, hex: string) => {
+    const c = parseInt(hex, 16)
+    const unreserved =
+      (0x41 <= c && c <= 0x5a) ||
+      (0x61 <= c && c <= 0x7a) ||
+      (0x30 <= c && c <= 0x39) ||
+      0x2d === c ||
+      0x2e === c ||
+      0x5f === c ||
+      0x7e === c
+    return unreserved ? String.fromCharCode(c) : '%' + hex.toUpperCase()
+  })
+}
+
+// RFC 3986 section 6.2: the one form that equivalent URIs share, so that
+// two of them compare equal as strings. By syntax (6.2.2): the scheme and
+// the host in lower case, percent-encodings as `normalizeEncoding` has
+// them, and the dot segments gone from a path that starts at the root.
+// By scheme (6.2.3): no empty port and no port that is the scheme's own,
+// and `/` for an empty path beside an authority. The case of a path, a
+// query and a fragment is theirs, and is kept.
+function normalizeUri(u: string): string {
+  const p = parseUri(u)
+  const scheme = undefined === p.scheme ? undefined : p.scheme.toLowerCase()
+  let out = undefined === scheme ? '' : scheme + ':'
+  let path = normalizeEncoding(p.path)
+  if (undefined !== p.authority) {
+    const at = p.authority.lastIndexOf('@')
+    let host = p.authority.slice(at + 1)
+    let port = ''
+    const m = /:([0-9]*)$/.exec(host)
+    if (null !== m) {
+      port = m[1]
+      host = host.slice(0, m.index)
+    }
+    out +=
+      '//' +
+      normalizeEncoding(p.authority.slice(0, at + 1)) +
+      normalizeEncoding(normalizeEncoding(host).toLowerCase()) +
+      ('' === port || port === DEFAULT_PORT[scheme ?? ''] ? '' : ':' + port)
+    path = '' === path ? '/' : removeDots(path)
+  } else if (path.startsWith('/')) path = removeDots(path)
+  out += path
+  if (undefined !== p.query) out += '?' + normalizeEncoding(p.query)
+  if (undefined !== p.fragment) out += '#' + normalizeEncoding(p.fragment)
+  return out
+}
+
 const withoutFragment = (u: string) => u.replace(/#.*$/s, '')
 
 function fragmentOf(u: string): string | undefined {
@@ -154,10 +215,13 @@ function define(o: any, k: string, v: any): void {
 export {
   ANCHOR,
   NOTHING,
+  PLAIN_NAME,
   define,
   fragmentOf,
   isMap,
   merged,
+  normalizeEncoding,
+  normalizeUri,
   own,
   pointer,
   pointerParts,

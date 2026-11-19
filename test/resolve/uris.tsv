@@ -1,0 +1,23 @@
+input	expected	unresolved	cuts	opts	provenance
+# URIs are compared in their normal form (RFC 3986, section 6.2), so a
+# reference that names this document in another spelling names this
+# document. The case of the scheme and of the host:
+{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"$ref":"HTTPS://E.COM/a/api.yaml#/components/schemas/T"}}}}	{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"type":"string"}}}}	[]	[]	{"retrievalUri":"https://e.com/a/api.yaml"}	
+# The port a scheme has by default, and an empty port:
+{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"$ref":"https://e.com:443/a/api.yaml#/components/schemas/T"},"R":{"$ref":"https://e.com:/a/api.yaml#/components/schemas/T"}}}}	{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"type":"string"},"R":{"type":"string"}}}}	[]	[]	{"retrievalUri":"https://e.com/a/api.yaml"}	
+# A percent-encoded letter, which is the letter, and hex digits in
+# either case:
+{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"a b":{"type":"integer"},"S":{"$ref":"https://e.com/a/%61pi.yaml#/components/schemas/T"},"R":{"$ref":"https://e.com/a/api%2eyaml#/components/schemas/a%20b"}}}}	{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"a b":{"type":"integer"},"S":{"type":"string"},"R":{"type":"integer"}}}}	[]	[]	{"retrievalUri":"https://e.com/a/api.yaml"}	
+# Dot segments:
+{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"$ref":"https://e.com/a/b/../api.yaml#/components/schemas/T"},"R":{"$ref":"https://e.com/./a/api.yaml#/components/schemas/T"}}}}	{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"type":"string"},"R":{"type":"string"}}}}	[]	[]	{"retrievalUri":"https://e.com/a/api.yaml"}	
+# The retrieval URI in another spelling, and a `$self` in one:
+{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"$ref":"https://e.com/a/api.yaml#/components/schemas/T"}}}}	{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"type":"string"}}}}	[]	[]	{"retrievalUri":"HTTPS://E.com:443/a/./api.yaml"}	
+{"openapi":"3.2.0","components":{"schemas":{"T":{"type":"string"},"S":{"$ref":"https://e.com/a/api.yaml#/components/schemas/T"}}},"$self":"https://E.COM/a/%61pi.yaml"}	{"openapi":"3.2.0","components":{"schemas":{"T":{"type":"string"},"S":{"type":"string"}}},"$self":"https://E.COM/a/%61pi.yaml"}	[]	[]		
+# An `$id` in another spelling than the reference to it, and one that
+# is a host alone, whose path is `/`:
+{"openapi":"3.1.0","components":{"schemas":{"A":{"$id":"https://e.com/s/a","type":"integer"},"B":{"$ref":"https://E.com/s/a"},"H":{"$id":"https://h.example","type":"boolean"},"I":{"$ref":"https://h.example/"}}}}	{"openapi":"3.1.0","components":{"schemas":{"A":{"$id":"https://e.com/s/a","type":"integer"},"B":{"$id":"https://e.com/s/a","type":"integer"},"H":{"$id":"https://h.example","type":"boolean"},"I":{"$id":"https://h.example","type":"boolean"}}}}	[]	[]		
+# A plain name is compared as it is decoded:
+{"openapi":"3.1.0","components":{"schemas":{"A":{"$anchor":"name","type":"string"},"B":{"$ref":"#%6eame"}}}}	{"openapi":"3.1.0","components":{"schemas":{"A":{"$anchor":"name","type":"string"},"B":{"$anchor":"name","type":"string"}}}}	[]	[]		
+# What is not the same URI stays another document: the case of a path,
+# another port, another scheme. The row has each in its normal form.
+{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"P":{"$ref":"https://e.com/a/API.yaml#/components/schemas/T"},"Q":{"$ref":"https://e.com:8443/a/api.yaml#/components/schemas/T"},"R":{"$ref":"http://e.com/a/api.yaml#/components/schemas/T"},"U":{"$ref":"HTTP://Other.Example:80/x/../defs.json#/A%2fB"}}}}	{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"P":{"$ref":"https://e.com/a/API.yaml#/components/schemas/T"},"Q":{"$ref":"https://e.com:8443/a/api.yaml#/components/schemas/T"},"R":{"$ref":"http://e.com/a/api.yaml#/components/schemas/T"},"U":{"$ref":"HTTP://Other.Example:80/x/../defs.json#/A%2fB"}}}}	["/components/schemas/P external","/components/schemas/Q external","/components/schemas/R external","/components/schemas/U external"]	[]	{"retrievalUri":"https://e.com/a/api.yaml"}	["/components/schemas/P unresolved -> - uri=https://e.com/a/API.yaml fragment=/components/schemas/T","/components/schemas/Q unresolved -> - uri=https://e.com:8443/a/api.yaml fragment=/components/schemas/T","/components/schemas/R unresolved -> - uri=http://e.com/a/api.yaml fragment=/components/schemas/T","/components/schemas/U unresolved -> - uri=http://other.example/defs.json fragment=/A%2FB"]

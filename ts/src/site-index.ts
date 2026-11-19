@@ -7,11 +7,12 @@
 // What it owns:
 //
 //   locations  every map and list of the document, by where it is, with
-//              the state the object model gives it, its base URI and its
-//              schema dialect;
+//              the state the object model gives it, its base URI and the
+//              schema dialect it is read by;
 //   sites      every map whose `$ref` is a reference, with its kind and
 //              type, and what the reference names;
-//   ids        the `$id`, `$anchor` and `$dynamicAnchor` index;
+//   ids        the index of identifiers and anchors, each schema's by the
+//              rules of its dialect;
 //   landings   for each site, the location its reference lands on, read on
 //              the document as written, and the sites the pointer was read
 //              through to get there;
@@ -25,9 +26,24 @@
 // The design is section 3 of docs/design/typescript-plan.md, and the
 // prototype it follows is docs/design/prototype/e12-site-index/.
 
-import { kindFrom, slot, stepper } from './model'
+import { DIALECTS, dialectOf } from './dialect'
+import type { Dialect, DialectUse } from './dialect'
+import { kindFrom, schemaStates, slot, stepper } from './model'
 import type { How, ModelVersion, SlotKind } from './model'
-import { ANCHOR, NOTHING, fragmentOf, isMap, own, pointer, pointerParts, resolveUri, stepInto, withoutFragment } from './uri'
+import {
+  NOTHING,
+  PLAIN_NAME,
+  fragmentOf,
+  isMap,
+  normalizeEncoding,
+  normalizeUri,
+  own,
+  pointer,
+  pointerParts,
+  resolveUri,
+  stepInto,
+  withoutFragment,
+} from './uri'
 import type { Path } from './uri'
 
 // The kind of a site: what the object model says its position holds, or
@@ -42,7 +58,6 @@ type Why =
   | 'no-anchor'
   | 'external'
   | 'non-object-target'
-  | 'unsupported-dialect'
 
 // What the model, and the typing by reference, know of a location: it has
 // a state (`typed`); the model names it and says it is plain JSON
@@ -51,19 +66,9 @@ type Why =
 // Only an unknown location is typed by a reference that lands on it.
 type Known = 'typed' | 'data' | 'unknown'
 
-// JSON Schema identifiers ($id, $anchor, $dynamicAnchor) exist in OpenAPI
-// from 3.1.
+// JSON Schema identifiers and anchors, and schema dialects, exist in
+// OpenAPI from 3.1.
 const hasIds = (v: ModelVersion) => '3.1' === v || '3.2' === v
-
-// The schema dialects whose `$ref` semantics the resolver applies: the
-// OpenAPI dialects of 3.1 and 3.2, and JSON Schema 2020-12 itself.
-function supportedDialect(dialect: string): boolean {
-  return (
-    dialect.startsWith('https://spec.openapis.org/oas/3.1/dialect/') ||
-    dialect.startsWith('https://spec.openapis.org/oas/3.2/dialect/') ||
-    'https://json-schema.org/draft/2020-12/schema' === dialect
-  )
-}
 
 // A region typed by a reference: the state it took, the site whose
 // landing gave it, and the round that found it.
@@ -82,14 +87,18 @@ class Loc {
   state = 'data'
   known: Known = 'unknown'
   // The base URI and schema dialect its own members are read under: its
-  // parent's, or its own `$id` and `$schema` where it is a Schema Object.
+  // parent's, or its own identifier and `$schema` where it is a Schema
+  // Object. The dialect is the identifier as written.
   base = ''
   dialect = ''
+  // The rules a Schema Object here is read by, which are its dialect's.
+  rules: Dialect | undefined = undefined
   // Whether it is inside an extension the caller named.
   ext = false
   // The site it is, if its `$ref` is a reference.
   site: SiteFacts | undefined = undefined
-  // Whether it is a `$dynamicRef` the fold reports.
+  // Whether it is a reference its dialect leaves to evaluation: a
+  // `$dynamicRef` of 2020-12 or a `$recursiveRef` of 2019-09.
   dynamic = false
   // Whether it is a `$ref` map the model types as data.
   slot = false
@@ -99,10 +108,11 @@ class Loc {
   // given one.
   region: Region | undefined = undefined
   holdsRegion = false
-  // The base URI and dialect its parent gave it when it was last
-  // surveyed. With its state, what is known of it and `ext`, they are what
-  // a survey reads it under, so one that would find the same again can
-  // pass it by.
+  // The state, base URI and dialect it was given when it was last
+  // surveyed. With what is known of it and `ext`, they are what a survey
+  // reads it under, so one that would find the same again can pass it by.
+  // Its state is the one given unless it is a schema of another dialect.
+  inState = 'data'
   inBase = ''
   inDialect = ''
 
@@ -144,6 +154,9 @@ type SiteFacts = {
   ref: unknown
   base: string
   dialect: string
+  // Whether its `$ref` stands alone, as in a schema of draft-04 to
+  // draft-07: the members beside it are not read.
+  alone: boolean
   // Why it names nothing in this document, when that is so.
   why?: Why
   // The location it names, as the reference is written.
@@ -161,9 +174,8 @@ type SiteFacts = {
 
 type IndexConfig = {
   mv: ModelVersion
-  // The base URI of the document, its URI without a fragment, and the URI
-  // it was retrieved from without one.
-  docBase: string
+  // The URI of the document, which is the base URI of its root, and the
+  // URI it was retrieved from: each in its normal form, with no fragment.
   entry: string
   retrieved: string
   // The dialect a schema is read under unless it says.
@@ -210,6 +222,9 @@ type SiteIndex = {
   landingAt: (target: Path) => Landing
   // The state at a landing: the model's, or the one a reference gave.
   stateAt: (landing: Landing) => string
+  // The dialect each schema declares with `$schema`, in document order,
+  // and the one it is read by.
+  dialects: () => DialectUse[]
 }
 
 // Two things the index does can cost more than one pass over the
@@ -242,7 +257,7 @@ const samePath = (a: Path | undefined, b: Path | undefined): boolean => {
 
 // Build the index of one document.
 function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
-  const { mv, docBase, entry, retrieved, rootDialect, pointers, maxDepth, refuse } = cfg
+  const { mv, entry, retrieved, rootDialect, pointers, maxDepth, refuse } = cfg
   const step = stepper(mv)
   const ids = hasIds(mv)
   const all = 'all' === cfg.slots
@@ -274,6 +289,27 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     }
     return i
   }
+
+  // What a dialect's identifier names, worked out once for each: its
+  // rules, whether this package knows it, and the state of a Schema
+  // Object read by it.
+  type Spoken = { rules: Dialect; known: boolean; state: string }
+  const schemaState = schemaStates(mv)
+  const spokens = new Map<string, Spoken>()
+  const spokenOf = (uri: string): Spoken => {
+    let spoken = spokens.get(uri)
+    if (undefined === spoken) {
+      const d = dialectOf(uri)
+      spoken = { rules: d.dialect, known: d.known, state: schemaState[d.dialect.name] ?? 'schema' }
+      spokens.set(uri, spoken)
+    }
+    return spoken
+  }
+  // Under `refs: 'pointer'` no dialect is read, and every schema is the
+  // version's own.
+  const OWN: Spoken = { rules: DIALECTS['2020-12'], known: true, state: 'schema' }
+  // The schemas that declare a dialect, and what each declares.
+  const declared = new Map<Loc, string>()
 
   const root = new Loc(undefined, '', raw, 0)
   const sites: SiteFacts[] = []
@@ -362,7 +398,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
       if (
         skip &&
         0 <= loc.ord &&
-        loc.state === state &&
+        loc.inState === state &&
         loc.known === known &&
         loc.inBase === base &&
         loc.inDialect === dialect &&
@@ -376,14 +412,16 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
       }
       const first = loc.ord < 0
       if (first) loc.ord = nextOrd++
+      loc.inState = state
       loc.inBase = base
       loc.inDialect = dialect
 
       const node = loc.raw
       const list = Array.isArray(node)
-      const info = infoOf(state)
+      let info = infoOf(state)
       let mine = base
       let speaks = dialect
+      let rules: Dialect | undefined
       if (!list) {
         if (loc.slot) {
           dataSlots--
@@ -391,16 +429,55 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
         }
         loc.dynamic = false
         let keys: string[] | undefined
+        let says: string | undefined
         if (ids && info.schema) {
+          // A Schema Object is read by the dialect it declares, else by
+          // the one in force where it is. Its state is that dialect's,
+          // which says which of its members hold schemas.
           if ('string' === typeof node.$schema) speaks = node.$schema
-          if ('string' === typeof node.$id) {
-            mine = resolveUri(base, node.$id)
-            keys = [withoutFragment(mine)]
+          const spoken = pointers ? OWN : spokenOf(speaks)
+          rules = spoken.rules
+          if (!pointers) {
+            if ('string' === typeof node.$schema) says = node.$schema
+            if (state !== spoken.state) {
+              state = spoken.state
+              info = infoOf(state)
+            }
           }
-          for (const a of ['$anchor', '$dynamicAnchor']) {
-            if ('string' === typeof node[a]) (keys ??= []).push(withoutFragment(mine) + '#' + node[a])
+          // In draft-04 to draft-07 a `$ref` stands alone: an identifier
+          // beside it is not read.
+          if (!(rules.refAlone && 'string' === typeof node.$ref)) {
+            const id = node[rules.id]
+            if ('string' === typeof id) {
+              const abs = normalizeUri(resolveUri(base, id))
+              const resource = withoutFragment(abs)
+              const name = fragmentOf(abs)
+              if (rules.idAnchor && undefined !== name && PLAIN_NAME.test(name)) {
+                // `#name`, the anchor of draft-04 to draft-07: the base
+                // is as it was.
+                keys = [abs]
+              } else if (resource !== base) {
+                // A schema resource, whose URI its members are read
+                // against. A fragment that is no anchor here is dropped,
+                // as the empty one of the older dialects' own
+                // identifiers is.
+                mine = resource
+                keys = [mine]
+              }
+              // What is left names the resource it is in, with or
+              // without a fragment that is no anchor here: `$id: '#name'`
+              // in 2020-12, or `id: '#'`. It names nothing new. Read as
+              // a resource it would take the place of the one it is in,
+              // and every reference into that one would be read from
+              // here.
+            }
+            for (const a of rules.anchors) {
+              if ('string' === typeof node[a]) (keys ??= []).push(mine + '#' + node[a])
+            }
           }
         }
+        if (undefined === says) declared.delete(loc)
+        else declared.set(loc, says)
         declare(loc, keys)
         if (own(node, '$ref')) {
           const ref = node.$ref
@@ -414,17 +491,13 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
           // never a site of its own.
           if (null != k && !(pointers && 0 === loc.depth)) {
             const type = 'reference' === k ? info.type : 'pathItem' === k || 'schema' === k ? k : null
-            const pre: Why | undefined =
-              'string' !== typeof ref
-                ? 'not-a-string'
-                : !pointers && 'schema' === k && ids && !supportedDialect(speaks)
-                  ? 'unsupported-dialect'
-                  : undefined
+            const pre: Why | undefined = 'string' !== typeof ref ? 'not-a-string' : undefined
+            const alone = undefined !== rules && rules.refAlone
             let row = loc.site
             if (undefined === row) {
               const path = pathOf(loc)
               row = loc.site = {
-                loc, round, path, at: pointer(path), kind: k, type, state, ref, base: mine, dialect: speaks, pre, stale: true,
+                loc, round, path, at: pointer(path), kind: k, type, state, ref, base: mine, dialect: speaks, alone, pre, stale: true,
               }
               sites.push(row)
               stirred.push(row)
@@ -434,6 +507,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
               row.state !== state ||
               row.base !== mine ||
               row.dialect !== speaks ||
+              row.alone !== alone ||
               row.pre !== pre
             ) {
               row.kind = k
@@ -441,6 +515,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
               row.state = state
               row.base = mine
               row.dialect = speaks
+              row.alone = alone
               row.pre = pre
               if (!row.stale) {
                 row.stale = true
@@ -448,14 +523,15 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
               }
             }
           }
-        } else if (own(node, '$dynamicRef')) {
-          loc.dynamic = !pointers && ids && 'schema' === info.kind
+        } else if (undefined !== rules && null !== rules.dynamic && own(node, rules.dynamic)) {
+          loc.dynamic = !pointers
         }
       }
       loc.state = state
       loc.known = known
       loc.base = mine
       loc.dialect = speaks
+      loc.rules = rules
       loc.ext = ext
 
       // Its members that are maps or lists are found once, in their
@@ -488,7 +564,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
   }
 
   const surveyAll = (skip: boolean) => {
-    if (Array.isArray(raw) || isMap(raw)) survey([root, 'root', 'typed', docBase, rootDialect, false], skip)
+    if (Array.isArray(raw) || isMap(raw)) survey([root, 'root', 'typed', entry, rootDialect, false], skip)
   }
 
   // ---- what a reference names ----
@@ -502,11 +578,23 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
   }
 
   // A URI reference, against a base: the location it names in this
-  // document, or why it names none here.
+  // document, or why it names none here. URIs are compared in their
+  // normal form (RFC 3986 section 6.2), so one that differs from this
+  // document's in the case of its scheme or host, in a default port or in
+  // a percent-encoded letter still names this document. Every base is in
+  // that form and has no fragment, so a reference that is a fragment
+  // alone names the base's own document without being resolved.
   const locateUri = (ref: string, base: string): Located => {
-    const abs = resolveUri(base, ref)
-    const doc = withoutFragment(abs)
-    const fragment = fragmentOf(abs)
+    let doc: string
+    let fragment: string | undefined
+    if (ref.startsWith('#')) {
+      doc = base
+      fragment = normalizeEncoding(ref.slice(1))
+    } else {
+      const abs = normalizeUri(resolveUri(base, ref))
+      doc = withoutFragment(abs)
+      fragment = fragmentOf(abs)
+    }
     let start: Path
     const named = idIndex.get(doc)
     if (undefined !== named) start = pathOf(named)
@@ -517,7 +605,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
       const parts = pointerParts(fragment)
       return null == parts ? { why: 'bad-fragment' } : { target: [...start, ...parts] }
     }
-    if (ids && ANCHOR.test(fragment)) {
+    if (ids && PLAIN_NAME.test(fragment)) {
       const anchored = idIndex.get(doc + '#' + fragment)
       return undefined === anchored ? { why: 'no-anchor' } : { target: pathOf(anchored) }
     }
@@ -666,7 +754,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
       // next round.
       round++
       try {
-        if (incremental) survey([at, at.state, at.known, at.inBase, at.inDialect, at.ext], true)
+        if (incremental) survey([at, at.inState, at.known, at.inBase, at.inDialect, at.ext], true)
         else surveyAll(false)
       } finally {
         round--
@@ -753,6 +841,14 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     return undefined === loc || 0 === path.length ? 'data' : step(loc.state, path[path.length - 1])
   }
 
+  const dialects = (): DialectUse[] =>
+    [...declared]
+      .sort((a, b) => a[0].ord - b[0].ord)
+      .map(([loc, uri]) => {
+        const spoken = spokenOf(uri)
+        return { at: pointer([...pathOf(loc), '$schema']), dialect: uri, as: spoken.rules.name, known: spoken.known }
+      })
+
   return {
     root,
     sites,
@@ -763,9 +859,10 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     landing: landingOf,
     landingAt: (target) => walkTo(target),
     stateAt,
+    dialects,
   }
 }
 
-export { Loc, buildIndex, hasIds, supportedDialect }
+export { Loc, buildIndex, hasIds }
 
 export type { IndexConfig, Kind, Known, Landing, Located, Region, SiteFacts, SiteIndex, Why }

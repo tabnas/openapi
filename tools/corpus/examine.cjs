@@ -446,7 +446,7 @@ function examine(text, { ext = '', fast = true, reading = 'base', send = () => {
           if (Object.keys(ext.refs).length < 400 || key in ext.refs) ext.refs[key] = (ext.refs[key] ?? 0) + 1
           continue
         }
-        if (!['not-found', 'bad-fragment', 'no-anchor', 'unsupported-dialect'].includes(u.why)) continue
+        if (!['not-found', 'bad-fragment', 'no-anchor'].includes(u.why)) continue
         const g = (checks[u.why] ??= { n: 0, verdicts: {}, samples: [] })
         g.n++
         let verdict = 'unchecked'

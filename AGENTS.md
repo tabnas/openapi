@@ -166,7 +166,7 @@ default that a shared row pins changes until porting starts.
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
 | T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
 | T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger is 5 rows where it was 190, three of them accepted and two the descriptions refused for their size, and under the base reading it is 235 where it was 254. The rule history is measured, and turning it on is Decision 34 |
-| T3 | the site index, and `resolve` on it | items 1 and 2 built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. It needs what tabnas/expr#117 added to the fold, which is on `expr`'s `main` and in no release: until one carries it, `resolve` runs in CI and in the linked model only, and the corpus baselines stay as swept on the released packages. W4 and W5 are item 3's. Items 3 to 5 are not begun |
+| T3 | the site index, and `resolve` on it | items 1 to 3 built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. Item 3 is the dialects: a schema of 3.1 or 3.2 is read by the dialect it declares, draft-04 to 2020-12, an unknown one as 2020-12 and reported in `dialects`; URIs are compared in their normal form; and the vendored schemas are the latest published, with the model held to the 3.1.2 and 3.2.1 texts. W4 and W5 are repaired. Items 2 and 3 need what tabnas/expr#117 added to the fold, which is on `expr`'s `main` and in no release: until one carries it, `resolve` runs in CI and in the linked model only, and the corpus baselines stay as swept on the released packages. Items 4 and 5 are not begun |
 | T4 to T6 | several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -318,15 +318,16 @@ section 3 of the plan has it and prototype E12 measured.
 every fact about the document:
 
 - A location for every map and list, with the state the object model
-  gives it, its base URI, its schema dialect, and whether it is inside an
-  extension named in `extensions`.
+  gives it, its base URI, the schema dialect it is read by, and whether
+  it is inside an extension named in `extensions`.
 - The sites: a `$ref` map where the model puts a Reference Object, a
   Schema Object or a Path Item, and, under `slots: 'all'` or inside a
   named extension, any map whose `$ref` is a string. Each has its kind
   and type, and what its reference names: `locateUri` reads a URI
   reference, and under `refs: 'pointer'` `locatePointer` reads a
   pointer.
-- The `$id`, `$anchor` and `$dynamicAnchor` index.
+- The index of identifiers and anchors, each schema's by the rules of
+  its dialect.
 - Each site's landing: its pointer read on the document as it is
   written (Decision 27). Where a step is missing at a site, the walk
   goes on in what that site names, and the landing lists that site in
@@ -346,6 +347,47 @@ one pass over the document (`openapi_work`). `model.ts`'s `stepper` is
 the one statement of a step in the model, and tells the index how each
 was decided, which is how a region with no state is told from data.
 
+**Dialects** (the plan's Decision 29) are stated in two places, and
+the survey reads both. `ts/src/dialect.ts` has what resolving needs of
+each of the five: which member names a schema resource (`id` in
+draft-04, `$id` after), whether that member written as a fragment
+alone is an anchor (draft-04 to draft-07), which members name an
+anchor, whether a `$ref` stands alone (draft-04 to draft-07), and which
+reference is left to evaluation (`$recursiveRef` in 2019-09,
+`$dynamicRef` in 2020-12). `dialectOf` reads an identifier in its
+normal form, and gives 2020-12 for one it does not know. Which members
+hold schemas is the object model's: `model/applicators.json` lists
+them for each dialect a 3.1 or 3.2 schema may declare, and the
+generator makes a state for each, `schema@draft-07` and the like.
+
+At a Schema Object of 3.1 or 3.2 the survey takes the dialect its
+`$schema` names, else the one in force above it, and gives the
+location that dialect's state and rules. So a site in `definitions` is
+found by where it is under draft-07, and only by a reference that
+lands on it under 2020-12. A region a reference types as a schema is
+read by the dialect in force where the region is, not by the
+referrer's. What OpenAPI adds to a schema is typed in every dialect.
+`index.dialects()` lists each `$schema`, and `resolve` puts the root's
+`jsonSchemaDialect` before them. Under `refs: 'pointer'` no dialect is
+read: every schema is the version's own, as apidef has it.
+
+An identifier that names the resource it is in names nothing new,
+with or without a fragment its dialect does not read as an anchor:
+`$id: '#name'` in 2020-12, `id: '#'`, or the document's own URI. Read
+as a resource it would take the place of the one it is in. One
+`$id: '#name'` in a 3.1 description then left every reference of the
+document `not-found`, which is what the builds before T3's third item
+did. An identifier of another resource is that resource's, and a
+fragment on it that is no anchor is dropped.
+
+**URIs are compared in their normal form** (`normalizeUri` in
+`ts/src/uri.ts`, section 6.2 of RFC 3986). Every base URI the index
+holds is in that form and has no fragment: the document's, from
+`retrievalUri` or `$self`, and each schema's. `locateUri` therefore
+reads a reference that is a fragment alone without resolving it, which
+is most of them. Keep that property when adding a base: a base that is
+not in normal form compares unequal to itself.
+
 **The fold** is `fold` from `@tabnas/expr`, and keeps what depends on
 the tree being built: the values, what is shared, and which edge of a
 cycle is cut.
@@ -361,8 +403,8 @@ cycle is cut.
   number is plain document order.
 - `evaluate` hands the site's landing to `settleSite`, which applies
   the chain rule (a site naming a site left as written is left as
-  written, reported as that one is), the sibling rule by version and
-  kind, and the output shape. Under `cycles: 'cut'` it reads the
+  written, reported as that one is), the sibling rule by version, kind
+  and dialect, and the output shape. Under `cycles: 'cut'` it reads the
   landing through `site.written`, which folds that location and reads
   through no site above it. Under `cycles: 'keep'` it reads nothing: see
   below. Under `strict` a landing with a `through` is not found, since
@@ -399,10 +441,11 @@ the compact JSON's UTF-8 bytes against `budget`. `xref` (apidef's
 the `x-ref` a chain's earlier link carried.
 
 `refs: 'pointer'` is apidef's reading of a reference, and it changes
-four things: `locatePointer` stands in for `locateUri`; the root is no
-site; no region is typed by a reference; and a pointer is read through
-each site on its way, by `site.at`, and ends at a reference left as
-written (in `keepCycles`, and by `throughLeft` under `cycles: 'cut'`).
+five things: `locatePointer` stands in for `locateUri`; the root is no
+site; no region is typed by a reference; no dialect is read; and a
+pointer is read through each site on its way, by `site.at`, and ends
+at a reference left as written (in `keepCycles`, and by `throughLeft`
+under `cycles: 'cut'`).
 The index's landings are not used there.
 `compat: 'apidef'` is the seven options of `PRESETS.apidef`, with two
 details that no option names, both under `asApidef`: `settleSite` leaves
@@ -412,8 +455,8 @@ site's members in the order that apidef's resolving in place leaves.
 `ts/src/connections.ts` builds the `connections` report from the index:
 one walk of the typed locations for the names (operationId,
 operationRef, security requirement keys, tags, 3.2 tag parents,
-discriminator mappings, `$dynamicRef`), each URI judged by where it
-lands; Path Item merge conflicts come from `evaluate`;
+discriminator mappings, and the `$dynamicRef` or `$recursiveRef` of a
+schema whose dialect has it), each URI judged by where it lands; Path Item merge conflicts come from `evaluate`;
 `operationIdReuse` walks routes through paths, webhooks and callbacks on
 the document, a reference on the way standing for its landing. None of
 it reads the resolved tree, so it does not depend on the shape asked
@@ -422,7 +465,7 @@ for. `ts/src/uri.ts` holds the RFC 3986 and RFC 6901 helpers both use.
 A reference into another document is reported `external`: loading is
 Phase 3. `test/resolve/*.tsv` pins the resolver, with
 `ts/test/resolve-spec.test.ts` as the runner (optional `select`,
-`connections` and `provenance` columns); identity, cyclic graphs, the
+`connections`, `provenance` and `dialects` columns); identity, cyclic graphs, the
 byte budget and the step bound, which JSON cannot carry, are in
 `ts/test/resolve.test.ts`.
 
@@ -452,8 +495,10 @@ The table is **generated, never hand-edited**, by
 - `model/schemas/`: the OAI's dated validation schemas, vendored
   unchanged and pinned by URL, date and SHA-256 in `sources.json`;
 - `model/applicators.json`: which members of a Schema Object hold
-  schemas, per dialect (2020-12, Wright-00, draft-04), which the
-  validation schemas cannot say;
+  schemas, which the validation schemas cannot say. `dialects` has each
+  version's own (2020-12, Wright-00, and the part of draft-04 that 2.0
+  takes), and `declared` has the dialects a 3.1 or 3.2 schema may
+  declare with `$schema` (draft-04, draft-06, draft-07, 2019-09);
 - `model/overlay.json`: the locators, connections and mappings the
   schemas type as plain strings, each with its reason.
 

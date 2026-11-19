@@ -26,11 +26,13 @@ import type { FoldOptions, Op, Positions, Site } from '@tabnas/expr'
 
 import { connectionsOf, reuseOf } from './connections'
 import type { Connection } from './connections'
+import { dialectOf } from './dialect'
+import type { DialectUse } from './dialect'
 import type { ModelVersion } from './model'
 import { version as readVersion } from './oas-version'
 import { Loc, buildIndex, hasIds } from './site-index'
 import type { Kind, SiteFacts, Why } from './site-index'
-import { NOTHING, define, isMap, merged, own, pointer, resolveUri, stepInto, withoutFragment } from './uri'
+import { NOTHING, define, isMap, merged, normalizeUri, own, pointer, resolveUri, stepInto, withoutFragment } from './uri'
 import type { Path } from './uri'
 
 // The base a description is read under when the caller gives no retrieval
@@ -178,6 +180,13 @@ type ResolveResult = {
   // `$ref` maps the object model types as data: an example payload, an
   // extension value, a property named `$ref`.
   dataSlots: number
+  // The schema dialects the description declares, the root's
+  // `jsonSchemaDialect` first and then each schema's `$schema` in document
+  // order, with the dialect each is read by. One this package does not
+  // know is read as 2020-12, and has `known: false` here. Empty for 2.0
+  // and 3.0, which have no dialects, and under `refs: 'pointer'`, which
+  // reads none.
+  dialects: DialectUse[]
 }
 
 class ResolveError extends Error {
@@ -213,8 +222,10 @@ const DEFAULT_DIALECT: Record<string, string> = {
 }
 
 // A Reference Object's summary and description override the target's
-// only where the target's type has the field. 3.2 adds summary to the
-// Response and Tag objects and description to the Media Type object.
+// only where the target's type has the field, by the specification's
+// text. 3.2 adds summary to the Response and Tag objects. Its Media Type
+// Object has no description, though the validation schemas before
+// 2026-11-12 gave it one.
 const OVERRIDE_31: Record<string, string[]> = {
   response: ['description'],
   parameter: ['description'],
@@ -232,7 +243,6 @@ const OVERRIDE: Record<string, Record<string, string[]>> = {
   '3.2': {
     ...OVERRIDE_31,
     response: ['summary', 'description'],
-    mediaType: ['description'],
     tag: ['summary', 'description'],
   },
 }
@@ -403,11 +413,13 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   const siteShape = 'site' === o.sharing || o.xref
   const extensions = new Set(o.extensions)
 
-  const retrieval = o.retrievalUri ?? DEFAULT_BASE
-  const docBase =
-    hasSelf(mv) && isMap(raw) && 'string' === typeof raw.$self ? resolveUri(retrieval, raw.$self) : retrieval
-  const entry = withoutFragment(docBase)
-  const retrieved = withoutFragment(retrieval)
+  // The URI the description was retrieved from, and its own: both in
+  // their normal form and without a fragment, as every base URI below is.
+  const retrieved = withoutFragment(normalizeUri(o.retrievalUri ?? DEFAULT_BASE))
+  const entry =
+    hasSelf(mv) && isMap(raw) && 'string' === typeof raw.$self
+      ? withoutFragment(normalizeUri(resolveUri(retrieved, raw.$self)))
+      : retrieved
   const rootDialect =
     hasIds(mv) && isMap(raw) && 'string' === typeof raw.jsonSchemaDialect
       ? raw.jsonSchemaDialect
@@ -437,7 +449,6 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
 
   const index = buildIndex(raw, {
     mv,
-    docBase,
     entry,
     retrieved,
     rootDialect,
@@ -559,8 +570,10 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     // reference in data: siblings are ignored.
     if ('data' === info.kind || '2.0' === mv || '3.0' === mv) return hit
     // 3.1 and later: a Schema Object's $ref is an applicator, and its
-    // siblings apply beside it.
+    // siblings apply beside it, unless the schema is of a dialect whose
+    // $ref stands alone (draft-04 to draft-07).
     if ('schema' === info.kind) {
+      if (info.row.alone) return hit
       const rest = merged(siblings)
       const allOf = Array.isArray(rest.allOf) ? rest.allOf : []
       delete rest.allOf
@@ -982,6 +995,17 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
 
   const bySeq = <T>(rows: [number, T][]) => rows.sort((a, b) => a[0] - b[0]).map((r) => r[1])
 
+  // The dialects the description declares: the root's, then each
+  // schema's.
+  const dialects: DialectUse[] = []
+  if (!pointers && hasIds(mv)) {
+    if (isMap(raw) && 'string' === typeof raw.jsonSchemaDialect) {
+      const d = dialectOf(raw.jsonSchemaDialect)
+      dialects.push({ at: '/jsonSchemaDialect', dialect: raw.jsonSchemaDialect, as: d.dialect.name, known: d.known })
+    }
+    for (const use of index.dialects()) dialects.push(use)
+  }
+
   return {
     tree,
     version: detected,
@@ -990,6 +1014,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     cuts: bySeq(cutRows),
     connections,
     dataSlots: index.dataSlots,
+    dialects,
   }
 
 }

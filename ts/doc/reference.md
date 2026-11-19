@@ -295,6 +295,14 @@ type ResolveResult = {
   cuts: { at: string, ref: string, target: string }[]
   connections: Connection[]
   dataSlots: number             // $ref maps read as data
+  dialects: DialectUse[]        // the schema dialects it declares
+}
+
+type DialectUse = {
+  at: string                    // /jsonSchemaDialect, or a schema's $schema
+  dialect: string               // as written
+  as: 'draft-04' | 'draft-06' | 'draft-07' | '2019-09' | '2020-12'
+  known: boolean                // false: not a dialect this package knows
 }
 
 type Provenance = {
@@ -328,8 +336,8 @@ does the same inside the extension members it names.
 A map the version gives no type at all takes the type of the first
 reference to land on it, in document order. Such a map is in an
 extension, under a member the version does not have, such as
-`definitions` in a 3.1 schema, or under a 3.0 component name that the
-specification's pattern refuses. The references inside it are then
+`definitions` in a 2020-12 schema, or under a 3.0 component name that
+the specification's pattern refuses. The references inside it are then
 sites, and they can type further maps in turn. A reference of kind
 `data` types nothing.
 
@@ -340,7 +348,18 @@ map's included), else the document's `$self` (3.2), else
 `retrievalUri`. Its fragment is a JSON Pointer, percent-decoded first,
 or from 3.1 an anchor that a `$anchor` or `$dynamicAnchor` declares. An
 array index is `0`, or digits with no leading zero, in range. Only a
-map's own members are members.
+map's own members are members. A schema of an earlier dialect names
+itself and its anchors by that dialect's rules, which
+[Dialects](#dialects) has.
+
+A URI is compared with another in the normal form of RFC 3986, section
+6.2. The scheme and the host are in lower case. An empty port and
+the scheme's own are dropped. A percent-encoded letter, digit, `-`,
+`.`, `_` or `~` is that character, and the hex digits of any other
+percent-encoding are in upper case. Dot segments are removed, and an
+empty path beside a host is `/`. So `HTTPS://API.Example.com:443/a.yaml`
+names the document retrieved from `https://api.example.com/a.yaml`. The
+case of a path is kept, since it can matter.
 
 A pointer is read on the document as it is written, so a member that a
 reference has beside its `$ref` is the one a pointer through it names.
@@ -352,8 +371,9 @@ root. A JSON Pointer has no such step of its own, and `strict` does not
 take it: the reference is `not-found`.
 
 For a reference into another document, `uri` is that document's URI,
-resolved against the same base, and `fragment` is the reference's
-fragment. Give `retrievalUri` for `uri` to be a real location.
+resolved against the same base and in its normal form, and `fragment`
+is the reference's fragment. Give `retrievalUri` for `uri` to be a real
+location.
 
 A reference to a site left as written is left as written too, and
 reported as that site is.
@@ -367,7 +387,7 @@ and nothing else:
 - The pointer is read from the document's root. `~1` and `~0` are
   decoded, and nothing is percent-decoded.
 - `$id`, anchors, schema dialects, `$self` and `retrievalUri` are not
-  read, and `$dynamicRef` makes no site.
+  read, `$dynamicRef` makes no site, and `dialects` is empty.
 - A pointer that passes through a string `$ref` left as written ends
   there. Its site is cut where that reference was cut, and has `why` set
   to `not-found` otherwise. Under `uri` it reads on in that map as
@@ -377,6 +397,59 @@ and nothing else:
 
 `refs` does not change `connections`.
 
+#### Dialects
+
+A Schema Object of 3.1 or 3.2 is written in a JSON Schema dialect. It
+is the one its own `$schema` names, else the one in force where it is.
+At the root that is the description's `jsonSchemaDialect`, else the
+OpenAPI dialect of the version. A `$schema` is read at any schema that
+has one, which is lenient: the specification gives it a meaning only at
+the root of a schema resource. Five dialects are read, each by its own
+rules:
+
+| | draft-04 | draft-06, draft-07 | 2019-09 | 2020-12 |
+|---|---|---|---|---|
+| Names a schema resource | `id` | `$id` | `$id` | `$id` |
+| Names an anchor | `id: '#name'` | `$id: '#name'` | `$anchor` | `$anchor`, `$dynamicAnchor` |
+| Members beside a `$ref` | not read | not read | apply | apply |
+| Reported, never followed | | | `$recursiveRef` | `$dynamicRef` |
+| Maps of schemas | `properties`, `patternProperties`, `definitions`, `dependencies` | the same | `properties`, `patternProperties`, `$defs`, `dependentSchemas` | the same |
+| A list of schemas in `items` | yes, with `additionalItems` | yes | yes | no: `prefixItems` |
+
+draft-06 adds `contains` and `propertyNames`, and draft-07 adds `if`,
+`then` and `else`. 2019-09 adds `unevaluatedItems`,
+`unevaluatedProperties` and `contentSchema`. A member a dialect does
+not have holds no schemas in it. A `$ref` there is read only where a
+reference lands on it, as [Sites](#sites) has.
+
+The OpenAPI dialects of 3.1 and 3.2 are read as 2020-12, and so is a
+dialect this package does not know. An identifier is compared in its
+normal form, with or without the empty fragment, under `http` or
+`https`. A draft's hyper-schema dialect is read as the draft.
+
+Three things follow from a `$ref` whose neighbours are not read. Its
+site holds the target alone. An `$id` beside it names nothing, so the
+reference is read against the base its parent has. And `$schema` is
+still read first, since it says how the rest is read.
+
+An identifier that is a fragment alone, such as `$id: '#name'`, is an
+anchor in draft-04 to draft-07. In 2019-09 and 2020-12 it names
+nothing: not an anchor, and not the resource it is in. In every
+dialect, an identifier that is the URI of the resource it is in names
+nothing new, so a schema can't take the place of the document or of
+the schema resource around it. An identifier of another resource that
+has a fragment names that resource, and the fragment is dropped.
+
+What OpenAPI adds to a Schema Object is read in every dialect:
+`discriminator`, `xml`, `externalDocs` and `example`.
+
+`dialects` lists what the description declares: the root's
+`jsonSchemaDialect` first, then the `$schema` of each schema in
+document order. `as` is the dialect whose rules it is read by, and `known` is
+false for one this package does not know. An unknown dialect is not an
+error, under `strict` or otherwise. 2.0 and 3.0 have no dialects:
+`$schema` there is a member like any other, and `dialects` is empty.
+
 #### Siblings
 
 What happens to the members beside a `$ref` under `siblings: 'spec'`:
@@ -384,7 +457,7 @@ What happens to the members beside a `$ref` under `siblings: 'spec'`:
 | Site | 2.0, 3.0 | 3.1, 3.2 |
 |---|---|---|
 | Reference Object | ignored | `summary` and `description` override the target's, where its type has them |
-| Schema Object | ignored | kept, with the target joined in an `allOf` |
+| Schema Object | ignored | kept, with the target joined in an `allOf`. Ignored in a schema of draft-04 to draft-07 |
 | Path Item | merged with the target's fields | merged with the target's fields |
 | data | ignored | ignored |
 
@@ -481,11 +554,10 @@ in `unresolved`, with `why`:
 |---|---|
 | `not-found` | names nothing in the document |
 | `no-anchor` | names an anchor nothing declares |
-| `bad-fragment` | has a fragment that is not a well-formed JSON Pointer or, before 3.1, any anchor. Under `refs: 'pointer'`: begins `#` and not `#/` |
+| `bad-fragment` | has a fragment that is not a well-formed JSON Pointer or, from 3.1, a plain name. Under `refs: 'pointer'`: begins `#` and not `#/` |
 | `not-a-string` | is not a string; its map is resolved as a plain map |
 | `external` | names another document, which this release does not load. Under `refs: 'pointer'`: does not begin `#` |
 | `non-object-target` | names a value that is not a map, under `targets: 'object'` |
-| `unsupported-dialect` | is in a schema of a dialect other than JSON Schema 2020-12 or OpenAPI's |
 
 A site left as written keeps its other members, each resolved, so a
 reference inside a sibling still resolves.
@@ -531,7 +603,8 @@ through `$ref`. Nothing in it is put into the tree.
 | `tagParent` | a 3.2 tag's `parent` | the root `tags` entry of that name | `cycle`, when the chain of parents loops |
 | `mapping` | a Discriminator `mapping` value | a schema by component name, failing that by URI | `via` |
 | `defaultMapping` | a 3.2 Discriminator's `defaultMapping` | as `mapping` | `via` |
-| `dynamicRef` | a schema with `$dynamicRef` | its initial target, by URI | `anchor`, when that target has a `$dynamicAnchor` of the fragment's name |
+| `dynamicRef` | a 2020-12 schema with `$dynamicRef` | its initial target, by URI | `anchor`, when that target has a `$dynamicAnchor` of the fragment's name |
+| `recursiveRef` | a 2019-09 schema with `$recursiveRef` | its initial target, by URI | `anchor`, when that target has `$recursiveAnchor: true` |
 | `pathItemMerge` | a Path Item with `$ref` | the Path Item it names | `fields`: the fields both have, where the specification leaves the merge undefined |
 | `operationIdReuse` | the first route | one `operationId` that more than one route through `paths`, `webhooks` and callbacks reaches | `routes` |
 

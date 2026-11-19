@@ -25,5 +25,35 @@
       "objects": { "xml": "xml", "externalDocs": "externalDocs" },
       "data": ["example", "enum", "default", "discriminator"]
     }
+  },
+  "declared": {
+    "comment": "The Schema Object as a dialect other than the version's own has it, for a schema of the listed versions that declares one with $schema, or a description that declares one with jsonSchemaDialect. Each list is the dialect's own: draft-04 (JSON Schema Validation, draft-fge-json-schema-validation-00), draft-06 (draft-wright-json-schema-validation-01, which adds contains and propertyNames), draft-07 (draft-handrews-json-schema-validation-01, which adds if, then and else) and 2019-09 (its applicator vocabulary and contentSchema; items may still be a list, beside additionalItems, and definitions and dependencies are no longer keywords). The lists have the same meaning as in dialects. The members OpenAPI adds to a Schema Object (objects) and the members that hold plain values (data) are the version's own in every dialect: a schema inside an OpenAPI description keeps its discriminator, xml, externalDocs and example whatever dialect it declares.",
+    "versions": ["3.1", "3.2"],
+    "dialects": {
+      "draft-04": {
+        "schema": ["additionalProperties", "additionalItems", "not"],
+        "schemaMap": ["properties", "patternProperties", "definitions", "dependencies"],
+        "schemaList": ["allOf", "anyOf", "oneOf"],
+        "schemaOrList": ["items"]
+      },
+      "draft-06": {
+        "schema": ["additionalProperties", "additionalItems", "contains", "propertyNames", "not"],
+        "schemaMap": ["properties", "patternProperties", "definitions", "dependencies"],
+        "schemaList": ["allOf", "anyOf", "oneOf"],
+        "schemaOrList": ["items"]
+      },
+      "draft-07": {
+        "schema": ["additionalProperties", "additionalItems", "contains", "propertyNames", "if", "then", "else", "not"],
+        "schemaMap": ["properties", "patternProperties", "definitions", "dependencies"],
+        "schemaList": ["allOf", "anyOf", "oneOf"],
+        "schemaOrList": ["items"]
+      },
+      "2019-09": {
+        "schema": ["additionalProperties", "additionalItems", "contains", "propertyNames", "if", "then", "else", "not", "unevaluatedItems", "unevaluatedProperties", "contentSchema"],
+        "schemaMap": ["properties", "patternProperties", "$defs", "dependentSchemas"],
+        "schemaList": ["allOf", "anyOf", "oneOf"],
+        "schemaOrList": ["items"]
+      }
+    }
   }
 }
