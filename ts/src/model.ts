@@ -20,7 +20,13 @@
 //               substituted (a Link's operationRef);
 //   connection  a name that names something elsewhere (a tag, an
 //               operationId, a security scheme);
-//   mapping     a Discriminator mapping value, a schema name or a URI.
+//   mapping     a Discriminator mapping value, a schema name or a URI;
+//   url         a URL or URI of something outside the description, which
+//               is reported and never loaded. Its type is what a relative
+//               one is relative to: the description's base URI
+//               (`description`), the URI the description was retrieved
+//               from (`retrieval`), a server of the API (`api`), or
+//               nothing, where it must be absolute (`none`).
 //
 // An unknown position is data.
 
@@ -38,6 +44,7 @@ type SlotKind =
   | 'locator'
   | 'connection'
   | 'mapping'
+  | 'url'
 
 // A position, as the model sees it.
 type Slot = {
@@ -98,31 +105,104 @@ function rootState(): string {
   return 'root'
 }
 
+// How a step was decided: the model names the member (`prop`); a pattern
+// of the model matches its name (`pattern`), which for the `^x-` pattern is
+// an extension (`ext`); the position's catch-all takes it (`rest`); it is
+// an item of a list (`items`); nothing in the model names it (`none`); or
+// it is below a position that has no members of its own (`below`).
+type How = 'prop' | 'pattern' | 'ext' | 'rest' | 'items' | 'none' | 'below'
+
+const INDEX = /^(?:0|[1-9][0-9]*)$/
+
+// The one statement of a step. `why`, when given, is told how the step
+// was decided.
+function stepIn(states: Record<string, State>, state: string, member: string | number, why?: { how: How }): string {
+  let how: How
+  let next: string
+  let s = states[state]
+  if (null != s && 'refable' === s.kind && null != s.target) s = states[s.target]
+  if (null == s) {
+    next = 'data'
+    how = null == states[state] ? 'below' : 'none'
+  } else {
+    const index = 'number' === typeof member || INDEX.test(member)
+    if ('list' === s.kind) {
+      if (index && null != s.items) {
+        next = s.items
+        how = 'items'
+      } else {
+        next = 'data'
+        how = 'none'
+      }
+    } else if ('object' !== s.kind && 'schema' !== s.kind) {
+      next = 'data'
+      how = 'below'
+    } else if (index && null != s.items) {
+      next = s.items
+      how = 'items'
+    } else {
+      const name = String(member)
+      next = ''
+      how = 'none'
+      if (null != s.props && own(s.props, name)) {
+        next = s.props[name]
+        how = 'prop'
+      } else {
+        for (const [src, to] of s.patterns ?? []) {
+          if (pattern(src).test(name)) {
+            next = to
+            how = '^x-' === src ? 'ext' : 'pattern'
+            break
+          }
+        }
+        if ('' === next) {
+          if (null != s.rest) {
+            next = s.rest
+            how = 'rest'
+          } else next = 'data'
+        }
+      }
+    }
+  }
+  if (undefined !== why) why.how = how
+  return next
+}
+
 // The state of a member of a position: by name, then by the first pattern
 // that matches, then the catch-all; an index of a list is its item state.
 // A refable slot steps as the object it holds, so a member of a Reference
 // Object ($ref, summary, description) reads as the target's member of that
 // name, which is data where the target has none.
 function step(version: ModelVersion, state: string, member: string | number): string {
+  return stepIn(table(version), state, member)
+}
+
+// `step`, for one version, that also tells `why` how each step was
+// decided. The site index types a document with it.
+function stepper(version: ModelVersion): (state: string, member: string | number, why?: { how: How }) => string {
+  const states = table(version)
+  return (state, member, why) => stepIn(states, state, member, why)
+}
+
+// The kind of the state a step is taken from, a refable slot stepping as
+// the object it holds.
+function kindFrom(version: ModelVersion, state: string): SlotKind {
   const states = table(version)
   let s = states[state]
   if (null == s) return 'data'
-  if ('refable' === s.kind && null != s.target) {
-    s = states[s.target]
-    if (null == s) return 'data'
+  if ('refable' === s.kind && null != s.target) s = states[s.target] ?? s
+  return s.kind
+}
+
+// The state of a Schema Object, by the name of the dialect it is read
+// by: the version's own, and for 3.1 and 3.2 the dialects a schema may
+// declare (model/applicators.json).
+function schemaStates(version: ModelVersion): Record<string, string> {
+  const v = (OBJECT_MODEL.versions as any)[version]
+  if (null == v) {
+    throw new Error('model: no object model for version ' + JSON.stringify(version))
   }
-  const index = 'number' === typeof member || /^(?:0|[1-9][0-9]*)$/.test(member)
-  if ('list' === s.kind) {
-    return index && null != s.items ? s.items : 'data'
-  }
-  if ('object' !== s.kind && 'schema' !== s.kind) return 'data'
-  if (index && null != s.items) return s.items
-  const name = String(member)
-  if (null != s.props && own(s.props, name)) return s.props[name]
-  for (const [src, to] of s.patterns ?? []) {
-    if (pattern(src).test(name)) return to
-  }
-  return s.rest ?? 'data'
+  return v.dialects ?? { [v.dialect]: 'schema' }
 }
 
 // What a state is.
@@ -170,6 +250,6 @@ function walkModel<T>(
   }
 }
 
-export { VERSIONS as MODEL_VERSIONS, classify, rootState, slot, step, walkModel }
+export { VERSIONS as MODEL_VERSIONS, classify, kindFrom, rootState, schemaStates, slot, step, stepper, walkModel }
 
-export type { ModelVersion, Slot, SlotKind }
+export type { How, ModelVersion, Slot, SlotKind }

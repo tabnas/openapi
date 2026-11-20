@@ -369,6 +369,14 @@ each round.
 
 ## To run it again
 
+The prototype's resolver is made from the compiled resolver of the
+commit it was measured at, a353a71. Since then `resolve` has been
+rebuilt on the index, as item 2 of T3, so the seven replacements no
+longer match this checkout's build, and `resolver.cjs` refuses to load
+against it, as it is meant to. Build that commit, and name its `ts/dist`
+with `OPENAPI_DIST_DIR` and its `ts/dist/openapi.js` with
+`OPENAPI_DIST`.
+
 ```sh
 # the expr build with site.written
 git clone https://github.com/tabnas/expr && cd expr && git checkout 72962b0

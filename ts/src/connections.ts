@@ -5,17 +5,25 @@
 // names an operation by operationId, or locates one with operationRef; a
 // Security Requirement's member names name security schemes; an
 // operation's tags name tags; a 3.2 tag names its parent; a Discriminator
-// maps payload values to schemas by name or URI; a `$dynamicRef` has an
-// initial target. Nothing here is substituted into the tree: the report
-// says what each name reaches, and the caller decides.
+// maps payload values to schemas by name or URI, and by the names of the
+// schemas it is beside or that build on its own; a `$dynamicRef` or a
+// `$recursiveRef` has an initial target. Nothing here is substituted into
+// the tree: the report says what each name reaches, and the caller
+// decides. The URLs a description gives for things outside it are a
+// report of their own, since nothing here can say whether one is there.
 //
-// The names are found by walking the raw tree with the object model, so a
-// name inside example data is data. Whether a target exists is checked in
-// the resolved tree, so a target reached through a `$ref` is found.
+// Everything here is read from the site index (site-index.ts), which has
+// the type of every location, the base URI it is read under, and where a
+// path lands. So a name inside example data is data; a name in a region
+// that only a reference types is found; and whether a target is there is
+// judged on the document as written, with a step that is missing at a
+// reference read in what that reference names. None of it depends on the
+// shape the caller asked the resolved tree in.
 
-import { classify, slot, step, walkModel } from './model'
+import { slot, step } from './model'
 import type { ModelVersion } from './model'
-import { ANCHOR, NOTHING, fragmentOf, isMap, own, pointer, resolveUri, stepInto } from './uri'
+import type { Landing, Loc, SiteIndex } from './site-index'
+import { ANCHOR, NOTHING, fragmentOf, hierarchical, isMap, normalizeUri, own, pointer, resolveUri, stepInto } from './uri'
 import type { Path } from './uri'
 
 type ConnectionKind =
@@ -26,7 +34,9 @@ type ConnectionKind =
   | 'tagParent'
   | 'mapping'
   | 'defaultMapping'
+  | 'implicitMapping'
   | 'dynamicRef'
+  | 'recursiveRef'
   | 'pathItemMerge'
   | 'operationIdReuse'
 
@@ -55,7 +65,8 @@ type Connection = {
   // A 3.2 tag whose chain of parents loops.
   cycle?: boolean
   // A `$dynamicRef` whose initial target has a `$dynamicAnchor` of the
-  // fragment's name.
+  // fragment's name, or a `$recursiveRef` whose initial target has
+  // `$recursiveAnchor: true`.
   anchor?: boolean
   // A Path Item `$ref`'s fields that are also in the Path Item it names,
   // where the specification leaves the merge undefined.
@@ -63,15 +74,60 @@ type Connection = {
   // Every route through paths, webhooks and callbacks that reaches an
   // operation with one operationId, when there is more than one.
   routes?: string[]
+  // Where an implicit mapping comes from: a schema listed beside the
+  // discriminator in `oneOf` or `anyOf`, one that builds on the
+  // discriminator's schema with `allOf`, or in 2.0 that schema itself.
+  from?: 'oneOf' | 'anyOf' | 'allOf' | 'self'
 }
 
-// How resolve reads a URI reference: the target in this document, or why
-// there is none.
-type Locate = (ref: string, base: string) => { target?: Path; why?: string }
+// A URL or URI that a description gives for something outside it: its
+// terms of service, an external example, a server, a token endpoint.
+// `value` is the field as written. `base` is what a relative value is
+// relative to: the description's base URI where the field is
+// (`description`), the URI the description was retrieved from
+// (`retrieval`, for a Server Object's `url`), a server of the API (`api`),
+// or nothing, where the value must be absolute (`none`). `uri` is the
+// absolute URI in its normal form, where the value has one that this
+// package can work out. A value written with a scheme always has one,
+// but for a server's URL with variables. A relative one has one under
+// `description` and `retrieval`, where its base is a URI that a relative
+// reference can be read against: the base a description has when nobody
+// says where it is stands for no location, and gives none. Nothing is
+// loaded.
+type UrlUse = {
+  at: string
+  value: string
+  base: 'description' | 'retrieval' | 'api' | 'none'
+  uri?: string
+}
 
-type Use = { kind: ConnectionKind; at: string; name: string; base: string; holder?: string }
+type Use = {
+  kind: ConnectionKind
+  at: string
+  name: string
+  base: string
+  holder?: string
+  // For an implicit mapping: the schema that has the discriminator.
+  loc?: Loc
+  node?: any
+}
 
-// The value at a path in the resolved tree, or NOTHING.
+// A URI with a scheme, which needs no base.
+const ABSOLUTE = /^[A-Za-z][A-Za-z0-9+.-]*:/
+
+// The absolute form of a URL as written, in its normal form: its own
+// where it has a scheme, and else its form against `base`, where there
+// is one and a relative reference can be read against it.
+const absoluteOf = (value: string, base: string | undefined): string | undefined =>
+  ABSOLUTE.test(value)
+    ? normalizeUri(resolveUri('', value))
+    : undefined !== base && hierarchical(base)
+      ? normalizeUri(resolveUri(base, value))
+      : undefined
+
+const esc = (seg: string | number) => String(seg).replace(/~/g, '~0').replace(/\//g, '~1')
+
+// The value at a path in a tree, or NOTHING.
 function reach(root: any, path: Path): any {
   let node = root
   for (const seg of path) {
@@ -89,85 +145,235 @@ function namesAt(raw: any, path: Path): Record<string, any> {
 
 function connectionsOf(
   raw: any,
-  tree: any,
   mv: ModelVersion,
-  docBase: string,
-  locate: Locate,
+  index: SiteIndex,
   hasIds: boolean,
-): Connection[] {
+  tick?: () => void,
+): { rows: Connection[]; urls: UrlUse[] } {
+  // A root that is neither a map nor a list names nothing.
+  if (!Array.isArray(raw) && !isMap(raw)) return { rows: [], urls: [] }
   const uses: Use[] = []
+  const urls: UrlUse[] = []
   const declared = new Map<string, string[]>()
   const tags = new Map<string, { at: string; parent?: string }>()
 
-  walkModel<string>(mv, raw, docBase, (node, path, state, base) => {
-    const s = slot(mv, state)
-    let mine = base
-    if ('schema' === s.kind && hasIds && isMap(node)) {
-      if ('string' === typeof node.$id) mine = resolveUri(base, node.$id)
-      if ('string' === typeof node.$dynamicRef) {
-        uses.push({ kind: 'dynamicRef', at: pointer(path), name: node.$dynamicRef, base: mine })
-      }
-    }
-    const last = path[path.length - 1]
-    if ('string' === typeof node) {
-      if ('connection:operationId' === state) {
-        uses.push({ kind: 'operationId', at: pointer(path), name: node, base })
-      } else if ('locator:operation' === state) {
-        uses.push({ kind: 'operationRef', at: pointer(path), name: node, base })
-      } else if ('connection:tag' === state) {
-        const holder = 'parent' === last ? reach(raw, path.slice(0, -1)) : undefined
+  // Every position the index types, in document order, a container before
+  // its members. A value that is neither a map nor a list has no location
+  // of its own: its state is its parent's step to it, and it is read under
+  // its parent's base URI.
+  type Frame = { node: any; loc: Loc | undefined; at: string; state: string; base: string; last: string | number; depth: number; holder: any }
+  const stack: Frame[] = [{ node: raw, loc: index.root, at: '', state: 'root', base: '', last: '', depth: 0, holder: undefined }]
+  while (0 < stack.length) {
+    const f = stack.pop()!
+    if (undefined !== tick) tick()
+    const node = f.node
+    const loc = f.loc
+    const state = undefined !== loc ? loc.state : f.state
+    if ('data' !== state) {
+      const s = slot(mv, state)
+      // The reference a schema's dialect leaves to evaluation: 2020-12's
+      // `$dynamicRef`, or 2019-09's `$recursiveRef`.
+      const dynamic = hasIds && 'schema' === s.kind && isMap(node) ? loc?.rules?.dynamic : undefined
+      if (null != dynamic && 'string' === typeof node[dynamic]) {
         uses.push({
-          kind: 'parent' === last ? 'tagParent' : 'tag',
-          at: pointer(path),
-          name: node,
-          base,
-          holder: isMap(holder) && 'string' === typeof holder.name ? holder.name : undefined,
+          kind: '$dynamicRef' === dynamic ? 'dynamicRef' : 'recursiveRef',
+          at: f.at,
+          name: node[dynamic],
+          base: loc!.base,
         })
-      } else if ('mapping' === state) {
-        uses.push({ kind: 'defaultMapping' === last ? 'defaultMapping' : 'mapping', at: pointer(path), name: node, base })
       }
-    }
-    if (isMap(node)) {
-      if ('connection:securityScheme' === s.keys) {
-        for (const key of Object.keys(node)) {
-          uses.push({ kind: 'securityScheme', at: pointer([...path, key]), name: key, base })
+      if ('string' === typeof node) {
+        if ('connection:operationId' === state) {
+          uses.push({ kind: 'operationId', at: f.at, name: node, base: f.base })
+        } else if ('locator:operation' === state) {
+          uses.push({ kind: 'operationRef', at: f.at, name: node, base: f.base })
+        } else if ('connection:tag' === state) {
+          const holder = 'parent' === f.last ? f.holder : undefined
+          uses.push({
+            kind: 'parent' === f.last ? 'tagParent' : 'tag',
+            at: f.at,
+            name: node,
+            base: f.base,
+            holder: isMap(holder) && 'string' === typeof holder.name ? holder.name : undefined,
+          })
+        } else if ('mapping' === state) {
+          uses.push({ kind: 'defaultMapping' === f.last ? 'defaultMapping' : 'mapping', at: f.at, name: node, base: f.base })
+        } else if ('url' === s.kind) {
+          const base = ('description' === s.type || 'retrieval' === s.type || 'api' === s.type ? s.type : 'none') as UrlUse['base']
+          const row: UrlUse = { at: f.at, value: node, base }
+          // A server's URL with variables has no absolute form until
+          // they are given.
+          const uri =
+            'description' === base
+              ? absoluteOf(node, f.base)
+              : 'retrieval' !== base
+                ? absoluteOf(node, undefined)
+                : /[{}]/.test(node)
+                  ? undefined
+                  : absoluteOf(node, index.retrieved)
+          if (undefined !== uri) row.uri = uri
+          urls.push(row)
         }
       }
-      if ('operation' === s.type && 'object' === s.kind && 'string' === typeof node.operationId) {
-        const list = declared.get(node.operationId) ?? []
-        list.push(pointer(path))
-        declared.set(node.operationId, list)
-      }
-      if ('tag' === s.type && 2 === path.length && 'tags' === path[0] && 'string' === typeof node.name) {
-        if (!tags.has(node.name)) {
-          tags.set(node.name, { at: pointer(path), parent: 'string' === typeof node.parent ? node.parent : undefined })
+      if (isMap(node)) {
+        // A discriminator, which in 2.0 is the name of the property and
+        // from 3.0 an object that has it.
+        if ('schema' === s.kind && undefined !== loc) {
+          const d = node.discriminator
+          if ('2.0' === mv ? 'string' === typeof d : isMap(d) && 'string' === typeof d.propertyName) {
+            uses.push({ kind: 'implicitMapping', at: f.at + '/discriminator', name: '', base: f.base, loc, node })
+          }
+        }
+        if ('connection:securityScheme' === s.keys) {
+          for (const key of Object.keys(node)) {
+            uses.push({ kind: 'securityScheme', at: f.at + '/' + esc(key), name: key, base: f.base })
+          }
+        }
+        if ('operation' === s.type && 'object' === s.kind && 'string' === typeof node.operationId) {
+          const list = declared.get(node.operationId) ?? []
+          list.push(f.at)
+          declared.set(node.operationId, list)
+        }
+        if ('tag' === s.type && 2 === f.depth && 'tags' === loc!.parent!.seg && 'string' === typeof node.name) {
+          if (!tags.has(node.name)) {
+            tags.set(node.name, { at: f.at, parent: 'string' === typeof node.parent ? node.parent : undefined })
+          }
         }
       }
     }
-    return mine
-  })
+    if (undefined === loc) continue
+    const names: (string | number)[] = Array.isArray(node) ? node.map((_: any, i: number) => i) : Object.keys(node)
+    for (let i = names.length - 1; 0 <= i; i--) {
+      const name = names[i]
+      const child = node[name]
+      const kid = null != child && 'object' === typeof child ? index.child(loc, name) : undefined
+      // What lies below a position the model gives no state is of
+      // interest only where a reference has typed it, or something in it.
+      const next = undefined !== kid ? kid.state : 'data' === state ? 'data' : step(mv, state, name)
+      if ('data' === next && (undefined === kid || !kid.holdsRegion)) continue
+      stack.push({ node: child, loc: kid, at: f.at + '/' + esc(name), state: next, base: loc.base, last: name, depth: f.depth + 1, holder: node })
+    }
+  }
 
   const schemes = namesAt(raw, '2.0' === mv ? ['securityDefinitions'] : ['components', 'securitySchemes'])
   const schemesAt = '2.0' === mv ? ['securityDefinitions'] : ['components', 'securitySchemes']
   const schemas = namesAt(raw, '2.0' === mv ? ['definitions'] : ['components', 'schemas'])
   const schemasAt = '2.0' === mv ? ['definitions'] : ['components', 'schemas']
 
-  // A URI reference: located in this document, there in the resolved
-  // tree, and of what type.
+  // A URI reference: located in this document, there as the document is
+  // written, and of what type.
   const byUri = (name: string, base: string) => {
-    const where = locate(name, base)
-    if (null == where.target) return { found: false, target: null, why: where.why ?? 'not-found', type: null }
-    const there = NOTHING !== reach(tree, where.target)
-    return {
-      found: there,
-      target: pointer(where.target),
-      why: there ? undefined : 'not-found',
-      type: there ? classify(mv, where.target).type : null,
+    const where = index.locate(name, base)
+    if (null == where.target) {
+      return { found: false, target: null, why: (where.why ?? 'not-found') as string | undefined, type: null, node: undefined }
     }
+    const land = index.landingAt(where.target)
+    return {
+      found: land.found,
+      target: pointer(where.target),
+      why: land.found ? undefined : 'not-found',
+      type: land.found ? slot(mv, index.stateAt(land)).type : null,
+      node: land.found ? land.node : undefined,
+    }
+  }
+
+  // The schema components that build on a schema with `allOf`, by the
+  // location of the schema built on. A reference in `allOf` names a
+  // schema, and where that one is itself a reference, the one it names
+  // too.
+  const holder = ((): Loc | undefined => {
+    let loc: Loc | undefined = index.root
+    for (const seg of schemasAt) loc = undefined === loc ? undefined : index.child(loc, seg)
+    return loc
+  })()
+  let builders: Map<Loc, string[]> | undefined
+  const buildersOf = (): Map<Loc, string[]> => {
+    if (undefined !== builders) return builders
+    const found = new Map<Loc, string[]>()
+    for (const name of undefined === holder ? [] : Object.keys(schemas)) {
+      if (undefined !== tick) tick()
+      const schema = schemas[name]
+      const list = isMap(schema) && Array.isArray(schema.allOf) ? index.child(index.child(holder!, name)!, 'allOf') : undefined
+      if (undefined === list) continue
+      for (let i = 0; i < schema.allOf.length; i++) {
+        let loc = index.child(list, i)
+        const seen = new Set<Loc>()
+        while (undefined !== loc && undefined !== loc.site && !seen.has(loc)) {
+          seen.add(loc)
+          const land: Landing = index.landing(loc.site)
+          loc = land.found ? land.loc : undefined
+          if (undefined === loc) break
+          const names = found.get(loc)
+          if (undefined === names) found.set(loc, [name])
+          else names.push(name)
+        }
+      }
+    }
+    return (builders = found)
+  }
+
+  // The name of the schema component at a path, where it is one.
+  const componentAt = (path: Path | undefined): string | undefined =>
+    undefined !== path && path.length === schemasAt.length + 1 && schemasAt.every((seg, i) => seg === String(path[i]))
+      ? String(path[path.length - 1])
+      : undefined
+
+  // The implicit mapping of a discriminator: the value of its property is
+  // the name of a schema component, where no `mapping` entry has that
+  // value. The schemas it can name are the ones listed beside it in
+  // `oneOf` or `anyOf` by reference, since an inline one has no name, and
+  // the components that build on its schema with `allOf`, and on those in
+  // turn. In 2.0 the schema's own name is one too.
+  const implied = (use: Use): Connection[] => {
+    const node = use.node
+    const rows: Connection[] = []
+    const explicit = '2.0' !== mv && isMap(node.discriminator.mapping) ? node.discriminator.mapping : undefined
+    const seen = new Set<string>()
+    const add = (name: string, from: Connection['from']) => {
+      if (seen.has(name) || (undefined !== explicit && own(explicit, name))) return
+      seen.add(name)
+      rows.push({ kind: 'implicitMapping', at: use.at, name, found: true, target: pointer([...schemasAt, name]), from })
+    }
+    if ('2.0' === mv) {
+      const path: Path = []
+      for (let p: Loc | undefined = use.loc; undefined !== p && undefined !== p.parent; p = p.parent) path.unshift(p.seg)
+      const self = componentAt(path)
+      if (undefined !== self) add(self, 'self')
+    } else {
+      for (const k of ['oneOf', 'anyOf'] as const) {
+        const list = Array.isArray(node[k]) ? index.child(use.loc!, k) : undefined
+        if (undefined === list) continue
+        for (let i = 0; i < node[k].length; i++) {
+          const item = index.child(list, i)
+          if (undefined === item || undefined === item.site) continue
+          const land: Landing = index.landing(item.site)
+          const name = land.found ? componentAt(land.path) : undefined
+          if (undefined !== name) add(name, k)
+        }
+      }
+    }
+    const built = buildersOf()
+    const queue: Loc[] = [use.loc!]
+    const done = new Set<Loc>()
+    while (0 < queue.length) {
+      const at = queue.shift()!
+      if (done.has(at)) continue
+      done.add(at)
+      for (const name of built.get(at) ?? []) {
+        add(name, 'allOf')
+        const child = index.child(holder!, name)
+        if (undefined !== child) queue.push(child)
+      }
+    }
+    return rows
   }
 
   const out: Connection[] = []
   for (const use of uses) {
+    if ('implicitMapping' === use.kind) {
+      for (const row of implied(use)) out.push(row)
+      continue
+    }
     const row: Connection = { kind: use.kind, at: use.at, name: use.name, found: false, target: null }
     if ('operationId' === use.kind) {
       const decl = declared.get(use.name)
@@ -176,7 +382,7 @@ function connectionsOf(
         row.target = decl[0]
         if (1 < decl.length) row.targets = decl
       }
-    } else if ('operationRef' === use.kind || 'dynamicRef' === use.kind) {
+    } else if ('operationRef' === use.kind || 'dynamicRef' === use.kind || 'recursiveRef' === use.kind) {
       const u = byUri(use.name, use.base)
       row.found = u.found
       row.target = u.target
@@ -184,9 +390,10 @@ function connectionsOf(
       if ('operationRef' === use.kind) row.type = u.type
       if ('dynamicRef' === use.kind) {
         const fragment = fragmentOf(resolveUri(use.base, use.name))
-        const node = u.found && null != u.target ? reach(tree, pointerPath(u.target)) : undefined
+        const node = u.node
         row.anchor = null != fragment && ANCHOR.test(fragment) && isMap(node) && fragment === node.$dynamicAnchor
       }
+      if ('recursiveRef' === use.kind) row.anchor = isMap(u.node) && true === u.node.$recursiveAnchor
     } else if ('securityScheme' === use.kind) {
       if (own(schemes, use.name)) {
         row.found = true
@@ -239,38 +446,89 @@ function connectionsOf(
     }
     out.push(row)
   }
-  return out
+  return { rows: out, urls }
 }
 
 // Every route through paths, webhooks and callbacks that reaches an
-// operation, walked in the resolved tree so a path item reached through a
-// `$ref` counts once per route, and grouped by operationId: an id that
-// more than one route reaches names more than one operation in the API.
-function reuseOf(tree: any, mv: ModelVersion): Connection[] {
+// operation, grouped by operationId: an id that more than one route
+// reaches names more than one operation in the API. The routes are
+// walked on the document. A reference on the way stands for what it lands
+// on, so a path item reached through a `$ref` counts once per route, and
+// a Path Item's own fields beside its `$ref` are walked with those of the
+// Path Item it names. That holds for every site the index has: under
+// `slots: 'all'` a `$ref` where the model puts an operation is one. A
+// reference that lands nowhere is walked as it is written, and a route
+// that comes back to a value it is already in ends there.
+//
+// A value that two routes reach is walked once for each, so the walk can
+// be far longer than the document: every visit is a step of the caller's
+// count, where one is kept.
+function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex, tick?: () => void): Connection[] {
   const routes = new Map<string, string[]>()
   const onPath = new Set<any>()
-  const stack: [any, Path, string, boolean][] = [[tree, [], 'root', false]]
+  type Member = { value: any; loc: Loc | undefined }
+  type Frame = { node: any; loc: Loc | undefined; at: string; state: string; leaving: boolean }
+  const stack: Frame[] = [{ node: raw, loc: index.root, at: '', state: 'root', leaving: false }]
   while (0 < stack.length) {
-    const [node, path, state, leaving] = stack.pop()!
-    if (leaving) {
-      onPath.delete(node)
+    const f = stack.pop()!
+    if (f.leaving) {
+      onPath.delete(f.node)
       continue
     }
-    if (null == node || 'object' !== typeof node || onPath.has(node)) continue
-    const s = slot(mv, state)
+    if (null == f.node || 'object' !== typeof f.node) continue
+    if (undefined !== tick) tick()
+    const s = slot(mv, f.state)
     if ('schema' === s.kind) continue
+    // What a reference here stands for, and the fields a Path Item has
+    // beside its `$ref`, the outermost winning.
+    let node = f.node
+    let loc = f.loc
+    let beside: Record<string, Member> | undefined
+    const followed = new Set<Loc>()
+    while (undefined !== loc && undefined !== loc.site) {
+      const land: Landing = index.landing(loc.site)
+      if (!land.found || followed.has(loc)) {
+        // A reference that names nothing is as it is written, and so is
+        // one that names it.
+        node = f.node
+        loc = f.loc
+        beside = undefined
+        break
+      }
+      followed.add(loc)
+      if ('pathItem' === loc.site.kind && isMap(node)) {
+        for (const k of Object.keys(node)) {
+          if ('$ref' === k) continue
+          beside ??= Object.create(null) as Record<string, Member>
+          if (!own(beside, k)) beside[k] = { value: node[k], loc: index.child(loc, k) }
+        }
+      }
+      node = land.node
+      loc = land.loc
+    }
+    if (null == node || 'object' !== typeof node || onPath.has(node)) continue
     if ('operation' === s.type && 'object' === s.kind && isMap(node) && 'string' === typeof node.operationId) {
       const list = routes.get(node.operationId) ?? []
-      list.push(pointer(path))
+      list.push(f.at)
       routes.set(node.operationId, list)
     }
     onPath.add(node)
-    stack.push([node, path, state, true])
+    stack.push({ node, loc: undefined, at: f.at, state: f.state, leaving: true })
     const names: (string | number)[] = Array.isArray(node) ? node.map((_: any, i: number) => i) : Object.keys(node)
+    if (undefined !== beside) for (const k of Object.keys(beside)) if (!own(node, k)) names.push(k)
     for (let i = names.length - 1; 0 <= i; i--) {
-      if (0 === path.length && 'components' === names[i]) continue
-      const next = step(mv, state, names[i])
-      if ('data' !== next) stack.push([node[names[i]], [...path, names[i]], next, false])
+      const name = names[i]
+      if ('' === f.at && 'components' === name) continue
+      const next = step(mv, f.state, name)
+      if ('data' === next) continue
+      const from = undefined !== beside && own(beside, String(name)) ? beside[String(name)] : undefined
+      stack.push({
+        node: undefined !== from ? from.value : node[name],
+        loc: undefined !== from ? from.loc : undefined === loc ? undefined : index.child(loc, name),
+        at: f.at + '/' + esc(name),
+        state: next,
+        leaving: false,
+      })
     }
   }
   const out: Connection[] = []
@@ -282,15 +540,6 @@ function reuseOf(tree: any, mv: ModelVersion): Connection[] {
   return out
 }
 
-// RFC 6901 back to segments, for a pointer this module made.
-function pointerPath(p: string): Path {
-  if ('' === p) return []
-  return p
-    .slice(1)
-    .split('/')
-    .map((s) => s.replace(/~1/g, '/').replace(/~0/g, '~'))
-}
-
 export { connectionsOf, reuseOf }
 
-export type { Connection, ConnectionKind, Locate }
+export type { Connection, ConnectionKind, UrlUse }

@@ -1,0 +1,609 @@
+/* Copyright (c) 2026 Richard Rodger and other contributors, MIT License */
+
+// The site index, held to itself: the typing rounds, their bound, and the
+// index that carries each round forward against one that works every
+// round out from nothing. What `resolve` makes of the index is in
+// resolve.test.ts and test/resolve/.
+
+import { describe, test } from 'node:test'
+import assert from 'node:assert'
+import { join } from 'node:path'
+
+import { buildIndex } from '../dist/site-index'
+import type { IndexConfig, Loc, SiteIndex } from '../dist/site-index'
+import { pointer } from '../dist/uri'
+
+const { generate } = require(join(__dirname, '..', '..', 'tools', 'apidef-preset', 'generate.cjs'))
+
+const DOC = 'https://example.com/doc'
+
+const DIALECT: Record<string, string> = {
+  '3.1': 'https://spec.openapis.org/oas/3.1/dialect/base',
+  '3.2': 'https://spec.openapis.org/oas/3.2/dialect/base',
+}
+
+function config(raw: any, over: Partial<IndexConfig> = {}): IndexConfig {
+  const v = String(raw?.openapi ?? raw?.swagger ?? '3.2')
+  const mv = (v.startsWith('2') ? '2.0' : v.startsWith('3.0') ? '3.0' : v.startsWith('3.1') ? '3.1' : '3.2') as IndexConfig['mv']
+  return {
+    mv,
+    entry: DOC,
+    retrieved: DOC,
+    rootDialect: DIALECT[mv] ?? '',
+    slots: 'spec',
+    extensions: new Set(),
+    pointers: false,
+    maxDepth: 1000,
+    refuse: (code, message, at) => {
+      const err: any = new Error(message)
+      err.code = code
+      err.at = at
+      throw err
+    },
+    ...over,
+  }
+}
+
+const indexOf = (raw: any, over: Partial<IndexConfig> = {}): SiteIndex => buildIndex(raw, config(raw, over))
+
+const pathOf = (loc: Loc): (string | number)[] => {
+  const path: (string | number)[] = []
+  for (let p: Loc | undefined = loc; undefined !== p && undefined !== p.parent; p = p.parent) path.push(p.seg)
+  return path.reverse()
+}
+
+// Everything the index says, in a form that does not depend on the order
+// it was found in: every location's facts, every site's, and the count of
+// data slots.
+function answer(index: SiteIndex): string {
+  const locs: any[] = []
+  const stack: Loc[] = [index.root]
+  while (0 < stack.length) {
+    const loc = stack.pop()!
+    locs.push([
+      pointer(pathOf(loc)),
+      loc.state,
+      loc.known,
+      loc.base,
+      loc.dialect,
+      loc.rules?.name ?? null,
+      loc.ext,
+      loc.dynamic,
+      loc.slot,
+      loc.ids ?? null,
+      undefined === loc.region ? null : [loc.region.state, loc.region.by.at, loc.region.round],
+    ])
+    for (const kid of loc.kids ?? []) stack.push(kid)
+  }
+  const sites = index.sites.map((r) => [
+    r.at,
+    r.kind,
+    r.type,
+    r.state,
+    r.round,
+    r.base,
+    r.dialect,
+    r.alone,
+    r.why ?? null,
+    undefined === r.target ? null : pointer(r.target),
+    r.uri ?? null,
+    r.fragment ?? null,
+    undefined === r.landing ? null : r.landing.found ? pointer(r.landing.path!) : true === r.landing.loop ? 'loop' : 'nowhere',
+    r.landing?.through ?? null,
+  ])
+  const byAt = (a: any[], b: any[]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
+  return JSON.stringify({
+    rounds: index.rounds,
+    dataSlots: index.dataSlots,
+    locs: locs.sort(byAt),
+    sites: sites.sort(byAt),
+    dialects: index.dialects(),
+  })
+}
+
+// The regions a reference typed, as `at state by round`.
+function regions(index: SiteIndex): string[] {
+  const out: string[] = []
+  const stack: Loc[] = [index.root]
+  while (0 < stack.length) {
+    const loc = stack.pop()!
+    if (undefined !== loc.region) out.push(`${pointer(pathOf(loc))} ${loc.region.state} ${loc.region.by.at} ${loc.region.round}`)
+    for (const kid of loc.kids ?? []) stack.push(kid)
+  }
+  return out.sort()
+}
+
+// A seeded generator, so that a run can be repeated.
+function rng(seed: number): () => number {
+  let s = seed >>> 0
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0
+    return s / 0x100000000
+  }
+}
+
+// The same document with the members of every map in another order.
+// Lists keep theirs: the order of a list is part of what it says.
+function reorder(v: any, next: () => number): any {
+  if (Array.isArray(v)) return v.map((x) => reorder(x, next))
+  if (null == v || 'object' !== typeof v) return v
+  const keys = Object.keys(v)
+  for (let i = keys.length - 1; 0 < i; i--) {
+    const j = Math.floor(next() * (i + 1))
+    ;[keys[i], keys[j]] = [keys[j], keys[i]]
+  }
+  const out: any = {}
+  for (const k of keys) out[k] = reorder(v[k], next)
+  return out
+}
+
+const info = { title: 't', version: '1' }
+
+const chain = (n: number) => {
+  const doc: any = { openapi: '3.0.3', info, paths: { '/a': { get: { responses: { 200: { $ref: '#/x-r0/R' } } } } } }
+  doc['x-r0'] = { R: { description: 'd', content: { 'application/json': { schema: { $ref: '#/x-s1/S' } } } } }
+  for (let i = 1; i <= n; i++) {
+    doc['x-s' + i] = { S: i < n ? { properties: { next: { $ref: `#/x-s${i + 1}/S` } } } : { type: 'string' } }
+  }
+  return doc
+}
+
+// The cases of the prototype E12: [name, whether one answer holds under
+// every order of the members, rounds, regions, document].
+const ROUNDS: [string, boolean, number, number, any][] = [
+  ['typing reveals a second reference to the same target, of the same type', true, 2, 3, {
+    openapi: '3.0.3', info,
+    paths: { '/a': { get: { responses: { 404: { $ref: '#/x-responses/NotFound' } } } } },
+    'x-responses': { NotFound: { description: 'nf', content: { 'application/json': { schema: { $ref: '#/x-schemas/Error' } } } } },
+    components: { schemas: { Problem: { properties: { cause: { $ref: '#/x-schemas/Error' } } } } },
+    'x-schemas': { Error: { type: 'object', properties: { code: { $ref: '#/x-schemas/Code' } } }, Code: { type: 'integer' } },
+  }],
+  ['typing reveals a second reference to the same target, of another type', true, 1, 2, {
+    openapi: '3.0.3', info,
+    paths: { '/a': { get: { responses: { 404: { $ref: '#/x-responses/NotFound' }, 500: { $ref: '#/x-shared/Thing' } } } } },
+    'x-responses': { NotFound: { description: 'nf', content: { 'application/json': { schema: { $ref: '#/x-shared/Thing' } } } } },
+    'x-shared': { Thing: { description: 'a response, by the first reference to it', type: 'object' } },
+  }],
+  ['an $id inside a region typed only by reference', true, 1, 1, {
+    openapi: '3.1.0', info, paths: {},
+    components: {
+      schemas: {
+        A: { $ref: '#/x-defs/Thing' },
+        B: { $ref: 'https://example.com/schemas/thing#/properties/name' },
+        C: { $ref: 'https://example.com/schemas/thing#tag' },
+      },
+    },
+    'x-defs': {
+      Thing: {
+        $id: 'https://example.com/schemas/thing',
+        type: 'object',
+        properties: { name: { type: 'string', $anchor: 'tag' }, self: { $ref: '#/properties/name' } },
+      },
+    },
+  }],
+  ['a region that references itself', true, 2, 2, {
+    openapi: '3.0.3', info, paths: {},
+    components: { schemas: { A: { $ref: '#/x-a/Node' } } },
+    'x-a': { Node: { properties: { next: { $ref: '#/x-a/Node' }, other: { $ref: '#/x-a/Leaf' } } }, Leaf: { type: 'string' } },
+  }],
+  ['a chain of 40 regions, each typed by a reference in the one before', true, 41, 41, chain(40)],
+  ['two references of one round that give one target different types', false, 1, 1, {
+    openapi: '3.0.3', info, paths: {},
+    components: {
+      responses: { R: { $ref: '#/x-u/T' } },
+      schemas: { S: { $ref: '#/x-u/T' } },
+    },
+    'x-u': { T: { description: 'a response or a schema', type: 'object' } },
+  }],
+]
+
+const copy = (v: any) => JSON.parse(JSON.stringify(v))
+
+// A dialect of each kind this package reads, and one it does not know.
+const DIALECTS = [
+  'http://json-schema.org/draft-04/schema#',
+  'http://json-schema.org/draft-06/schema#',
+  'http://json-schema.org/draft-07/schema#',
+  'https://json-schema.org/draft/2019-09/schema',
+  'https://json-schema.org/draft/2020-12/schema',
+  'https://example.com/a-dialect',
+]
+
+// A document of regions the model does not type, nested in each other
+// and typed by references, with identifiers and anchors in them: what
+// the index has to carry from one round to the next.
+function regionsDoc(seed: number): any {
+  const next = rng(seed)
+  const pick = (n: number) => Math.floor(next() * n)
+  const v31 = 0 === pick(2)
+  const doc: any = { openapi: v31 ? '3.1.0' : '3.0.3', info, paths: {}, components: { schemas: {}, responses: {} } }
+  const count = 2 + pick(7)
+  const at: string[] = []
+  const holders: any[] = []
+  for (let i = 0; i < count; i++) {
+    // A region is under an extension of the root, or of an earlier region.
+    const inside = 0 < i && 0 === pick(2) ? pick(i) : -1
+    const region: any = { type: 'object', properties: {} }
+    if (v31 && 0 === pick(3)) region.$id = 0 === pick(2) ? `https://example.com/r${i}` : `r${i}/`
+    if (v31 && 0 === pick(3)) region.$anchor = 'a' + i
+    if (0 === pick(4)) region.definitions = { D: { type: 'string' }, E: { $ref: '#/components/schemas/S0' } }
+    // A region may declare its dialect, which decides whether `id` or
+    // `$id` names it, what an anchor is, and whether `definitions` and a
+    // list of `items` hold schemas.
+    if (v31 && 0 === pick(3)) region.$schema = DIALECTS[pick(DIALECTS.length)]
+    if (v31 && 0 === pick(4)) region.id = 0 === pick(2) ? `https://example.com/q${i}` : '#n' + i
+    if (v31 && 0 === pick(5)) region.items = [{ $ref: '#/components/schemas/S0' }, { $recursiveRef: '#' }]
+    const key = 'x-r' + i
+    if (-1 === inside) {
+      doc[key] = { T: region }
+      at.push(`/${key}/T`)
+    } else {
+      holders[inside][key] = { T: region }
+      at.push(`${at[inside]}/${key}/T`)
+    }
+    holders.push(region)
+  }
+  const ref = (to: number): string => {
+    const r = holders[to]
+    const how = pick(4)
+    if (v31 && 1 === how && 'string' === typeof r.$id && r.$id.startsWith('https:')) return r.$id
+    if (v31 && 2 === how && 'string' === typeof r.$anchor && undefined === r.$id) return DOC + '#' + r.$anchor
+    if (3 === how && undefined !== r.definitions) return DOC + '#' + at[to] + '/definitions/D'
+    return DOC + '#' + at[to]
+  }
+  // Each region names a few others, and a few components name regions.
+  for (let i = 0; i < count; i++) {
+    const n = pick(3)
+    for (let j = 0; j < n; j++) holders[i].properties['p' + j] = { $ref: ref(pick(count)) }
+    if (0 === pick(5)) holders[i].properties.gone = { $ref: DOC + '#' + at[pick(count)] + '/nope' }
+  }
+  const starts = 1 + pick(3)
+  for (let j = 0; j < starts; j++) doc.components.schemas['S' + j] = { $ref: ref(pick(count)) }
+  if (0 === pick(3)) doc.components.responses.R = { $ref: ref(pick(count)) }
+  return doc
+}
+
+describe('site index', () => {
+  for (const [name, oneAnswer, rounds, typed, doc] of ROUNDS) {
+    test('rounds: ' + name, () => {
+      const first = indexOf(copy(doc))
+      assert.equal(first.rounds, rounds)
+      assert.equal(regions(first).length, typed)
+      const next = rng(12345)
+      const answers = new Set<string>()
+      for (let i = 0; i < 200; i++) {
+        const variant = 0 === i ? copy(doc) : reorder(copy(doc), next)
+        const index = indexOf(variant)
+        answers.add(JSON.stringify(regions(index)))
+        // The index that carries each round forward says what one that
+        // works every round out from nothing says.
+        assert.equal(answer(index), answer(indexOf(variant, { incremental: false })))
+      }
+      if (oneAnswer) assert.equal(answers.size, 1)
+      // Two references of one round that disagree are decided by which
+      // is written first: Decision 28 has the order of the document.
+      else assert.equal(answers.size, 2)
+    })
+  }
+
+  test('a region takes the type of the first reference to land on it, in the order of the document', () => {
+    const doc = ROUNDS[5][4]
+    assert.deepEqual(regions(indexOf(copy(doc))), ['/x-u/T response? /components/responses/R 1'])
+    const swapped = copy(doc)
+    swapped.components = { schemas: doc.components.schemas, responses: doc.components.responses }
+    assert.deepEqual(regions(indexOf(swapped)), ['/x-u/T schema /components/schemas/S 1'])
+  })
+
+  test('the index carried forward equals the index worked out from nothing, on regions nested in each other', () => {
+    let typedSome = 0
+    let nested = 0
+    for (let seed = 1; seed <= 400; seed++) {
+      const doc = regionsDoc(seed)
+      const index = indexOf(doc)
+      if (0 < index.rounds) typedSome++
+      if (regions(index).some((r) => 2 < r.split(' ')[0].split('/x-r').length)) nested++
+      assert.equal(answer(index), answer(indexOf(doc, { incremental: false })), 'seed ' + seed)
+    }
+    // The generator does make what it is for.
+    assert.ok(300 < typedSome, 'only ' + typedSome + ' documents had a region typed')
+    assert.ok(50 < nested, 'only ' + nested + ' documents had a region typed inside another')
+  })
+
+  test('the index carried forward equals the index worked out from nothing, on generated documents', () => {
+    let compared = 0
+    for (const item of generate(3, 800)) {
+      let raw: any
+      try {
+        raw = JSON.parse(item.text)
+      } catch {
+        continue
+      }
+      if (null == raw || 'object' !== typeof raw) continue
+      for (const over of [{}, { slots: 'all' as const }, { extensions: new Set(['x-ext']) }]) {
+        compared++
+        assert.equal(answer(indexOf(raw, over)), answer(indexOf(raw, { ...over, incremental: false })), item.name)
+      }
+    }
+    assert.ok(1500 < compared, 'only ' + compared + ' compared')
+  })
+
+  test('a base URI that a later round finds moves what was located under the earlier one', () => {
+    // S types the inner region first. A reference in it types the outer
+    // one, whose `$id` is then the base of `rel`, written `#/properties/q`:
+    // until then that named the root's own member. X is read through
+    // `rel`, so it moves with it.
+    const doc = {
+      openapi: '3.1.0', info, paths: {},
+      properties: { q: { type: 'string' } },
+      components: {
+        schemas: {
+          S: { $ref: DOC + '#/x-o/T/x-i/T' },
+          X: { $ref: DOC + '#/x-o/T/x-i/T/properties/rel/type' },
+        },
+      },
+      'x-o': {
+        T: {
+          $id: 'https://example.com/o',
+          properties: { q: { type: 'integer' } },
+          'x-i': { T: { properties: { up: { $ref: DOC + '#/x-o/T' }, rel: { $ref: '#/properties/q' } } } },
+        },
+      },
+    }
+    const index = indexOf(doc)
+    const site = (at: string) => index.sites.find((r) => r.at === at)!
+    const rel = site('/x-o/T/x-i/T/properties/rel')
+    assert.equal(rel.base, 'https://example.com/o')
+    assert.equal(pointer(rel.target!), '/x-o/T/properties/q')
+    const x = site('/components/schemas/X')
+    assert.equal(pointer(x.landing!.path!), '/x-o/T/properties/q/type')
+    assert.deepEqual(x.landing!.through, ['/x-o/T/x-i/T/properties/rel'])
+    assert.equal(x.landing!.node, 'integer')
+    assert.equal(answer(index), answer(indexOf(doc, { incremental: false })))
+  })
+
+  test('a site that a later round types as a schema is read by the dialect in force there', () => {
+    // Under `slots: 'all'` the reference in the region is a site from the
+    // start, as data. Once the region is typed it is a schema's, of the
+    // dialect the region declares: draft-07, whose `$ref` stands alone.
+    const doc = {
+      openapi: '3.1.0', info, paths: {},
+      components: { schemas: { S: { $ref: '#/x-o/T' }, Z: { type: 'string' } } },
+      'x-o': { T: { $schema: 'http://json-schema.org/draft-07/schema#', properties: { a: { $ref: '#/components/schemas/Z' } } } },
+    }
+    const index = indexOf(doc, { slots: 'all' })
+    const a = index.sites.find((r) => '/x-o/T/properties/a' === r.at)!
+    assert.equal(a.round, 0)
+    assert.equal(a.kind, 'schema')
+    assert.equal(a.state, 'schema@draft-07')
+    assert.equal(a.dialect, 'http://json-schema.org/draft-07/schema#')
+    assert.equal(a.alone, true)
+    assert.equal(a.why, undefined)
+    assert.equal(pointer(a.target!), '/components/schemas/Z')
+    assert.equal(answer(index), answer(indexOf(doc, { slots: 'all', incremental: false })))
+  })
+
+  test('a region typed in a later round is read by the dialect it declares', () => {
+    // `definitions` holds schemas in draft-07 and is no keyword of
+    // 2020-12. The reference in it is found by where it is once the
+    // region is a schema, in the round that types the region.
+    const region = (dialect: string | undefined) => ({
+      openapi: '3.1.0', info, paths: {},
+      components: { schemas: { S: { $ref: '#/x-o/T' }, Z: { type: 'string' } } },
+      'x-o': { T: { ...(undefined === dialect ? {} : { $schema: dialect }), definitions: { D: { $ref: '#/components/schemas/Z' } } } },
+    })
+    const old = region('http://json-schema.org/draft-07/schema#')
+    const index = indexOf(old)
+    const d = index.sites.find((r) => '/x-o/T/definitions/D' === r.at)!
+    assert.equal(d.round, 1)
+    assert.equal(d.state, 'schema@draft-07')
+    assert.equal(d.alone, true)
+    assert.deepEqual(index.dialects(), [
+      { at: '/x-o/T/$schema', dialect: 'http://json-schema.org/draft-07/schema#', as: 'draft-07', known: true },
+    ])
+    assert.equal(answer(index), answer(indexOf(old, { incremental: false })))
+    // Without the declaration the region is a 2020-12 schema, and what
+    // `definitions` holds is not read.
+    const now = indexOf(region(undefined))
+    assert.equal(now.sites.find((r) => '/x-o/T/definitions/D' === r.at), undefined)
+    assert.deepEqual(now.dialects(), [])
+  })
+
+  test('a location has the rules of its dialect, and is dynamic where that dialect leaves a reference to evaluation', () => {
+    const D = (name: string) =>
+      name.startsWith('20') ? `https://json-schema.org/draft/${name}/schema` : `http://json-schema.org/${name}/schema#`
+    const schemas: any = {}
+    for (const name of ['draft-04', 'draft-06', 'draft-07', '2019-09', '2020-12']) {
+      schemas[name] = {
+        $schema: D(name),
+        properties: { r: { $recursiveRef: '#' }, d: { $dynamicRef: '#x' }, both: { $ref: '#/x', $dynamicRef: '#x', $recursiveRef: '#' } },
+      }
+    }
+    const doc = { openapi: '3.1.0', info, paths: {}, components: { schemas }, 'x-data': { $dynamicRef: '#x' } }
+    const at = (index: SiteIndex, path: (string | number)[]): Loc => {
+      let loc: Loc | undefined = index.root
+      for (const seg of path) loc = index.child(loc!, seg)
+      return loc!
+    }
+    const index = indexOf(doc)
+    const facts = (name: string) => {
+      const p = ['components', 'schemas', name]
+      return [at(index, p).rules?.name, at(index, [...p, 'properties', 'r']).dynamic, at(index, [...p, 'properties', 'd']).dynamic]
+    }
+    assert.deepEqual(facts('draft-04'), ['draft-04', false, false])
+    assert.deepEqual(facts('draft-06'), ['draft-06', false, false])
+    assert.deepEqual(facts('draft-07'), ['draft-07', false, false])
+    assert.deepEqual(facts('2019-09'), ['2019-09', true, false])
+    assert.deepEqual(facts('2020-12'), ['2020-12', false, true])
+    // A `$ref` is the reference where a map has both, and what is not a
+    // schema has no rules.
+    assert.equal(at(index, ['components', 'schemas', '2020-12', 'properties', 'both']).dynamic, false)
+    assert.equal(at(index, ['components', 'schemas', '2019-09', 'properties', 'both']).dynamic, false)
+    assert.equal(at(index, ['x-data']).rules, undefined)
+    assert.equal(at(index, ['x-data']).dynamic, false)
+    assert.equal(at(index, ['components']).rules, undefined)
+    // Under `refs: 'pointer'` no dialect is read and nothing is dynamic.
+    const plain = indexOf(doc, { pointers: true })
+    assert.equal(at(plain, ['components', 'schemas', 'draft-04']).rules?.name, '2020-12')
+    assert.equal(at(plain, ['components', 'schemas', 'draft-04']).state, 'schema')
+    assert.equal(at(plain, ['components', 'schemas', '2020-12', 'properties', 'd']).dynamic, false)
+    assert.deepEqual(plain.dialects(), [])
+  })
+
+  test('a reference that a later round reads against another base stops what was read through it', () => {
+    // X is read through `p` to a member of Z. Then the region around `p`
+    // is typed, and it names itself with an `$id`: `p` is read against
+    // that from then on, and names nothing there, so nothing is read
+    // through it.
+    const doc = {
+      openapi: '3.1.0', info, paths: {},
+      components: {
+        schemas: {
+          S: { $ref: '#/x-o/T/x-i/T' },
+          Z: { type: 'object', properties: { deep: { type: 'integer' } } },
+          X: { $ref: '#/x-o/T/x-i/T/properties/p/properties/deep' },
+        },
+      },
+      'x-o': {
+        T: {
+          $id: 'https://other.example/t',
+          'x-i': { T: { properties: { up: { $ref: DOC + '#/x-o/T' }, p: { $ref: '#/components/schemas/Z' } } } },
+        },
+      },
+    }
+    const index = indexOf(doc)
+    const site = (at: string) => index.sites.find((r) => r.at === at)!
+    const p = site('/x-o/T/x-i/T/properties/p')
+    assert.equal(p.base, 'https://other.example/t')
+    assert.equal(pointer(p.target!), '/x-o/T/components/schemas/Z')
+    assert.equal(p.landing!.found, false)
+    assert.equal(site('/components/schemas/X').landing!.found, false)
+    assert.equal(answer(index), answer(indexOf(doc, { incremental: false })))
+  })
+
+  test('a landing found late is still typed by the earliest round to reach it', () => {
+    // R is of round 0, and its pointer is read through `via`, which is a
+    // site only once the region around it is typed. `n` is of round 1 and
+    // lands on the same place. R types it, being of the earlier round.
+    const doc = {
+      openapi: '3.0.3', info, paths: {},
+      components: {
+        schemas: { S: { $ref: '#/x-o/T' } },
+        responses: { R: { $ref: '#/x-o/T/properties/via/x-u' } },
+      },
+      'x-o': { T: { properties: { n: { $ref: '#/x-store/x-u' }, via: { $ref: '#/x-store' } } } },
+      'x-store': { 'x-u': { description: 'a response or a schema', type: 'object' } },
+    }
+    const index = indexOf(doc)
+    assert.deepEqual(regions(index), [
+      '/x-o/T schema /components/schemas/S 1',
+      '/x-store schema /x-o/T/properties/via 2',
+      '/x-store/x-u response? /components/responses/R 2',
+    ])
+    assert.equal(answer(index), answer(indexOf(doc, { incremental: false })))
+  })
+
+  test('a long chain of regions is typed, one round for each', () => {
+    const index = indexOf(chain(300))
+    assert.equal(index.rounds, 301)
+    assert.equal(regions(index).length, 301)
+  })
+
+  test('rounds built to undo each other end in openapi_work', () => {
+    // Each region holds the next in an extension, has an `$id`, and is
+    // typed by a reference from the one inside it. So each round types
+    // the next region out, which changes the base URI of everything in
+    // it, and all of that is read again.
+    const levels = 300
+    const inner = (i: number) => DOC + '#/x-top' + '/x-in'.repeat(i)
+    let region: any = { $id: `https://example.com/l${levels - 1}/`, properties: { up: { $ref: inner(levels - 2) } } }
+    for (let p = 0; p < 4000; p++) region.properties['p' + p] = { type: 'string' }
+    for (let i = levels - 2; 0 <= i; i--) {
+      const outer: any = { $id: `https://example.com/l${i}/`, properties: {}, 'x-in': region }
+      if (0 < i) outer.properties.up = { $ref: inner(i - 1) }
+      region = outer
+    }
+    const doc = { openapi: '3.1.0', info, paths: {}, components: { schemas: { S: { $ref: inner(levels - 1) } } }, 'x-top': region }
+    assert.throws(() => indexOf(doc), (err: any) => 'openapi_work' === err.code)
+    // A few such levels are within the bound, and are typed.
+    const few = copy(doc)
+    let at = few['x-top']
+    for (let i = 0; i < levels - 8; i++) at = at['x-in']
+    few['x-top'] = at
+    few.components.schemas.S.$ref = DOC + '#/x-top' + '/x-in'.repeat(7)
+    // The references inside still name the longer paths, so only the
+    // innermost region is typed: the point is that it is not refused.
+    assert.equal(regions(indexOf(few)).length, 1)
+  })
+
+  test('a pointer read through a reference lists the references its own steps were missing at', () => {
+    const S = '#/components/schemas/'
+    const doc = {
+      openapi: '3.0.3', info, paths: {},
+      components: {
+        schemas: {
+          T: { not: { $ref: S + 'T' } },
+          A0: { $ref: S + 'T' },
+          A1: { $ref: S + 'A0/not' },
+          A2: { $ref: S + 'A1/not' },
+          E: { $ref: 'other.yaml' },
+          viaE: { $ref: S + 'E/x' },
+        },
+      },
+    }
+    const index = indexOf(doc)
+    const land = (name: string) => index.sites.find((r) => r.at === S.slice(1) + name)!.landing!
+    assert.deepEqual(land('A1').through, [S.slice(1) + 'A0'])
+    // A2 is read through A1, which lands on a reference, and through
+    // that: what A1 was itself read through is A1's to say.
+    assert.deepEqual(land('A2').through, [S.slice(1) + 'A1', S.slice(1) + 'T/not'])
+    assert.equal(pointer(land('A2').path!), S.slice(1) + 'T/not')
+    // A reference into another document cannot be read through.
+    assert.equal(land('viaE').found, false)
+    assert.equal(land('viaE').through, undefined)
+    // The root is where a pointer starts, and is never read through.
+    const rooted = { openapi: '3.0.3', $ref: '#/x-a', 'x-a': { y: { type: 'string' } }, components: { schemas: { P: { $ref: '#/y' } } } }
+    const p = indexOf(rooted, { slots: 'all' }).sites.find((r) => '/components/schemas/P' === r.at)!
+    assert.equal(p.landing!.found, false)
+  })
+
+  test('pointers read through each other deeper than maxDepth end in openapi_depth', () => {
+    const S = '#/components/schemas/'
+    const chain = (reversed: boolean) => {
+      const entries: [string, any][] = [['T', { not: { $ref: S + 'T' } }], ['A0', { $ref: S + 'T' }]]
+      for (let i = 1; i <= 12; i++) entries.push(['A' + i, { $ref: S + 'A' + (i - 1) + '/not' }])
+      return { openapi: '3.0.3', info, paths: {}, components: { schemas: Object.fromEntries(reversed ? entries.reverse() : entries) } }
+    }
+    // Written last to first, the first asks for the second while it is
+    // being read, and so on down.
+    assert.throws(() => indexOf(chain(true), { maxDepth: 8 }), (err: any) => 'openapi_depth' === err.code && S.slice(1) + 'A4' === err.at)
+    assert.equal(indexOf(chain(true), { maxDepth: 20 }).sites.length, 14)
+    // Written first to last, each is read before the next asks for it.
+    assert.equal(indexOf(chain(false), { maxDepth: 8 }).sites.length, 14)
+  })
+
+  test('many pointers read through one long chain of references end in openapi_work', () => {
+    const S = '#/components/schemas/'
+    const doc = (pointers: number, links: number) => {
+      const schemas: Record<string, any> = {}
+      for (let j = 0; j < links; j++) schemas['Q' + j] = { $ref: S + 'Q' + (j + 1) }
+      schemas['Q' + links] = { type: 'object' }
+      for (let i = 0; i < pointers; i++) schemas['P' + i] = { $ref: S + 'Q0/x' + i }
+      return { openapi: '3.0.3', info, paths: {}, components: { schemas } }
+    }
+    // Each pointer is read through every link of the chain to find that
+    // nothing has its member. A few hundred of each is within the bound.
+    assert.equal(indexOf(doc(200, 200), { maxDepth: 100000 }).sites.filter((r) => !r.landing!.found).length, 200)
+    assert.throws(() => indexOf(doc(2000, 2000), { maxDepth: 100000 }), (err: any) => 'openapi_work' === err.code)
+  })
+
+  test('nesting past maxDepth is refused with openapi_depth, as the fold refuses it', () => {
+    const deep = (n: number) => {
+      let v: any = 1
+      for (let i = 0; i < n; i++) v = { a: v }
+      return { openapi: '3.1.0', 'x-deep': v }
+    }
+    assert.equal(indexOf(deep(999)).rounds, 0)
+    assert.throws(() => indexOf(deep(1000)), (err: any) => 'openapi_depth' === err.code)
+    assert.throws(() => indexOf(deep(50), { maxDepth: 20 }), (err: any) => 'openapi_depth' === err.code)
+  })
+})

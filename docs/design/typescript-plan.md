@@ -290,6 +290,45 @@ layout defects and the refusals of section 2.1. They are repaired in the
 yaml grammar, and reached this package with that grammar's release,
 `@tabnas/yaml` 0.5.33.
 
+**Repaired in T3, item 2**: W1, W2, W3 and W6, in this repository, by
+the site index of section 3. Each has rows in
+`test/resolve/landings.tsv`. W4 and W5 are item 3's.
+
+**Repaired in T3, item 3**: W4 and W5, in this repository. A schema of
+3.1 or 3.2 is read by the dialect it declares, and URIs are compared in
+their normal form. `test/resolve/dialects.tsv` and
+`test/resolve/uris.tsv` have the rows.
+
+**Found in T3, item 3: W13.** An `$id` written as a fragment alone, as
+in `$id: '#name'`, was read in a 2020-12 schema as naming a resource:
+the one it is in, since a fragment is dropped from an identifier. That
+schema then stood in the index where the document stood, or the
+resource around it, and every reference into that resource was read
+from the schema. One such `$id` in a 3.1 description left every
+`#/components/…` reference of the document `not-found`. It is how
+draft-06 and draft-07 name an anchor, so a schema pasted from either
+has it. No description of the corpus does. It is repaired with the
+dialects: such an identifier is an anchor where its dialect has that,
+and names nothing where it does not. The same holds for any identifier
+that is the URI of the resource it is in, such as `id: '#'` at the top
+of a schema pasted from draft-04, or the document's own URI: it names
+nothing new, and the document stays where it is.
+
+**Added in T3, item 4**: the three reports the audit found missing and
+this phase owed, each read from the index and none changing the tree.
+The implicit mapping of a discriminator is rows of `connections`; a
+reference that lands on a type it does not expect has `conflict` in its
+`provenance` row; and the URLs a description gives are a report of
+their own, `urls`. `test/resolve/reports.tsv` has the rows.
+
+**Repaired in T3, item 5**: the last of the audit's findings on the
+object model, a 3.0 component under a name the specification's pattern
+refuses. The repair of W3 reads such a component where a reference
+lands on it. One that nothing references kept its own references as
+written, counted as data and reported nowhere, which is the audit's
+probe 3.7. It is read as any other component now, as 3.1 and 3.2 read
+it, which Decision 25 chose.
+
 **Found in T2b.** Four shapes were read, each wrongly, and are refused
 by that change. No document of the corpus has one. The first three are
 not YAML, and the reference parser refuses them as well. The fourth is
@@ -601,12 +640,31 @@ Item 1 is done, as
 with no source change. Each of its six points is shown, and section 11
 has what it found beside them.
 
-Item 2 is begun. Its three changes in `expr` (section 7) are built, in
-every implementation there, and merged as tabnas/expr#117. No release
-of `expr` has them yet. Here the sweep counts a site that is reported
-resolved and holds its map as written, and the test of W10 expects the
-repaired fold. The index, and `resolve` on it, are not begun. Items 3
-to 5 are not begun.
+Item 2 is built, but for W4 and W5, which item 3's text also has and
+which are left to it. Its three changes in `expr` (section 7) are
+merged as tabnas/expr#117, and no release of `expr` has them yet. Here
+the index is `ts/src/site-index.ts`, with `resolve` and the
+`connections` report built on it, and section 11 has what it was held
+to. Until `expr` is released, `resolve` runs in CI and with the
+siblings linked, and the corpus baselines stay as swept on the released
+packages.
+
+Item 3 is built, on the defaults of Decisions 29 and 30, and section 11
+has its record. The rules of each dialect are in `ts/src/dialect.ts`,
+the members that hold schemas in each are in `model/applicators.json`,
+and the index reads both. It asks nothing more of `expr`.
+
+Item 4 is built. The three reports are read from the index after it is
+built: `implied` in `ts/src/connections.ts` gives the implicit mapping,
+`index.conflict` the type a reference did not expect, and the same walk
+that finds the names gives `urls`, from the leaves the object model's
+overlay marks as URLs. None of them changes the tree.
+
+Item 5 is built: every probe of the audit has a row under its number,
+and a test holds the rows to the audit's list. With it the object model
+reads a 3.0 component under any name, which was the last leniency of
+Decision 25 it owed. Section 11 has the record of both items, and of
+the acceptance runs on the build that has all five.
 
 ### T4: several documents (L)
 
@@ -803,6 +861,383 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T3's fifth item was built:
+
+- **Every probe of the audit has a row under its number.** Section 3 of
+  E8 has 17 probes that showed wrong behaviour. The eight about reading
+  a text are in `test/pending/parse-probes.tsv`, and the nine about
+  references in `test/resolve/probes.tsv`, each with the audit's own
+  input and what it gives now. `ts/test/probes.test.ts` reads the list
+  from the audit and holds the two files to it: a probe added there
+  needs a row, and a row under a number the audit lacks fails.
+
+  | Probe | It gives now | Repaired in |
+  |---|---|---|
+  | 3.1 YAML 1.1 words | strings under `reading: 'spec'`; booleans by default, until porting starts | T2, T2b (Decision 21) |
+  | 3.2 an integer past 2^53 | the nearest number, listed with its text in `lossy` | T2 (W8, Decision 22) |
+  | 2.1 an empty document after the description | accepted under `reading: 'spec'`; refused by default | T2 (Decision 25) |
+  | 2.2 a byte-order mark under `strict` | read | T2 (Decision 25) |
+  | 2.3 a carriage return alone as a line break | read | T2b (W9) |
+  | 2.4 a blank line before JSON, read by the grammar | read | T2b (W9) |
+  | 2.5 a tab in indentation | refused as `yaml_tab_indent` | T2b |
+  | 3.3 a reference inside `definitions`, `dependencies`, list `items` or `additionalItems` of a 3.1 schema | both references resolve | T3, item 2 (W3) |
+  | 3.4 a schema that references its own `$defs` | resolved, as the audit expected | T3, item 2 (W2) |
+  | 3.5 a pointer that passes a reference | the member the document has there | T3, item 2 (W1) |
+  | 3.6 a target in an extension | resolved, with the references in it | T3, item 2 (W3) |
+  | 3.7 a 3.0 component under a name the pattern refuses | read as any other | T3, item 5 (Decision 25) |
+  | 3.8 a schema that declares a dialect | read by it, an unknown one as 2020-12 and reported | T3, item 3 (W4) |
+  | 3.9 two spellings of one URI | one URI | T3, item 3 (W5) |
+  | 3.10 `description` beside a reference to a 3.2 Media Type Object | no effect | T3, item 3 (Decision 30) |
+  | 7.1 aliases that copy a text out past memory | refused as `openapi_alias_budget` | T2 (W7) |
+  | 7.2 nesting or a chain of references past 1,000 | refused as `openapi_depth` | T3, item 2 (W6) |
+
+- **Every member a `provenance` row gained in T3 is in one row**, the
+  first of `probes.tsv`: `landing`, `through`, `uri`, `fragment` and
+  `conflict`. The same test holds it to that.
+- **A 3.0 component is read under any name**, which is probe 3.7 and the
+  leniency of Decision 25 that the object model still owed. The 3.0
+  validation schema types a member of each map of the Components Object
+  only under a name that matches `^[a-zA-Z0-9\.\-_]+$`. The 3.1 and 3.2
+  schemas type every member and check the name apart, so the three
+  versions say one thing of a name and their schemas read a wrong one
+  differently. The object model's overlay gains an entry form for it,
+  `anyName`: a map the schema types by one pattern of names holds the
+  same thing under any other. The nine maps of the 3.0 Components Object
+  have one each, and the generator refuses the form where it does not
+  fit. The repair of W3 already read such a component where a reference
+  landed on it. What changes is one that nothing references: the
+  references in it were data, and are read.
+- **No description of the corpus has such a name where it mattered.**
+  The corpus and apidef's own definitions have 1,922 descriptions of
+  3.0, and none names a component outside the pattern, so this leniency
+  moves nothing there. Thirty descriptions of 2.0 have 684 such names
+  between them, generic types such as `Expression[Func[Account,Int64]]`,
+  and 2.0 reads a definition under any name already.
+- **On generated documents that leniency is all that moves.** Item 3's
+  build and this one were run on 12,000 generated documents under four
+  sets of options. 635 of the 48,000 results differ, every one in a
+  description of 3.0 that names a component outside the pattern, which
+  311 of the documents do. Under the preset every `$ref` map was a site
+  already, so there the tree, the cuts and what is left as written do
+  not move. What moves is the report: 372 rows inside such components
+  are a schema's where they were data, and 11 maps there whose `$ref`
+  is no string are reported `not-a-string`, as they are in any other
+  component. apidef reads the tree alone.
+- **The other two leniencies of Decision 25 were already built.** A
+  version this package does not know is read as the latest it does,
+  3.2, and the result says `unknown`: that was so since Phase 2, and is
+  now stated in the reference page and held by
+  `test/resolve/versions.tsv`. The text over the schema where they
+  differ is item 3's, with Decision 30.
+- **The suite** is 888 tests and the 11 of the pages' style.
+- **T3's acceptance runs hold on the build that has all five items.**
+
+  | Run | Result |
+  |---|---|
+  | The suite, and the pull request's twelve checks | pass |
+  | apidef gate | passes: 2,477 of its 2,478 tests with one skipped, and all 57 definitions byte-identical |
+  | Preset comparison | no difference in 15,177 documents |
+  | Sweep, base reading | no ledger row moves. The ten figures item 2 moved, by the same amounts, and the count of the new connection kind: 8,232, none of them not found |
+  | Sweep, `reading: 'spec'` | the same ten figures by the same amounts, and 8,241 implicit mappings, since this reading reads twelve more descriptions. No ledger row moves |
+  | A reference not found whose target exists | none. The four reported not found are in a test document of the specification's own, which has no `components` |
+  | A site reported resolved that holds its map as written | none |
+  | Target check | each of 120,648 local pointers, in 600 descriptions, lands where its pointer says |
+  | The Stripe and GitHub censuses of `AGENTS.md` | unchanged but for GitHub's connections, 1,296 where it had 1,284: the 12 more are its implicit mappings |
+
+  Against item 3's sweeps, 237 documents' records differ under the
+  base reading and 240 under the other, each by the count of its
+  implicit mappings alone.
+- **Items 3 to 5 cost no time.** On 290 descriptions of the corpus,
+  each resolved three times in turn by both builds and the least time
+  of each kept, the build with all five items takes 2% less time than
+  item 2's under the defaults and 1% less under `cycles: 'keep'`. Item
+  3's build took 4% and 3% less, since a reference written as a
+  fragment alone is now located without resolving a URI, and the three
+  reports take about half of that back. Item 2's cost against the build
+  before the index stands: the Stripe description takes about 220 ms
+  where it took about 180, and GitHub's about 430 ms where it took
+  about 365, measured together on one machine.
+
+**Since acceptance**, as T3's fourth item was built:
+
+- **Three reports are added, and none of them changes the tree.** Each
+  is read from the index once it is built. What they hold in the corpus
+  is at the end of this list.
+- **The implicit mapping of a discriminator is rows of `connections`**,
+  of kind `implicitMapping`, at the discriminator. A value of the
+  discriminating property names the schema component of that name,
+  unless `mapping` has the value as a key. The rows are the components
+  a description lets it name that way. Beside `oneOf` or `anyOf` they
+  are the ones listed there by reference, since an inline schema has no
+  name. On a parent schema they are the components that build on it
+  with `allOf`, and on those in turn, a child that names its parent
+  through another reference among them. `from` says which: `oneOf`,
+  `anyOf` or `allOf`. In 2.0, where `discriminator` is the name of the
+  property, the schema's own name is a value too, with `from: 'self'`.
+  The rows are the same under the preset, since they do not depend on
+  how a reference is read.
+- **A reference that lands on a type it does not expect has `conflict`**
+  in its `provenance` row, which is the report rule 2 of section 3
+  promised. Its value is the type the object model gives the landing by
+  where it is: the name of an object, `schema`, `map` or `list` for a
+  container with no type of its own, and `data` for plain JSON. The
+  reference resolves all the same, under `strict` too. A landing the
+  model gives no type has no conflict, since it takes the reference's.
+  The second of two references that give one such landing different
+  types conflicts with the first, which is the case Decision 28 left to
+  the order of the document. A reference of kind `data` expects
+  nothing, and under `refs: 'pointer'` no landing is typed, so neither
+  has one.
+- **The URLs a description gives are a report of their own, `urls`.** It
+  has a row for each string at a field that holds a URL or URI of
+  something outside the description: where it is, the value as written,
+  what a relative value is relative to, and its absolute form in the
+  normal form of item 3, where it has one. Nothing is loaded. The
+  fields are in the object model's overlay, as leaves of a new kind,
+  `url`, each with the sentence of the specification it is read from:
+
+  | `base` | The fields | Read against |
+  |---|---|---|
+  | `description` | in 3.1 and 3.2, `termsOfService`, the `url` of a Contact, License and External Documentation Object, and `externalValue`; in 3.0 the same but for `termsOfService` | the base URI in force where the field is, as a `$ref` is |
+  | `retrieval` | the `url` of a Server Object | the URI the description was retrieved from, whatever `$self` says |
+  | `api` | `openIdConnectUrl`, `oauth2MetadataUrl`, the URLs of an OAuth Flow Object, and `termsOfService` in 3.0 | a server of the API, so only a value written absolute has a form |
+  | `none` | the `namespace` of an XML Object, and every URL of 2.0 | nothing: 2.0 has no rule for a relative one |
+
+  3.1 and 3.2 name the fields that follow the base URI and the ones
+  relative to a server. 3.0.4 recommends the base URI for four of them
+  and leaves `termsOfService` to the servers. A server's URL with
+  variables has no absolute form until they are given.
+- **A relative URL has an absolute form only against a real location.**
+  A base is a URI with a scheme, and with an authority or a path from
+  the root. With no `retrievalUri` a description is read under a fixed
+  `urn:`, which is no location, and a relative URL in it has no `uri`.
+  The first build of this item gave it one against the `urn:`, which a
+  caller could not use and had to tell apart. The `uri` of a
+  `provenance` row is as it was: there it is the name the resolver
+  itself knows the other document by.
+- **A test holds the overlay to the fixtures.** Every field the object
+  model reads as a URL, in each version that has it, is listed by a row
+  of `test/resolve/reports.tsv` with its base: 41 fields over the four
+  versions.
+- **In the corpus** and apidef's own definitions, 5,213 descriptions
+  in all, on the build that has all five items and with no retrieval
+  URI given:
+
+  | Report | Rows | In |
+  |---|---|---|
+  | `conflict` | 8 | 4 descriptions |
+  | `implicitMapping` | 8,232, on 1,580 discriminators: 6,855 from `allOf`, 877 `self`, 456 from `oneOf`, 44 from `anyOf` | 237 descriptions |
+  | `urls` | 36,991: 24,245 `description`, 4,566 `retrieval`, 2,949 `api`, 5,231 `none` | 4,568 descriptions |
+
+  The eight conflicts are the ones E12 found: two references to a
+  response that name a schema in swaggerhub.com, five schemas that name
+  a response in rumble.run and rev.ai, and one that names a parameter
+  in enode.io. Of the URLs, 34,942 have an absolute form: every one
+  written absolute but the servers' with variables. The 2,049 without
+  one are relative, or a server's with variables.
+- **The suite** was 814 tests at the end of this item. 29 deliberate
+  faults in the new code are each caught by one, the last of them after
+  two rows were added for it.
+
+**Since acceptance**, as T3's third item was built:
+
+- **Five dialects are read, each by its own rules.** `ts/src/dialect.ts`
+  has what resolving needs of each: draft-04 names a schema resource
+  with `id` and the rest with `$id`; that member written as a fragment
+  alone is an anchor in draft-04 to draft-07, where 2019-09 has
+  `$anchor` and 2020-12 `$dynamicAnchor` as well; a `$ref` stands alone
+  in draft-04 to draft-07, so the members beside it are not read, an
+  identifier among them; and 2019-09 leaves `$recursiveRef` to
+  evaluation as 2020-12 leaves `$dynamicRef`. Which members hold schemas
+  is the object model's, in `model/applicators.json`, and the generator
+  makes a state of the Schema Object for each dialect a 3.1 or 3.2
+  schema may declare.
+- **A schema is read by the dialect in force where it is.** That is its
+  own `$schema`, else its parent's, else `jsonSchemaDialect`, else the
+  version's own. `$schema` is read at any Schema Object, as it was, and
+  it is read first: beside a `$ref` that stands alone it still says how
+  the schema is read. A region that a reference types as a schema is
+  read by the dialect in force at the region, not at the reference.
+- **What OpenAPI adds to a Schema Object is read in every dialect.**
+  `discriminator`, `xml`, `externalDocs` and `example` are OpenAPI's,
+  not a dialect's, and a schema in a description keeps them whatever it
+  declares. The other course drops them under a declared draft, and
+  with them a discriminator's mapping from the `connections` report.
+- **An unknown dialect is read as 2020-12 and reported**, in a new
+  report of the result, `dialects`. It lists every dialect the
+  description declares, the root's first, with the dialect each is read
+  by and whether this package knows it. It is no error, under `strict`
+  or otherwise. `unsupported-dialect` is no longer a reason a reference
+  is left as written, since none is.
+- **An identifier of a dialect is compared in its normal form**, with
+  or without the empty fragment, under `http` or `https`. The
+  hyper-schema dialect of each draft is read as the draft, since it
+  reads references as the draft does. The OpenAPI dialects of 3.1 and
+  3.2 are read as 2020-12 whatever their date.
+- **`$recursiveRef` is reported as `$dynamicRef` is**, in the
+  `connections` report, as a row of kind `recursiveRef` with its first
+  target and whether that has `$recursiveAnchor: true`. Neither is
+  followed.
+- **W13**, found here and in section 2.3: an identifier that names the
+  resource it is in, with or without a fragment its dialect does not
+  read as an anchor, names nothing new. An identifier of another
+  resource names that resource, and a fragment on it that is no anchor
+  is dropped, as it was.
+- **A plain name may hold a colon**, as the names of draft-04 to 2019-09
+  may. So a fragment such as `#a:b` that nothing declares is `no-anchor`
+  where it was `bad-fragment`.
+- **URIs are compared in their normal form**, which is W5: the scheme
+  and the host in lower case, an empty port and a scheme's own dropped,
+  a percent-encoded unreserved character decoded and the hex digits of
+  any other in upper case, dot segments removed, and `/` for an empty
+  path beside an authority. The case of a path is kept. Every base the
+  index holds is in that form with no fragment, and the `uri` of a
+  `provenance` row is in it.
+- **The object model follows the latest texts and schemas**, which is
+  Decision 30. The Initiative has published 3.2.1, and newer validation
+  schemas than the ones vendored: 3.1 of 2026-11-05, 3.2 of 2026-11-12,
+  and the 3.2 dialect's meta-schema of 2026-02-26. They are vendored in
+  place of the older ones. One member of the model moves: the 3.2 Media
+  Type Object loses `description`, which the older schema gave it and
+  the text never had. `resolve` had taken that member from the schema
+  as one a Reference Object overrides, which the audit found, and no
+  longer does. The field
+  tables of the 3.1.2 and 3.2.1 texts were then held to the model,
+  object by object: every fixed field of all 30 objects of each is in
+  the model, and the model has none the text lacks. Between 3.2.0 and
+  3.2.1 no field table differs, and between 3.1.1 and 3.1.2 one cell
+  does, the type of a Header Object's `schema`.
+- **Nothing in the corpus moves.** The build before this item and this
+  one give one result, the tree and every report row, on all 5,213
+  documents, under the defaults, under `slots: 'all'` and under the
+  preset. Three documents of the corpus declare a dialect where one is
+  read. All three are the Initiative's own test documents and declare
+  an OpenAPI dialect, one of them of 3.3, which is reported as unknown.
+  So W4, W5 and W13 are shapes the specification allows and the corpus
+  does not have, as section 2.3 said of W4 and W5. The sweep does not
+  count the `dialects` report.
+- **On generated documents, only the dialects move.** The build before
+  this item and this one were run on 12,000 generated documents under
+  four sets of options. 600 of the 48,000 results differ, every one in
+  a document that declares a dialect other than 2020-12 or OpenAPI's,
+  which the build before left as written. None differs under the
+  preset.
+- **The preset reads no dialect**, as before, and a test holds it to
+  that: a declaration changes nothing in what the preset gives but its
+  own member.
+- **The suite** is 773 tests and the 11 of the pages' style. 41
+  deliberate faults in the new code are each caught by one.
+- **The gates run by hand hold on this item's build.** The apidef gate
+  passes: 2,477 of its 2,478 tests with one skipped, and all 57
+  definitions byte-identical. The preset comparison finds no difference
+  in 15,177 documents compared. The sweep moves the ten figures item 2
+  moved, by the same amounts, under both readings, with no ledger row,
+  and no document's record differs from the one item 2's sweep has for
+  it.
+- **Decisions 29 and 30 are built on their defaults.**
+
+**Since acceptance**, as T3's second item was built:
+
+- **The index is in source**, as `ts/src/site-index.ts`, and `resolve`
+  reads it: `inherit` and `recognise` are look-ups, a site is read at
+  its landing with `site.written`, and `cycles: 'keep'` walks the
+  finished tree to the same landing. `provenance` rows gain `landing`,
+  `through`, and for a reference into another document `uri` and
+  `fragment`.
+- **It equals the prototype, everywhere it was run.** The build before
+  the index, E12's prototype made from that build, and the new build
+  were run on the same trees: the 5,168 descriptions of the corpus with
+  apidef's 43 definitions and the petstore pair, 1,140,269 sites, and
+  12,000 generated documents. The new build gives the prototype's
+  result for every one, under the defaults, under `cycles: 'keep'`, and
+  under `slots: 'all'` with `siblings: 'merge'` and `sharing: 'site'`,
+  and the prototype's result under the preset for apidef's own.
+- **Against the build before it, the eight descriptions of E12 move,
+  and a ninth under `slots: 'all'`.** That one is spotify.com: seven
+  references inside an extension that is itself a reference name
+  members beside it, which is the W2 shape. E12 did not run the corpus
+  under that option.
+- **The index carries each round forward.** The prototype surveyed the
+  whole document again in every round. The index surveys only what a
+  newly typed region changes, and reads again only the sites whose
+  facts moved. A second way of running it, which works every round out
+  from nothing, is kept for the tests, and the two are held to each
+  other on 1,200 generated documents, 400 of them made of regions
+  nested in each other.
+- **Two costs are bounded that the prototype left open.** The rounds
+  after the first, and the steps of a pointer read on through
+  references, can each cost more than one pass over the document: a
+  chain of regions that undo each other's base, or many pointers read
+  through one long chain of references. Together they may take sixteen
+  times the work of the first pass and 100,000 steps besides, and past
+  that `resolve` raises `openapi_work`. No description of the corpus has
+  a pointer that takes such a step, and the longest has five rounds.
+- **`through` lists a pointer's own steps.** The prototype also listed
+  what each of those references had itself been read through, which
+  grows with the square of a chain's length. Each reference has a row
+  of its own that says it.
+- **The step budget is two options**, `maxSteps` and `onCheck` with
+  `checkEveryN`, raising `openapi_work` and `openapi_cancel`. They count
+  one run of steps, the index's and then the fold's.
+- **The `connections` report reads the index, not the tree.** It is the
+  same report on every one of the 5,213 documents. It no longer depends
+  on the shape the tree is asked in: under `inline-once` a route
+  through a reference kept as written was not walked, and now is. A
+  name in a region that only a reference types is found.
+- **The report's routes are steps, and their growth is not yet bounded
+  by default.** A value that two routes reach is walked once for each,
+  as it was on the resolved tree, so callbacks that branch to a shared
+  Path Item double the routes at every level: seventeen levels are
+  131,070 routes in under a second, and thirty would not end. `maxSteps`
+  and `onCheck` now stop that walk, since every visit is a step. With
+  neither given nothing does, in this build or the one before it. A
+  bound that needs no option, and its size, is a choice for G1's
+  hostile inputs that this item leaves open.
+- **`sharing: 'inline-once'` counts a target by where a reference
+  lands**, so two pointers to one place, one of them through a
+  reference, are one target. Six of the 12,000 generated documents move
+  by that, and none of the corpus.
+- **The order of report rows is pinned as the new one.** E12 left the
+  choice to this item. A row is listed when the walk first comes to its
+  reference, and a reference that a pointer only passes is not come to
+  then. No description of the corpus moves by it.
+- **The cost** is 15% over the build before it on 290 descriptions of
+  the corpus under the defaults, and 13% under `cycles: 'keep'`, each
+  document resolved three times in turn by both and the least time
+  kept. Descriptions in 3.1 cost what they did. E12 gave 6% to 17%.
+- **The apidef gate passes on this build**, with the three diffs at
+  apidef's 3b24341: 2,477 of 2,478 tests, none failing, one skipped as
+  on apidef's `main`, and 57 of 57 definitions byte-identical.
+- **The preset comparison is unmoved**: no difference in the 15,177
+  documents it runs.
+- **The sweep moves in 31 descriptions, each of them named before it
+  ran, and in no other.** Both readings were swept afresh on this
+  build, with `expr`'s `main` linked, and held to the baselines, which
+  were swept on the released packages. Ten figures move, by the same
+  amounts under both readings, and no ledger row does. The 23 Azure
+  descriptions of W10 hold nothing as written, where they held 180
+  sites, and nine of them have one or two cuts more, 14 in all. The
+  seven codat.io descriptions of W3 gain 196 sites that were `$ref`
+  maps read as data. Three of those have a cut more and one has three
+  fewer. dnd5eapi.co, of W1, has two cuts where it had five. So T3's
+  acceptance holds for this item. No site is reported resolved and
+  held as written. The four references the sweep reports `not-found`
+  are in one of the specification's own test documents, which has no
+  `components` at all. The target check finds each of 113,524 local
+  pointers, in 600 descriptions, where its pointer says. The baselines
+  are not rewritten: each names its dependencies by version, and no
+  released `expr` gives these figures yet.
+- **Decisions 27 and 28 are built on their defaults**, and each is
+  stated once in the index: the lenient step in the walk of a pointer,
+  which `strict` refuses, and the order of a round in one sort.
+- **W4 and W5 are left to item 3.** Item 2's text has W1 to W6, and
+  item 3's has the dialects and the comparison of URIs, which are W4
+  and W5.
+- **`resolve` needs the fold of tabnas/expr#117**, and says so: on an
+  `expr` up to 0.6.3 it throws a `TypeError`, except under
+  `refs: 'pointer'` with no step bound, which asks nothing new and is
+  what the preset sets.
 
 **Since acceptance**, as T3's second item was begun:
 

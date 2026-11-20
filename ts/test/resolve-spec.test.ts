@@ -3,11 +3,18 @@
 // The resolver against test/resolve/*.tsv. Each row parses its input,
 // resolves it with the row's options, and holds the resolved tree, the
 // references left as written (`at why`) and the cut edges to the row; an
-// `ERROR:<code>` row holds the code `resolve` raises. Two columns are
+// `ERROR:<code>` row holds the code `resolve` raises. Five columns are
 // optional: `select`, a path into the resolved tree whose value is held
-// to `expected` in place of the whole tree, and `connections`, the
+// to `expected` in place of the whole tree; `connections`, the
 // connections report, one `kind at -> target` line each (`!why` for a
-// target not found, then any flags). These fixtures live outside
+// target not found, then any flags); `provenance`, one
+// `at status -> landing` line for each reference, in the order of the
+// report (`-` for one that lands nowhere, then `through=`, `uri=`,
+// `fragment=` and `conflict=` where the row has them); `dialects`, one
+// `at dialect as name` line for each dialect the description declares
+// (then ` unknown` for one this package does not know); and `urls`, one
+// `at base value -> uri` line for each URL the description gives (`-`
+// for one with no absolute form). These fixtures live outside
 // test/spec/ because the parity runners there read a parse, and because
 // the Go and Rust ports do not carry the resolver yet.
 
@@ -18,7 +25,9 @@ import { join } from 'node:path'
 
 import { loadSpec } from '@tabnas/support'
 
-import { parse, resolve } from '../dist/openapi'
+import { parse, resolve, version } from '../dist/openapi'
+import { classify, MODEL_VERSIONS } from '../dist/model'
+import { OBJECT_MODEL } from '../dist/object-model'
 
 const DIR = join(__dirname, '..', '..', 'test', 'resolve')
 
@@ -27,13 +36,33 @@ const C = (x: any) => JSON.parse(JSON.stringify(x))
 // One connection as a fixture writes it.
 function line(c: any): string {
   let out = `${c.kind} ${c.at} -> ${c.found ? c.target : '!' + (c.why ?? 'missing')}`
-  for (const flag of ['via', 'type', 'ambiguous', 'cycle', 'anchor']) {
+  for (const flag of ['via', 'type', 'ambiguous', 'cycle', 'anchor', 'from']) {
     if (undefined !== c[flag]) out += ` ${flag}=${c[flag]}`
   }
   for (const list of ['targets', 'fields', 'routes']) {
     if (undefined !== c[list]) out += ` ${list}=${c[list].join(',')}`
   }
   return out
+}
+
+// One reference's provenance as a fixture writes it.
+function where(p: any): string {
+  let out = `${p.at} ${p.status} -> ${p.landing ?? '-'}`
+  if (undefined !== p.through) out += ' through=' + p.through.join(',')
+  if (undefined !== p.uri) out += ' uri=' + p.uri
+  if (undefined !== p.fragment) out += ' fragment=' + p.fragment
+  if (undefined !== p.conflict) out += ' conflict=' + p.conflict
+  return out
+}
+
+// One declared dialect as a fixture writes it.
+function spoken(d: any): string {
+  return `${d.at} ${d.dialect} as ${d.as}` + (d.known ? '' : ' unknown')
+}
+
+// One URL as a fixture writes it.
+function located(u: any): string {
+  return `${u.at} ${u.base} ${u.value} -> ${u.uri ?? '-'}`
 }
 
 const files = readdirSync(DIR).filter((f) => f.endsWith('.tsv')).sort()
@@ -82,7 +111,55 @@ for (const file of files) {
         if ('' !== conns) {
           assert.deepStrictEqual(out.connections.map(line), JSON.parse(conns), `${file}:${row.line} connections`)
         }
+        const prov = row.named('provenance').trim()
+        if ('' !== prov) {
+          assert.deepStrictEqual(out.provenance.map(where), JSON.parse(prov), `${file}:${row.line} provenance`)
+        }
+        const said = row.named('dialects').trim()
+        if ('' !== said) {
+          assert.deepStrictEqual(out.dialects.map(spoken), JSON.parse(said), `${file}:${row.line} dialects`)
+        }
+        const urls = row.named('urls').trim()
+        if ('' !== urls) {
+          assert.deepStrictEqual(out.urls.map(located), JSON.parse(urls), `${file}:${row.line} urls`)
+        }
       })
     }
   })
 }
+
+// The object model says which fields hold a URL, and what a relative one
+// is relative to, from model/overlay.json. A row that lists a field is
+// what holds its entry there to the specification, so every one of them
+// has a row, in each version that has the field.
+test('every URL field of the object model is in a row of reports.tsv', () => {
+  const field = (owner: { type?: string | null }, state: string, member: string | number) =>
+    `${owner.type ?? state}.${member}`
+  const model = new Set<string>()
+  for (const v of MODEL_VERSIONS) {
+    const states = (OBJECT_MODEL.versions as any)[v].states as Record<string, any>
+    for (const [name, state] of Object.entries(states)) {
+      for (const [member, to] of Object.entries((state.props ?? {}) as Record<string, string>)) {
+        if (to.startsWith('url:')) model.add(`${v} ${field(state, name, member)} ${to.slice(4)}`)
+      }
+      // A URL is a named field everywhere it is one: no pattern and no
+      // catch-all gives one, which this test could not name.
+      for (const [, to] of (state.patterns ?? []) as [string, string][]) assert.ok(!to.startsWith('url:'), `${v} ${name}`)
+      assert.ok(!String(state.rest ?? '').startsWith('url:'), `${v} ${name}`)
+    }
+  }
+  const rows = new Set<string>()
+  const spec = loadSpec(join(DIR, 'reports.tsv'))
+  for (const row of spec.rows) {
+    if ('' === row.named('urls').trim()) continue
+    const raw = row.named('opts').trim()
+    const tree = parse(row.unescNamed('input'))
+    const v = version(tree).version as (typeof MODEL_VERSIONS)[number]
+    for (const u of resolve(tree, '' === raw ? {} : JSON.parse(raw)).urls) {
+      const path = u.at.slice(1).split('/').map((seg: string) => seg.replace(/~1/g, '/').replace(/~0/g, '~'))
+      const owner = classify(v, path.slice(0, -1))
+      rows.add(`${v} ${field(owner, owner.state, path[path.length - 1])} ${u.base}`)
+    }
+  }
+  assert.deepStrictEqual([...rows].sort(), [...model].sort())
+})

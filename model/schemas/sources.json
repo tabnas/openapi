@@ -1,6 +1,6 @@
 {
   "comment": "The OpenAPI Initiative validation schemas the object model is generated from, each pinned by URL, date and SHA-256. They are the Initiative's, published under the Apache License 2.0 (https://github.com/OAI/OpenAPI-Specification/blob/main/LICENSE); they are vendored unchanged. tools/object-model.cjs checks every hash before it reads a file.",
-  "fetched": "2026-11-09",
+  "fetched": "2026-11-19",
   "sources": [
     {
       "version": "2.0",
@@ -21,10 +21,10 @@
     {
       "version": "3.1",
       "role": "schema",
-      "url": "https://spec.openapis.org/oas/3.1/schema/2026-08-03",
-      "date": "2026-08-03",
-      "file": "oas-3.1-schema-2026-08-03.json",
-      "sha256": "59f106413cb48c31299f96f024c938d3628aed6cd02cd14bcfb2fcaae7a130b6"
+      "url": "https://spec.openapis.org/oas/3.1/schema/2026-11-05",
+      "date": "2026-11-05",
+      "file": "oas-3.1-schema-2026-11-05.json",
+      "sha256": "4751a7777357b26b09a9a61b9addd08081de2e65cf80d3ae0df2b4cd931b2d7b"
     },
     {
       "version": "3.1",
@@ -37,18 +37,18 @@
     {
       "version": "3.2",
       "role": "schema",
-      "url": "https://spec.openapis.org/oas/3.2/schema/2026-08-30",
-      "date": "2026-08-30",
-      "file": "oas-3.2-schema-2026-08-30.json",
-      "sha256": "ec53db6e114b768ff2d273b232bda210f51b70c5e57d57ac8daf7e8496a6e073"
+      "url": "https://spec.openapis.org/oas/3.2/schema/2026-11-12",
+      "date": "2026-11-12",
+      "file": "oas-3.2-schema-2026-11-12.json",
+      "sha256": "f1f7ee38d431a7bb1082e4df2288dbe1d4d3f49081b497af249c07b77737fb43"
     },
     {
       "version": "3.2",
       "role": "meta",
-      "url": "https://spec.openapis.org/oas/3.2/meta/2025-09-17",
-      "date": "2025-09-17",
-      "file": "oas-3.2-meta-2025-09-17.json",
-      "sha256": "a1959c0aa1f9a7ce58f2b75699be5bc5187c8a25901fe04a227f1d9419ba4e9c"
+      "url": "https://spec.openapis.org/oas/3.2/meta/2026-02-26",
+      "date": "2026-02-26",
+      "file": "oas-3.2-meta-2026-02-26.json",
+      "sha256": "f444d02ef7d36f30293983fad8118c823a3c70a49a8e5aa6f1afe21215e35417"
     }
   ]
 }

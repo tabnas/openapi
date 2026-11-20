@@ -96,6 +96,17 @@ describe('resolve', () => {
     const unknown = resolve(parse('{"components":{"schemas":{"A":{"$ref":"#/components/schemas/B"},"B":{"type":"string"}}}}'))
     assert.equal(unknown.version, 'unknown')
     assert.deepEqual(C(unknown.tree.components.schemas.A), { type: 'string' })
+    // A version this package does not know is read as the latest it does,
+    // and reported as unknown: a reference at a Media Type Object, which
+    // 3.2 alone has, resolves.
+    const later = resolve(
+      parse(
+        '{"openapi":"3.3.0","components":{"mediaTypes":{"M":{"schema":{}}},' +
+          '"responses":{"R":{"description":"r","content":{"a/b":{"$ref":"#/components/mediaTypes/M"}}}}}}',
+      ),
+    )
+    assert.equal(later.version, 'unknown')
+    assert.deepEqual(C(later.tree.components.responses.R.content['a/b']), { schema: {} })
   })
 
   test('a member named __proto__ resolves as data and pollutes nothing', () => {
@@ -302,10 +313,11 @@ describe('resolve', () => {
     }
   })
 
-  test('cycles keep reads on past a cut reference only to say that nothing is there', () => {
-    // A and B name each other. The first pointer goes through A to a
-    // member A has as written, and is cut with it. The second goes
-    // through A to nothing.
+  test('a pointer past a cut reference reads the document as written, under cut and keep', () => {
+    // A and B name each other, and both are cut. A pointer is read on the
+    // document as it is written, so the first finds the member A has
+    // beside its `$ref`. The second finds no such member there, and is
+    // not found.
     const src = JSON.stringify({
       openapi: '3.0.0',
       components: {
@@ -317,9 +329,16 @@ describe('resolve', () => {
         },
       },
     })
-    const out = resolve(parse(src), { cycles: 'keep' })
-    assert.deepEqual(out.cuts.map((c) => c.at.slice(S.length - 1)), ['A', 'B', 'there'])
-    assert.deepEqual(out.unresolved.map((u) => [u.at.slice(S.length - 1), u.why]), [['gone', 'not-found']])
+    for (const cycles of ['cut', 'keep'] as const) {
+      const out = resolve(parse(src), { cycles })
+      assert.deepEqual(out.cuts.map((c) => c.at.slice(S.length - 1)), ['A', 'B'])
+      assert.deepEqual(out.unresolved.map((u) => [u.at.slice(S.length - 1), u.why]), [['gone', 'not-found']])
+      assert.deepEqual(C(out.tree.components.schemas.there), { type: 'integer' })
+      const row = (name: string) => out.provenance.find((p) => p.at === S.slice(1) + name)!
+      assert.equal(row('there').landing, S.slice(1) + 'A/properties/x')
+      assert.equal(row('there').through, undefined)
+      assert.equal(row('gone').landing, null)
+    }
   })
 
   test('cycles keep lists its reports in document order', () => {
@@ -345,7 +364,7 @@ describe('resolve', () => {
     assert.deepEqual(C(out.tree.components.schemas.k0), { type: 'string' })
     assert.throws(
       () => resolve(parse(chain(300)), { cycles: 'keep', maxDepth: 100 }),
-      (e: any) => 'FoldError' === e.name && 'fold_depth' === e.code && '/components/schemas/k100' === e.at,
+      (e: any) => 'ResolveError' === e.name && 'openapi_depth' === e.code && '/components/schemas/k100' === e.at,
     )
   })
 
@@ -398,11 +417,13 @@ describe('resolve', () => {
         pointer.unresolved.map((u) => [u.at.slice(S.length - 1), u.why]),
         [['M', 'external'], ['viaM', 'not-found']],
       )
-      // A walk through a reference that was cut is cut with it, under both.
-      for (const out of [uri, pointer]) {
-        assert.deepEqual(short(out.cuts), ['A', 'B', 'viaA'])
-        assert.deepEqual(C(out.tree.components.schemas.viaA), { $ref: S + 'A/properties/x' })
-      }
+      // Under 'pointer' a walk through a reference that was cut is cut
+      // with it. Under 'uri' the pointer is read on the document as
+      // written, and finds the member A has beside its `$ref`.
+      assert.deepEqual(short(pointer.cuts), ['A', 'B', 'viaA'])
+      assert.deepEqual(C(pointer.tree.components.schemas.viaA), { $ref: S + 'A/properties/x' })
+      assert.deepEqual(short(uri.cuts), ['A', 'B'])
+      assert.deepEqual(C(uri.tree.components.schemas.viaA), { type: 'integer' })
     }
   })
 
@@ -455,6 +476,358 @@ describe('resolve', () => {
         ['/components/schemas/D', 'cut', '/components/schemas/D/x'],
       ],
     )
+  })
+
+  test('provenance says where each reference lands, and what it was read through', () => {
+    const S = '#/components/schemas/'
+    const src = JSON.stringify({
+      openapi: '3.0.3',
+      components: {
+        schemas: {
+          T: { properties: { x: { type: 'string' } } },
+          A: { $ref: S + 'T' },
+          direct: { $ref: S + 'T/properties/x' },
+          through: { $ref: S + 'A/properties/x' },
+          gone: { $ref: S + 'Nope' },
+          other: { $ref: 'other.yaml#/X' },
+        },
+      },
+    })
+    const raw = parse(src)
+    const out = resolve(raw, { retrievalUri: 'https://example.com/a/openapi.yaml' })
+    const row = (name: string) => out.provenance.find((p) => p.at === S.slice(1) + name)!
+    assert.equal(row('direct').landing, S.slice(1) + 'T/properties/x')
+    assert.equal(row('direct').landing, row('direct').target)
+    assert.equal(row('direct').through, undefined)
+    assert.equal(row('through').target, S.slice(1) + 'A/properties/x')
+    assert.equal(row('through').landing, S.slice(1) + 'T/properties/x')
+    assert.deepEqual(row('through').through, [S.slice(1) + 'A'])
+    assert.equal(row('gone').landing, null)
+    assert.equal(row('other').landing, null)
+    assert.equal(row('other').uri, 'https://example.com/a/other.yaml')
+    assert.equal(row('other').fragment, '/X')
+    assert.equal(row('direct').uri, undefined)
+    // Under `refs: 'pointer'` a pointer is read as apidef reads it, and no
+    // landing is given.
+    const preset = resolve(raw, { refs: 'pointer' })
+    assert.deepEqual(preset.provenance.map((p) => p.landing), [null, null, null, null, null])
+    assert.ok(preset.provenance.every((p) => undefined === p.through && undefined === p.uri))
+  })
+
+  test('strict does not read a pointer through a reference', () => {
+    const S = '#/components/schemas/'
+    const raw = parse(
+      JSON.stringify({
+        openapi: '3.0.3',
+        components: { schemas: { T: { properties: { x: {} } }, A: { $ref: S + 'T' }, P: { $ref: S + 'A/properties/x' } } },
+      }),
+    )
+    for (const cycles of ['cut', 'keep'] as const) {
+      assert.deepEqual(C(resolve(raw, { cycles }).tree.components.schemas.P), {})
+      assert.throws(
+        () => resolve(raw, { strict: true, cycles }),
+        (e: any) => e instanceof ResolveError && 'openapi_unresolved' === e.code && S.slice(1) + 'P' === e.at,
+      )
+    }
+  })
+
+  test('maxSteps bounds the work of resolving, and openapi_work is its code', () => {
+    const raw = parse(readFileSync(join(PETSTORE, 'petstore.json'), 'utf8'))
+    const counts: number[] = []
+    for (const options of [{}, { cycles: 'keep' as const }, { compat: 'apidef' as const }]) {
+      // The steps a resolve takes are counted by its own check.
+      let taken = 0
+      resolve(raw, { ...options, checkEveryN: 1, onCheck: (n) => void (taken = n) })
+      assert.ok(100 < taken, 'only ' + taken + ' steps')
+      counts.push(taken)
+      assert.doesNotThrow(() => resolve(raw, { ...options, maxSteps: taken }))
+      for (const maxSteps of [1, 10, Math.floor(taken / 2), taken - 1]) {
+        assert.throws(
+          () => resolve(raw, { ...options, maxSteps }),
+          (e: any) => e instanceof ResolveError && 'openapi_work' === e.code,
+          'maxSteps ' + maxSteps,
+        )
+      }
+    }
+    // Each reference is read once, whether the fold reads it or, under
+    // 'keep', the pass after the fold does: the count is the same.
+    assert.equal(counts[1], counts[0])
+    for (const bad of [0, -1, 1.5, '10', NaN]) {
+      assert.throws(() => resolve(raw, { maxSteps: bad as any }), TypeError)
+      assert.throws(() => resolve(raw, { checkEveryN: bad as any }), TypeError)
+      assert.throws(() => resolve(raw, { maxDepth: bad as any }), TypeError)
+    }
+    assert.throws(() => resolve(raw, { onCheck: 'no' as any }), TypeError)
+  })
+
+  test('onCheck is told the steps as they are taken, and stops resolving when it returns false', () => {
+    const schemas: Record<string, unknown> = { s0: { type: 'string' } }
+    for (let i = 1; i < 800; i++) schemas['s' + i] = { properties: { p: { $ref: '#/components/schemas/s' + (i - 1) } } }
+    const raw = parse(JSON.stringify({ openapi: '3.0.3', components: { schemas } }))
+    for (const options of [{}, { cycles: 'keep' as const }]) {
+      const seen: number[] = []
+      resolve(raw, { ...options, checkEveryN: 50, onCheck: (n) => void seen.push(n) })
+      assert.ok(40 < seen.length, 'only ' + seen.length + ' checks')
+      assert.deepEqual(seen, seen.map((_, i) => 50 * (i + 1)))
+      // The default is a check every 1,000 steps.
+      const coarse: number[] = []
+      resolve(raw, { ...options, onCheck: (n) => void coarse.push(n) })
+      assert.ok(2 <= coarse.length, 'only ' + coarse.length + ' checks')
+      assert.deepEqual(coarse, coarse.map((_, i) => 1000 * (i + 1)))
+      // Stopped at the first check, at a later one, at the last, and not
+      // at all.
+      for (const stopAt of [50, 150, seen[seen.length - 1]]) {
+        let err: any
+        try {
+          resolve(raw, { ...options, checkEveryN: 50, onCheck: (n) => n < stopAt })
+        } catch (e) {
+          err = e
+        }
+        assert.ok(err instanceof ResolveError, 'stop at ' + stopAt)
+        assert.equal(err.code, 'openapi_cancel')
+        assert.match(err.message, new RegExp('after ' + stopAt + ' steps'))
+      }
+      assert.doesNotThrow(() => resolve(raw, { ...options, checkEveryN: 50, onCheck: () => true }))
+    }
+  })
+
+  test('the routes of the connections report are steps too, so a bound or a check stops them', () => {
+    // Each level is a Path Item whose operation has two callbacks to the
+    // next level, so the routes double with every level: twelve levels
+    // are 4,094 routes to eleven operations, in a document of 97 maps.
+    const levels = 12
+    const pathItems: Record<string, unknown> = {}
+    for (let i = 0; i < levels; i++) {
+      const next = { $ref: '#/components/pathItems/L' + (i + 1) }
+      pathItems['L' + i] = {
+        post: {
+          operationId: 'op' + i,
+          responses: {},
+          callbacks: i + 1 < levels ? { a: { '{$url}': next }, b: { '{$url}': next } } : {},
+        },
+      }
+    }
+    const raw = parse(JSON.stringify({ openapi: '3.1.0', paths: { '/start': { $ref: '#/components/pathItems/L0' } }, components: { pathItems } }))
+    const out = resolve(raw)
+    const routes = out.connections.filter((c) => 'operationIdReuse' === c.kind).reduce((n, c) => n + c.routes!.length, 0)
+    assert.equal(routes, 4094)
+    let taken = 0
+    resolve(raw, { checkEveryN: 1, onCheck: (n) => void (taken = n) })
+    assert.ok(routes < taken, taken + ' steps for ' + routes + ' routes')
+    assert.throws(() => resolve(raw, { maxSteps: 2000 }), (e: any) => e instanceof ResolveError && 'openapi_work' === e.code)
+    let calls = 0
+    assert.throws(
+      () => resolve(raw, { checkEveryN: 1000, onCheck: () => 3 > ++calls }),
+      (e: any) => e instanceof ResolveError && 'openapi_cancel' === e.code,
+    )
+    assert.equal(calls, 3)
+  })
+
+  test('nesting and references past maxDepth raise openapi_depth, whatever is asked of the tree', () => {
+    const S = '#/components/schemas/'
+    const chain = (n: number) => {
+      const schemas: Record<string, unknown> = {}
+      for (let i = 0; i < n; i++) schemas['k' + i] = { $ref: S + 'k' + (i + 1) }
+      schemas['k' + n] = { type: 'string' }
+      return parse(JSON.stringify({ openapi: '3.0.0', components: { schemas } }))
+    }
+    let nested: any = 1
+    for (let i = 0; i < 40; i++) nested = { a: nested }
+    const deep = parse(JSON.stringify({ openapi: '3.0.0', 'x-deep': nested }))
+    for (const options of [{}, { cycles: 'keep' as const }, { compat: 'apidef' as const }, { sharing: 'inline-once' as const }]) {
+      assert.doesNotThrow(() => resolve(chain(40), options))
+      for (const raw of [chain(40), deep]) {
+        assert.throws(
+          () => resolve(raw, { ...options, maxDepth: 20 }),
+          (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code && 'string' === typeof e.at,
+        )
+      }
+    }
+  })
+
+  test('a root that is neither a map nor a list is given back as it is', () => {
+    for (const raw of [null, undefined, 5, 'text', true, [], [1, {}]]) {
+      for (const options of [{}, { cycles: 'keep' as const }, { compat: 'apidef' as const }]) {
+        const out = resolve(raw, options)
+        assert.deepEqual(out.tree, raw)
+        assert.deepEqual(out.provenance, [])
+        assert.deepEqual(out.connections, [])
+        assert.equal(out.dataSlots, 0)
+        assert.deepEqual(out.dialects, [])
+        assert.deepEqual(out.urls, [])
+      }
+    }
+  })
+
+  test('says where a reference lands on a type it does not expect, and resolves it all the same', () => {
+    const doc = {
+      openapi: '3.1.0',
+      paths: { '/a': { get: { responses: { 200: { $ref: '#/components/schemas/S' }, 201: { $ref: '#/components/responses/R' } } } } },
+      components: { responses: { R: { description: 'r' } }, schemas: { S: { type: 'object' } } },
+    }
+    const out = resolve(C(doc))
+    const row = (at: string) => out.provenance.find((p) => p.at === at)!
+    assert.equal(row('/paths/~1a/get/responses/200').conflict, 'schema')
+    assert.equal(row('/paths/~1a/get/responses/200').type, 'response')
+    assert.equal(row('/paths/~1a/get/responses/200').status, 'resolved')
+    // The row of a reference that lands on what it expects has no such
+    // member at all.
+    assert.ok(!('conflict' in row('/paths/~1a/get/responses/201')))
+    assert.deepEqual(C(out.tree.paths['/a'].get.responses), { 200: { type: 'object' }, 201: { description: 'r' } })
+    assert.deepEqual(out.unresolved, [])
+    // Whatever shape the tree is asked in, the conflict is the same fact.
+    for (const options of [{ cycles: 'keep' as const }, { sharing: 'site' as const }, { siblings: 'merge' as const }]) {
+      assert.equal(resolve(C(doc), options).provenance.find((p) => p.at === '/paths/~1a/get/responses/200')!.conflict, 'schema')
+    }
+    // Under `refs: 'pointer'` no landing is read, so nothing is said.
+    assert.ok(resolve(C(doc), { refs: 'pointer' }).provenance.every((p) => !('conflict' in p)))
+  })
+
+  test('lists the URLs a description gives, and the implicit mapping of a discriminator, as rows', () => {
+    const doc = {
+      openapi: '3.1.0',
+      info: { title: 't', version: '1', termsOfService: 'terms.html' },
+      servers: [{ url: 'https://{tenant}.example.com/v1' }, { url: '/v2' }],
+      components: {
+        securitySchemes: { oidc: { type: 'openIdConnect', openIdConnectUrl: '/.well-known/openid-configuration' } },
+        schemas: {
+          Pet: { oneOf: [{ $ref: '#/components/schemas/Cat' }], discriminator: { propertyName: 'kind' }, xml: { namespace: 'urn:example:pets' } },
+          Cat: { type: 'object' },
+        },
+      },
+    }
+    const out = resolve(C(doc), { retrievalUri: 'https://API.example.com/descriptions/openapi.yaml' })
+    assert.deepEqual(out.urls, [
+      { at: '/info/termsOfService', value: 'terms.html', base: 'description', uri: 'https://api.example.com/descriptions/terms.html' },
+      { at: '/servers/0/url', value: 'https://{tenant}.example.com/v1', base: 'retrieval' },
+      { at: '/servers/1/url', value: '/v2', base: 'retrieval', uri: 'https://api.example.com/v2' },
+      { at: '/components/securitySchemes/oidc/openIdConnectUrl', value: '/.well-known/openid-configuration', base: 'api' },
+      { at: '/components/schemas/Pet/xml/namespace', value: 'urn:example:pets', base: 'none', uri: 'urn:example:pets' },
+    ])
+    assert.deepEqual(
+      out.connections.filter((c) => 'implicitMapping' === c.kind),
+      [
+        {
+          kind: 'implicitMapping',
+          at: '/components/schemas/Pet/discriminator',
+          name: 'Cat',
+          found: true,
+          target: '/components/schemas/Cat',
+          from: 'oneOf',
+        },
+      ],
+    )
+    // Neither depends on the shape the tree is asked in, or on how a
+    // reference is read.
+    for (const options of [{ cycles: 'keep' as const }, { compat: 'apidef' as const }, { slots: 'all' as const }]) {
+      const other = resolve(C(doc), { ...options, retrievalUri: 'https://API.example.com/descriptions/openapi.yaml' })
+      assert.deepEqual(other.urls, out.urls)
+      assert.deepEqual(other.connections.filter((c) => 'implicitMapping' === c.kind).length, 1)
+    }
+    // The steps of the report are steps of the caller's count.
+    assert.throws(() => resolve(C(doc), { maxSteps: 5 }), (e: any) => 'openapi_work' === e.code)
+  })
+
+  test('reports the dialects a description declares, and the one each is read by', () => {
+    const D7 = 'http://json-schema.org/draft-07/schema#'
+    const doc = {
+      openapi: '3.1.0',
+      jsonSchemaDialect: 'https://example.com/a-dialect',
+      components: {
+        schemas: {
+          T: { type: 'string' },
+          Old: { $schema: D7, definitions: { D: { $ref: '#/components/schemas/T' } } },
+          Odd: { $schema: 7, properties: { p: { $schema: 'https://json-schema.org/draft/2019-09/schema' } } },
+        },
+      },
+      // A `$schema` that is not a schema's declares nothing.
+      'x-data': { $schema: D7 },
+      info: { title: 't', version: '1', $schema: D7 },
+    }
+    const out = resolve(C(doc))
+    assert.deepEqual(out.dialects, [
+      { at: '/jsonSchemaDialect', dialect: 'https://example.com/a-dialect', as: '2020-12', known: false },
+      { at: '/components/schemas/Old/$schema', dialect: D7, as: 'draft-07', known: true },
+      {
+        at: '/components/schemas/Odd/properties/p/$schema',
+        dialect: 'https://json-schema.org/draft/2019-09/schema',
+        as: '2019-09',
+        known: true,
+      },
+    ])
+    assert.deepEqual(out.tree.components.schemas.Old.definitions.D, { type: 'string' })
+    // A dialect this package does not know is no error, strict or not.
+    assert.deepEqual(resolve(C(doc), { strict: true }).dialects, out.dialects)
+    // The shape the tree is asked in does not change what is declared.
+    for (const options of [{ cycles: 'keep' as const }, { slots: 'all' as const }, { sharing: 'copy' as const, budget: 1e6 }]) {
+      assert.deepEqual(resolve(C(doc), options).dialects, out.dialects)
+    }
+    // 2.0 and 3.0 have no dialects, and `refs: 'pointer'` reads none.
+    assert.deepEqual(resolve({ ...C(doc), openapi: '3.0.3' }).dialects, [])
+    assert.deepEqual(resolve({ swagger: '2.0', definitions: { S: { $schema: D7 } } }).dialects, [])
+    assert.deepEqual(resolve(C(doc), { refs: 'pointer' }).dialects, [])
+    assert.deepEqual(resolve(C(doc), { compat: 'apidef' }).dialects, [])
+  })
+
+  test('the apidef preset reads no dialect: a declaration changes nothing but its own member', () => {
+    const D4 = 'http://json-schema.org/draft-04/schema#'
+    const schemas = (declare: boolean) => ({
+      S: {
+        ...(declare ? { $schema: D4 } : {}),
+        id: 'https://x.example/s.json',
+        $id: 'https://x.example/dollar.json',
+        definitions: { D: { type: 'integer' } },
+        properties: {
+          p: { $ref: '#/definitions/D', description: 'd' },
+          q: { $ref: '#/components/schemas/S/definitions/D', description: 'd' },
+        },
+        // The report reads these as URIs, under the preset too, and
+        // there by `$id`, which is 2020-12's.
+        discriminator: {
+          propertyName: 'k',
+          mapping: { a: 'https://x.example/dollar.json', b: 'https://x.example/s.json#/definitions/D' },
+        },
+      },
+    })
+    const doc = (declare: boolean) => ({ openapi: '3.1.0', info: { title: 't', version: '1' }, paths: {}, components: { schemas: schemas(declare) } })
+    const plain = resolve(doc(false), { compat: 'apidef' })
+    const declared = resolve(doc(true), { compat: 'apidef' })
+    const without = C(declared.tree)
+    delete without.components.schemas.S.$schema
+    assert.deepEqual(without, C(plain.tree))
+    assert.deepEqual(declared.unresolved, plain.unresolved)
+    assert.deepEqual(declared.provenance, plain.provenance)
+    assert.deepEqual(declared.connections, plain.connections)
+    assert.deepEqual(
+      plain.connections.map((c) => [c.kind, c.found, c.target]),
+      [
+        ['mapping', true, '/components/schemas/S'],
+        ['mapping', false, null],
+      ],
+    )
+    assert.deepEqual(plain.unresolved.map((u) => u.at), ['/components/schemas/S/properties/p'])
+    // Read as the specification has it, the declaration decides. In
+    // draft-04 `id` names the schema, so `#/definitions/D` is found in it
+    // and a pointer from the document's root is not, and a `$ref` stands
+    // alone.
+    const spec = resolve(doc(true))
+    assert.deepEqual(C(spec.tree.components.schemas.S.properties.p), { type: 'integer' })
+    assert.deepEqual(spec.unresolved.map((u) => u.at), ['/components/schemas/S/properties/q'])
+    // Its report finds the mapping by `id`, and not by `$id`, which
+    // draft-04 does not have.
+    assert.deepEqual(spec.connections.map((c) => [c.kind, c.found, c.target]), [
+      ['mapping', false, null],
+      ['mapping', true, '/components/schemas/S/definitions/D'],
+    ])
+    // Without it the schema is of 2020-12, where `id` is a member like
+    // any, `$id` names the schema, and the members beside a `$ref` apply.
+    const now = resolve(doc(false))
+    assert.deepEqual(C(now.tree.components.schemas.S.properties.p), {
+      allOf: [{ type: 'integer' }],
+      description: 'd',
+    })
+    assert.deepEqual(now.unresolved.map((u) => u.at), ['/components/schemas/S/properties/q'])
+    assert.deepEqual(now.connections.map((c) => [c.kind, c.found]), [['mapping', true], ['mapping', false]])
   })
 
   test('strict raises a ResolveError with the code, the site and the reference', () => {

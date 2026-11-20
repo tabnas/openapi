@@ -220,6 +220,124 @@ try {
 code // => 'openapi_unresolved'
 ```
 
+## See where a reference lands
+
+`provenance` has one entry for each reference. Its `target` is the
+location the pointer names, and its `landing` is the location the
+pointer comes to. The two differ where a step of the pointer is missing
+at a reference and is read in what that reference names. `through`
+lists each such reference:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.0.3
+components:
+  schemas:
+    Pet: {properties: {name: {type: string}}}
+    Alias: {$ref: '#/components/schemas/Pet'}
+    Name: {$ref: '#/components/schemas/Alias/properties/name'}
+`)
+const out = resolve(raw)
+const name = out.provenance.find((p) => p.at === '/components/schemas/Name')
+name.target // => '/components/schemas/Alias/properties/name'
+name.landing // => '/components/schemas/Pet/properties/name'
+name.through // => ['/components/schemas/Alias']
+out.tree.components.schemas.Name // => { type: 'string' }
+```
+
+Under `strict` that step is not taken, and the reference is not found.
+
+## Find a reference that lands on the wrong type
+
+A reference resolves to whatever its pointer comes to. Where that is
+not the type the reference stands for, its entry in `provenance` has
+`conflict`, the type it landed on:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.0.3
+components:
+  responses:
+    Gone: {description: gone}
+  schemas:
+    Wrong: {$ref: '#/components/responses/Gone'}
+    Right: {$ref: '#/components/schemas/Wrong'}
+`)
+const out = resolve(raw)
+out.provenance.filter((p) => p.conflict).map((p) => p.at) // => ['/components/schemas/Wrong']
+out.provenance.find((p) => p.conflict).conflict // => 'response'
+out.tree.components.schemas.Wrong // => { description: 'gone' }
+```
+
+`Wrong` stands for a schema and lands on a Response Object, so it has a
+conflict. `Right` lands on `Wrong`, which is a schema where it stands,
+and has none.
+
+## Read schemas written in an older dialect
+
+A schema of OpenAPI 3.1 or 3.2 says which JSON Schema dialect it is
+written in with `$schema`, and `resolve` reads it by that dialect's
+rules. `dialects` lists what the description declares:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+components:
+  schemas:
+    Legacy:
+      $schema: http://json-schema.org/draft-07/schema#
+      definitions:
+        Id: {type: integer}
+      properties:
+        id: {$ref: '#/components/schemas/Legacy/definitions/Id', description: an id}
+`)
+const out = resolve(raw)
+out.tree.components.schemas.Legacy.properties.id // => { type: 'integer' }
+out.dialects[0].at // => '/components/schemas/Legacy/$schema'
+out.dialects[0].as // => 'draft-07'
+out.dialects[0].known // => true
+```
+
+In draft-07 `definitions` holds schemas, and a `$ref` stands alone, so
+the `description` beside it is not kept. Without the `$schema` line the
+schema is read as 2020-12, which has `$defs` in that place and keeps the
+`description`.
+
+A dialect this package does not know is read as 2020-12 and has
+`known: false` in the list. The
+[reference](reference.md#dialects) has what each dialect changes.
+
+## Bound the work of resolving, or stop it
+
+`maxSteps` is the most steps a resolve may take. Past it, `resolve`
+throws `openapi_work`. `onCheck` is asked every `checkEveryN` steps
+whether to go on, and when it returns `false`, `resolve` throws
+`openapi_cancel`. Keep a deadline there:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse('{"openapi":"3.1.0","components":{"schemas":{"A":{"$ref":"#/components/schemas/B"},"B":{"type":"string"}}}}')
+
+let code
+try {
+  resolve(raw, { maxSteps: 3 })
+} catch (err) {
+  code = err.code
+}
+code // => 'openapi_work'
+
+const deadline = Date.now() + 2000
+const out = resolve(raw, { checkEveryN: 100, onCheck: () => Date.now() < deadline })
+out.unresolved // => []
+```
+
 ## Write a resolved description to a file
 
 The default result shares one value among the sites that name it, and
@@ -292,6 +410,69 @@ paths:
 
 resolve(raw).connections.filter((c) => !c.found).map((c) => c.name) // => ['toys']
 ```
+
+## List the schemas a discriminator can name
+
+A discriminator names a schema by the value of a property. Beside the
+entries of its `mapping`, a value names the schema component of that
+name. The `implicitMapping` rows of `connections` list those
+components:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+components:
+  schemas:
+    Pet:
+      discriminator:
+        propertyName: kind
+        mapping: {dog: '#/components/schemas/Dog'}
+      oneOf:
+        - $ref: '#/components/schemas/Dog'
+        - $ref: '#/components/schemas/Cat'
+    Dog: {type: object}
+    Cat: {type: object}
+`)
+const rows = resolve(raw).connections.filter((c) => c.kind === 'implicitMapping')
+rows.map((c) => c.name) // => ['Dog', 'Cat']
+rows.map((c) => c.target) // => ['/components/schemas/Dog', '/components/schemas/Cat']
+rows.map((c) => c.from) // => ['oneOf', 'oneOf']
+```
+
+The value `dog` is the entry of `mapping`, which has a row of kind
+`mapping`. The values `Dog` and `Cat` are the names of the components
+listed beside the discriminator, and `from` says where: `oneOf`,
+`anyOf`, or `allOf` for a schema that builds on this one.
+
+## List the URLs a description gives
+
+`urls` has a row for each URL the description gives for something
+outside it, with what a relative one is relative to. Give
+`retrievalUri` for the absolute form of a relative one:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+info:
+  title: Pets
+  version: '1'
+  license: {name: MIT, url: LICENSE.txt}
+servers:
+  - url: /v1
+`)
+const out = resolve(raw, { retrievalUri: 'https://example.com/api/openapi.yaml' })
+out.urls.map((u) => u.at) // => ['/info/license/url', '/servers/0/url']
+out.urls.map((u) => u.base) // => ['description', 'retrieval']
+out.urls.map((u) => u.uri) // => ['https://example.com/api/LICENSE.txt', 'https://example.com/v1']
+```
+
+Nothing is loaded. Without `retrievalUri` the two rows are the same
+but for `uri`, which neither has. The
+[reference](reference.md#urls) has which field has which base.
 
 ## Resolve the references inside an extension
 

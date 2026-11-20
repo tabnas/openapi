@@ -22,7 +22,8 @@
 //   model/applicators.json
 //                       which members of a Schema Object hold schemas, per
 //                       schema dialect, which the validation schemas
-//                       cannot say;
+//                       cannot say: each version's own dialect, and the
+//                       dialects a 3.1 or 3.2 schema may declare;
 //   model/overlay.json  the positions the schemas type as plain strings or
 //                       maps that the specification gives a meaning to,
 //                       each with its reason.
@@ -424,6 +425,48 @@ function build(version, sources, applicators) {
     states['schema[]'] = { kind: 'list', type: null, items: 'schema' }
   }
 
+  // The Schema Object as each dialect a schema of this version may
+  // declare has it: a state for the schema, one for a map of them and one
+  // for a list. The members OpenAPI adds and the members that are plain
+  // values are the version's own in every dialect. The result names the
+  // schema state of each dialect, the version's own included.
+  function declaredStates() {
+    const declared = applicators.declared
+    if (null == declared || !Array.isArray(declared.versions) || !declared.versions.includes(version)) return null
+    const names = { [cfg.dialect]: 'schema' }
+    for (const [name, lists] of Object.entries(declared.dialects ?? {})) {
+      if (name in names) fail(`${version}: the dialect ${name} is declared twice`)
+      const state = 'schema@' + name
+      const props = {}
+      for (const k of lists.schema ?? []) props[k] = state
+      for (const k of lists.schemaOrList ?? []) props[k] = state
+      for (const k of lists.schemaMap ?? []) props[k] = state + '{}'
+      for (const k of lists.schemaList ?? []) props[k] = state + '[]'
+      for (const k of dialect.data) {
+        if (k in props) fail(`${version}: ${name} holds a schema at ${k}, which is data in ${cfg.dialect}`)
+        props[k] = 'data'
+      }
+      for (const k of Object.keys(dialect.objects)) {
+        if (k in props) fail(`${version}: ${name} holds a schema at ${k}, which is an object in ${cfg.dialect}`)
+        props[k] = states.schema.props[k]
+      }
+      props.$ref = 'data'
+      states[state] = {
+        kind: 'schema',
+        type: 'schema',
+        dialect: name,
+        props,
+        patterns: [[EXTENSION, 'data']],
+        rest: 'data',
+      }
+      if (0 < (lists.schemaOrList ?? []).length) states[state].items = state
+      states[state + '{}'] = { kind: 'object', type: null, rest: state }
+      states[state + '[]'] = { kind: 'list', type: null, items: state }
+      names[name] = state
+    }
+    return names
+  }
+
   // The definition of an object a Schema Object member holds: the main
   // schema's, else the dialect metaschema's (3.1 and 3.2 define
   // discriminator and xml only there).
@@ -439,10 +482,11 @@ function build(version, sources, applicators) {
   states.data = { kind: 'data' }
   states.reference = { kind: 'object', type: 'reference', props: { $ref: 'data' }, rest: 'data' }
   schemaState()
+  const dialects = declaredStates()
   const root = inlineState(main.doc, main, 'root', 'root')
   if ('root' !== root) fail(`${version}: the root is ${root}`)
 
-  return { dialect: cfg.dialect, source: main.url, meta: meta?.url ?? null, root: 'root', states }
+  return { dialect: cfg.dialect, dialects, source: main.url, meta: meta?.url ?? null, root: 'root', states }
 }
 
 // The overlay, applied to one version's states, and gated: an entry with
@@ -469,8 +513,18 @@ function applyOverlay(version, model, overlay) {
       used.push(i)
       return
     }
+    if (true === entry.anyName) {
+      // A map the schema types by one pattern of names and by nothing
+      // else: a name outside the pattern is read as one inside it is.
+      if (null != state.props || null != state.rest || 1 !== (state.patterns ?? []).length) {
+        fail(`${where}: ${version} ${entry.state} is not a map typed by one pattern of names`)
+      }
+      state.rest = state.patterns[0][1]
+      used.push(i)
+      return
+    }
     if (!Array.isArray(entry.at) || 0 === entry.at.length || 'string' !== typeof entry.set) {
-      fail(`${where} needs at and set, or keys`)
+      fail(`${where} needs at and set, or keys, or anyName`)
     }
     let holder = state
     let slot = null
@@ -507,7 +561,7 @@ function slotOf(model, state, seg) {
 function leaf(model, name) {
   if (model.states[name]) return name
   const [kind, type] = name.split(':')
-  const KINDS = ['locator', 'connection', 'mapping']
+  const KINDS = ['locator', 'connection', 'mapping', 'url']
   if (!KINDS.includes(kind)) fail(`unknown leaf ${name}`)
   model.states[name] = null == type ? { kind } : { kind, type }
   return name

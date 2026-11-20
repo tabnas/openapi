@@ -102,6 +102,28 @@ describe('object model generator gates', () => {
     assert.throws(() => Gen.generate({ overlay: o }), /has no position noSuchMember/)
   })
 
+  test('an overlay entry that reads any name is refused where no one pattern types the names', () => {
+    const at = (o: any) => o.entries.findIndex((e: any) => true === e.anyName)
+    // A state with named members is no map of names.
+    const named = overlay()
+    named.entries[at(named)].state = 'components'
+    assert.throws(() => Gen.generate({ overlay: named }), /3\.0 components is not a map typed by one pattern of names/)
+    // The entry is for the version whose schema has the pattern: 3.1 types
+    // every member already.
+    const typed = overlay()
+    typed.entries[at(typed)].versions = ['3.0', '3.1']
+    assert.throws(() => Gen.generate({ overlay: typed }), /3\.1 components\.\w+ is not a map typed by one pattern of names/)
+    // Without the entries a 3.0 component is typed under the pattern alone.
+    const none = overlay()
+    none.entries = none.entries.filter((e: any) => true !== e.anyName)
+    const states = Gen.generate({ overlay: none }).versions['3.0'].states
+    assert.equal(states['components.schemas'].rest, undefined)
+    assert.equal(states['components.responses'].rest, undefined)
+    const now = Gen.generate().versions['3.0'].states
+    assert.equal(now['components.schemas'].rest, 'schema')
+    assert.equal(now['components.responses'].rest, 'response?')
+  })
+
   test('an overlay entry that matches no version is refused', () => {
     const o = overlay()
     o.entries[0].versions = ['9.9']
@@ -139,5 +161,22 @@ describe('object model generator gates', () => {
     const applicators = JSON.parse(readFileSync(join(REPO, 'model', 'applicators.json'), 'utf8'))
     delete applicators.dialects['wright-00']
     assert.throws(() => Gen.generate({ applicators }), /no applicator list for dialect wright-00/)
+  })
+
+  test("a declared dialect that is a version's own, or that holds a schema where the version holds a value, is refused", () => {
+    const applicators = () => JSON.parse(readFileSync(join(REPO, 'model', 'applicators.json'), 'utf8'))
+    const twice = applicators()
+    twice.declared.dialects['2020-12'] = twice.declared.dialects['2019-09']
+    assert.throws(() => Gen.generate({ applicators: twice }), /the dialect 2020-12 is declared twice/)
+    const data = applicators()
+    data.declared.dialects['draft-07'].schema.push('example')
+    assert.throws(() => Gen.generate({ applicators: data }), /draft-07 holds a schema at example, which is data in 2020-12/)
+    const object = applicators()
+    object.declared.dialects['draft-07'].schemaMap.push('discriminator')
+    assert.throws(() => Gen.generate({ applicators: object }), /draft-07 holds a schema at discriminator, which is an object in 2020-12/)
+    // Without the declared dialects the model has each version's own alone.
+    const none = applicators()
+    delete none.declared
+    assert.equal(Gen.generate({ applicators: none }).versions['3.1'].dialects, undefined)
   })
 })

@@ -272,6 +272,9 @@ type ResolveOptions = {
   strict?: boolean                                    // default false
   positions?: (node: object) => Token | undefined     // from recordPositions
   maxDepth?: number                                   // default 1000
+  maxSteps?: number                                   // default: no bound
+  onCheck?: (steps: number) => boolean | void         // false stops resolving
+  checkEveryN?: number                                // default 1000
   sharing?: 'share' | 'site' | 'inline-once' | 'copy' // default 'share'
   budget?: number                                     // bytes; copy needs it
   cycles?: 'cut' | 'keep'                             // default 'cut'
@@ -292,6 +295,22 @@ type ResolveResult = {
   cuts: { at: string, ref: string, target: string }[]
   connections: Connection[]
   dataSlots: number             // $ref maps read as data
+  dialects: DialectUse[]        // the schema dialects it declares
+  urls: UrlUse[]                // the URLs it gives for things outside it
+}
+
+type DialectUse = {
+  at: string                    // /jsonSchemaDialect, or a schema's $schema
+  dialect: string               // as written
+  as: 'draft-04' | 'draft-06' | 'draft-07' | '2019-09' | '2020-12'
+  known: boolean                // false: not a dialect this package knows
+}
+
+type UrlUse = {
+  at: string                    // the field
+  value: string                 // as written
+  base: 'description' | 'retrieval' | 'api' | 'none'
+  uri?: string                  // its absolute form, where it has one
 }
 
 type Provenance = {
@@ -300,6 +319,11 @@ type Provenance = {
   kind: 'reference' | 'schema' | 'pathItem' | 'data'
   type: string | null           // what a Reference Object stands for
   target: string | null         // the location it names, when it names one here
+  landing: string | null        // the location it lands on, as the document is written
+  through?: string[]            // the references its pointer was read through
+  uri?: string                  // for a reference into another document: its URI
+  fragment?: string             // and its fragment, when it has one
+  conflict?: string             // the type it lands on, when not the one it expects
   status: 'resolved' | 'unresolved' | 'cut' | 'kept'
   row?: number                  // with positions
   col?: number
@@ -308,6 +332,10 @@ type Provenance = {
 
 Returns a new tree with every reference in the document replaced by
 what it names. The raw tree is never changed.
+
+The description is read by the version its root names, or by `version`
+when that is given. A version this package does not know is read as
+3.2, and the result's `version` is `'unknown'`.
 
 #### Sites
 
@@ -318,18 +346,64 @@ written; `dataSlots` counts those. `slots: 'all'` also makes a site of
 every such map whose `$ref` is a string, of kind `data`. `extensions`
 does the same inside the extension members it names.
 
+A map the version gives no type at all takes the type of the first
+reference to land on it, in document order. Such a map is in an
+extension, or under a member the version does not have, such as
+`definitions` in a 2020-12 schema. The references inside it are then
+sites, and they can type further maps in turn. A reference of kind
+`data` types nothing.
+
+A component is what its map of the Components Object holds, whatever
+its name. The specification has a pattern for a component's name,
+`^[a-zA-Z0-9\.\-_]+$`, and a component named otherwise is read as any
+other, in every version.
+
 #### Targets
 
 A reference resolves against the nearest `$id` (3.1 and 3.2, its own
 map's included), else the document's `$self` (3.2), else
 `retrievalUri`. Its fragment is a JSON Pointer, percent-decoded first,
-or from 3.1 an anchor that a `$anchor` or `$dynamicAnchor` declares. A
-pointer that passes through another site reads that site's value. An
+or from 3.1 an anchor that a `$anchor` or `$dynamicAnchor` declares. An
 array index is `0`, or digits with no leading zero, in range. Only a
-map's own members are members.
+map's own members are members. A schema of an earlier dialect names
+itself and its anchors by that dialect's rules, which
+[Dialects](#dialects) has.
+
+A URI is compared with another in the normal form of RFC 3986, section
+6.2. The scheme and the host are in lower case. An empty port and
+the scheme's own are dropped. A percent-encoded letter, digit, `-`,
+`.`, `_` or `~` is that character, and the hex digits of any other
+percent-encoding are in upper case. Dot segments are removed, and an
+empty path beside a host is `/`. So `HTTPS://API.Example.com:443/a.yaml`
+names the document retrieved from `https://api.example.com/a.yaml`. The
+case of a path is kept, since it can matter.
+
+A pointer is read on the document as it is written, so a member that a
+reference has beside its `$ref` is the one a pointer through it names.
+Where a step is missing at a reference, the pointer is read on in what
+that reference names. `landing` is the location the pointer comes to,
+and `through` lists each reference it was read through. A reference
+into another document can't be read through, and neither can the
+root. A JSON Pointer has no such step of its own, and `strict` does not
+take it: the reference is `not-found`.
+
+For a reference into another document, `uri` is that document's URI,
+resolved against the same base and in its normal form, and `fragment`
+is the reference's fragment. Give `retrievalUri` for `uri` to be a real
+location.
 
 A reference to a site left as written is left as written too, and
 reported as that site is.
+
+A reference expects a type: a Reference Object the type its place
+holds, the `$ref` of a schema a schema, and the `$ref` of a Path Item
+a Path Item. Where it lands on something the version gives another
+type, the reference resolves all the same, and its row has `conflict`,
+the type it landed on: `response` for a reference from a schema to a
+Response Object, `map` or `list` for a container with no type of its
+own, and `data` for plain JSON, as an example is. A landing the
+version gives no type takes the reference's, and has no conflict.
+Neither has a reference of kind `data`, which expects nothing.
 
 `refs: 'pointer'` reads a `$ref` as a JSON Pointer into the document
 and nothing else:
@@ -340,7 +414,7 @@ and nothing else:
 - The pointer is read from the document's root. `~1` and `~0` are
   decoded, and nothing is percent-decoded.
 - `$id`, anchors, schema dialects, `$self` and `retrievalUri` are not
-  read, and `$dynamicRef` makes no site.
+  read, `$dynamicRef` makes no site, and `dialects` is empty.
 - A pointer that passes through a string `$ref` left as written ends
   there. Its site is cut where that reference was cut, and has `why` set
   to `not-found` otherwise. Under `uri` it reads on in that map as
@@ -350,6 +424,59 @@ and nothing else:
 
 `refs` does not change `connections`.
 
+#### Dialects
+
+A Schema Object of 3.1 or 3.2 is written in a JSON Schema dialect. It
+is the one its own `$schema` names, else the one in force where it is.
+At the root that is the description's `jsonSchemaDialect`, else the
+OpenAPI dialect of the version. A `$schema` is read at any schema that
+has one, which is lenient: the specification gives it a meaning only at
+the root of a schema resource. Five dialects are read, each by its own
+rules:
+
+| | draft-04 | draft-06, draft-07 | 2019-09 | 2020-12 |
+|---|---|---|---|---|
+| Names a schema resource | `id` | `$id` | `$id` | `$id` |
+| Names an anchor | `id: '#name'` | `$id: '#name'` | `$anchor` | `$anchor`, `$dynamicAnchor` |
+| Members beside a `$ref` | not read | not read | apply | apply |
+| Reported, never followed | | | `$recursiveRef` | `$dynamicRef` |
+| Maps of schemas | `properties`, `patternProperties`, `definitions`, `dependencies` | the same | `properties`, `patternProperties`, `$defs`, `dependentSchemas` | the same |
+| A list of schemas in `items` | yes, with `additionalItems` | yes | yes | no: `prefixItems` |
+
+draft-06 adds `contains` and `propertyNames`, and draft-07 adds `if`,
+`then` and `else`. 2019-09 adds `unevaluatedItems`,
+`unevaluatedProperties` and `contentSchema`. A member a dialect does
+not have holds no schemas in it. A `$ref` there is read only where a
+reference lands on it, as [Sites](#sites) has.
+
+The OpenAPI dialects of 3.1 and 3.2 are read as 2020-12, and so is a
+dialect this package does not know. An identifier is compared in its
+normal form, with or without the empty fragment, under `http` or
+`https`. A draft's hyper-schema dialect is read as the draft.
+
+Three things follow from a `$ref` whose neighbours are not read. Its
+site holds the target alone. An `$id` beside it names nothing, so the
+reference is read against the base its parent has. And `$schema` is
+still read first, since it says how the rest is read.
+
+An identifier that is a fragment alone, such as `$id: '#name'`, is an
+anchor in draft-04 to draft-07. In 2019-09 and 2020-12 it names
+nothing: not an anchor, and not the resource it is in. In every
+dialect, an identifier that is the URI of the resource it is in names
+nothing new, so a schema can't take the place of the document or of
+the schema resource around it. An identifier of another resource that
+has a fragment names that resource, and the fragment is dropped.
+
+What OpenAPI adds to a Schema Object is read in every dialect:
+`discriminator`, `xml`, `externalDocs` and `example`.
+
+`dialects` lists what the description declares: the root's
+`jsonSchemaDialect` first, then the `$schema` of each schema in
+document order. `as` is the dialect whose rules it is read by, and `known` is
+false for one this package does not know. An unknown dialect is not an
+error, under `strict` or otherwise. 2.0 and 3.0 have no dialects:
+`$schema` there is a member like any other, and `dialects` is empty.
+
 #### Siblings
 
 What happens to the members beside a `$ref` under `siblings: 'spec'`:
@@ -357,7 +484,7 @@ What happens to the members beside a `$ref` under `siblings: 'spec'`:
 | Site | 2.0, 3.0 | 3.1, 3.2 |
 |---|---|---|
 | Reference Object | ignored | `summary` and `description` override the target's, where its type has them |
-| Schema Object | ignored | kept, with the target joined in an `allOf` |
+| Schema Object | ignored | kept, with the target joined in an `allOf`. Ignored in a schema of draft-04 to draft-07 |
 | Path Item | merged with the target's fields | merged with the target's fields |
 | data | ignored | ignored |
 
@@ -372,7 +499,7 @@ winning, at every site in every version. Every merge is shallow.
 |---|---|---|
 | `share` | its target's value, one value for every site naming that target | `cut` or `keep` |
 | `site` | a shallow copy of the value, its members shared | `cut` or `keep` |
-| `inline-once` | the value at the first site naming the target, in walk order; the reference as written at the rest, with status `kept` | `cut` |
+| `inline-once` | the value at the first site to land on the target, in walk order; the reference as written at the rest, with status `kept` | `cut` |
 | `copy` | a copy of the value all the way down, so nothing in the tree is shared | `cut` |
 
 `copy` needs `budget`: the most bytes, in UTF-8, of the compact JSON
@@ -384,9 +511,9 @@ closes a cycle. Under `cycles: 'cut'` it is left as written and listed
 in `cuts`, and so is a reference to it. Under `cycles: 'keep'` it holds
 its target's value once the walk is done, which makes the tree a cyclic
 graph that `JSON.stringify` refuses. A loop made of references alone has
-no value to hold, and is cut either way. Under `cycles: 'keep'` a
-reference to a member of such a loop is cut with it, and so is one whose
-pointer passes through a member of the loop to something that is there.
+no value to hold, and is cut either way, and so is a reference to a
+member of such a loop. A pointer that comes back to a reference it is
+being read through is cut in the same way.
 
 `xref: true` writes `x-ref`, the reference as written, in every site's
 value, resolved or not, except where the `$ref` is not a string. It is
@@ -397,15 +524,37 @@ there. Each site then holds a copy, as under `site`.
 written, with `why` set to `non-object-target`.
 
 The walk runs from the root in document order. Under `cycles: 'cut'` a
-target is entered at its first reference, and that order decides which
-edge of a cycle is cut and which site `inline-once` fills. It is also
-the order of `unresolved`, `cuts` and `provenance`. Under `cycles:
-'keep'` no target is entered early, and those three are in document
-order.
+reference's landing is entered at its first reference, and that order
+decides which edge of a cycle is cut and which site `inline-once`
+fills. It is also the order of `unresolved`, `cuts` and `provenance`. A
+reference that a pointer only passes is not entered then. Under
+`cycles: 'keep'` no landing is entered early, and those three are in
+document order.
 
-`maxDepth` bounds how deep the walk nests and how many references it
-follows at once. Past it, `resolve` throws an error named `FoldError`
-and coded `fold_depth`, with the place it stopped in `at`.
+Three options bound the work:
+
+- `maxDepth` bounds how deep the document nests and how many references
+  are followed one inside another, counted together. Past it, `resolve`
+  throws a `ResolveError` coded `openapi_depth`, with the place it
+  stopped in `at`.
+- `maxSteps` bounds the steps `resolve` takes: one for each map or list
+  it comes to, each time it comes to one, and one for each reference it
+  reads. Past it, `resolve` throws a `ResolveError` coded
+  `openapi_work`.
+- `onCheck` is called every `checkEveryN` steps with the number taken
+  so far. When it returns `false`, `resolve` throws a `ResolveError`
+  coded `openapi_cancel`. A caller keeps a deadline there.
+
+One bound needs no option. Typing maps by the references that land on
+them, and reading pointers on through references, can each cost more
+than one pass over the document. Together they are held to sixteen
+times the work of reading the document once, and 100,000 steps besides.
+No description of the 5,168 measured comes near that. Past it,
+`resolve` throws `openapi_work`.
+
+`resolve` needs a `@tabnas/expr` after 0.6.3. With an earlier one it
+throws a `TypeError` that says so, except under `refs: 'pointer'` with
+neither `maxSteps` nor `onCheck`, which asks nothing new of it.
 
 #### `compat: 'apidef'`
 
@@ -432,11 +581,10 @@ in `unresolved`, with `why`:
 |---|---|
 | `not-found` | names nothing in the document |
 | `no-anchor` | names an anchor nothing declares |
-| `bad-fragment` | has a fragment that is not a well-formed JSON Pointer or, before 3.1, any anchor. Under `refs: 'pointer'`: begins `#` and not `#/` |
+| `bad-fragment` | has a fragment that is not a well-formed JSON Pointer or, from 3.1, a plain name. Under `refs: 'pointer'`: begins `#` and not `#/` |
 | `not-a-string` | is not a string; its map is resolved as a plain map |
 | `external` | names another document, which this release does not load. Under `refs: 'pointer'`: does not begin `#` |
 | `non-object-target` | names a value that is not a map, under `targets: 'object'` |
-| `unsupported-dialect` | is in a schema of a dialect other than JSON Schema 2020-12 or OpenAPI's |
 
 A site left as written keeps its other members, each resolved, so a
 reference inside a sibling still resolves.
@@ -467,6 +615,7 @@ type Connection = {
   anchor?: boolean
   fields?: string[]
   routes?: string[]
+  from?: 'oneOf' | 'anyOf' | 'allOf' | 'self'
 }
 ```
 
@@ -482,14 +631,56 @@ through `$ref`. Nothing in it is put into the tree.
 | `tagParent` | a 3.2 tag's `parent` | the root `tags` entry of that name | `cycle`, when the chain of parents loops |
 | `mapping` | a Discriminator `mapping` value | a schema by component name, failing that by URI | `via` |
 | `defaultMapping` | a 3.2 Discriminator's `defaultMapping` | as `mapping` | `via` |
-| `dynamicRef` | a schema with `$dynamicRef` | its initial target, by URI | `anchor`, when that target has a `$dynamicAnchor` of the fragment's name |
+| `implicitMapping` | the `discriminator` of a schema | a schema component whose name is a value of the discriminating property | `from`: where the component is named |
+| `dynamicRef` | a 2020-12 schema with `$dynamicRef` | its initial target, by URI | `anchor`, when that target has a `$dynamicAnchor` of the fragment's name |
+| `recursiveRef` | a 2019-09 schema with `$recursiveRef` | its initial target, by URI | `anchor`, when that target has `$recursiveAnchor: true` |
 | `pathItemMerge` | a Path Item with `$ref` | the Path Item it names | `fields`: the fields both have, where the specification leaves the merge undefined |
 | `operationIdReuse` | the first route | one `operationId` that more than one route through `paths`, `webhooks` and callbacks reaches | `routes` |
 
+A discriminator has an implicit mapping beside its `mapping`: a value
+of its property names the schema component of that name. Its
+`implicitMapping` rows list the components it can name that way, each
+with `name`, the value. They are the ones listed by reference beside
+it in `oneOf` or `anyOf`, and the ones that build on its schema with
+`allOf`, and on those in turn. An inline schema has no name, and has
+no row. A value that `mapping` has is that entry's, and has no
+implicit row. In 2.0 the discriminator is the name of the property,
+and the name of the schema itself is a value too, with `from` set to
+`self`.
+
 The rows come in document order, then the `pathItemMerge` rows in walk
 order, then the `operationIdReuse` rows. A name inside example data is
-data, and has no row. A target is looked for in the resolved tree, so a
-target reached through a `$ref` is found.
+data, and has no row. A name in a map that only a reference types has
+one. A target is looked for as a reference's is: on the document as
+written, and through a `$ref` where a step is missing, so a target
+reached through a `$ref` is found. A route is walked the same way, with
+a Path Item's own fields beside its `$ref`. None of the report depends
+on `sharing`, `cycles` or `siblings`.
+
+#### URLs
+
+`urls` lists each URL or URI the description gives for something
+outside it, in document order. Nothing is loaded. `base` says what a
+relative value is relative to, and `uri` is the absolute form of the
+value, in its normal form, where it has one. A value written with a
+scheme has one whatever its `base`:
+
+| `base` | The field | `uri` of a relative value |
+|---|---|---|
+| `description` | `termsOfService` (3.1, 3.2), `url` of a Contact, License or External Documentation Object, `externalValue` | the value against the base URI in force, as for a `$ref` |
+| `retrieval` | `url` of a Server Object | the value against `retrievalUri`, whatever `$self` says. None while the URL has variables |
+| `api` | `openIdConnectUrl`, `oauth2MetadataUrl`, `authorizationUrl`, `tokenUrl`, `refreshUrl`, `deviceAuthorizationUrl`, and `termsOfService` in 3.0 | none: it is relative to a server of the API |
+| `none` | `namespace` of an XML Object, and every URL of 2.0 | none |
+
+A relative value has a `uri` only against a base that a relative
+reference can be read against: a URI with a scheme, and with an
+authority or a path from the root. With no `retrievalUri`, the
+description is read under a base that stands for no location, and a
+relative value has no `uri`, unless `$self` or the nearest `$id` is
+such a URI. A `urn:` is none either.
+
+A value that is no string has no row, and neither has one in an example
+or an extension.
 
 ### `version(tree)`
 

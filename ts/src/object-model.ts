@@ -31,7 +31,7 @@ const OBJECT_MODEL = {
           "props": {
             "email": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:none"
           },
           "type": "contact"
         },
@@ -58,7 +58,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data"
+            "url": "url:none"
           },
           "type": "externalDocs"
         },
@@ -154,7 +154,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "name": "data",
-            "url": "data"
+            "url": "url:none"
           },
           "type": "license"
         },
@@ -429,13 +429,13 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "authorizationUrl": "data",
+            "authorizationUrl": "url:none",
             "description": "data",
             "flow": "data",
             "in": "data",
             "name": "data",
             "scopes": "oauth2Scopes",
-            "tokenUrl": "data",
+            "tokenUrl": "url:none",
             "type": "data"
           }
         },
@@ -464,6 +464,10 @@ const OBJECT_MODEL = {
           },
           "type": "tag"
         },
+        "url:none": {
+          "kind": "url",
+          "type": "none"
+        },
         "xml": {
           "kind": "object",
           "patterns": [
@@ -475,7 +479,7 @@ const OBJECT_MODEL = {
           "props": {
             "attribute": "data",
             "name": "data",
-            "namespace": "data",
+            "namespace": "url:none",
             "prefix": "data",
             "wrapped": "data"
           },
@@ -532,7 +536,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "callback?"
             ]
-          ]
+          ],
+          "rest": "callback?"
         },
         "components.examples": {
           "kind": "object",
@@ -541,7 +546,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "example?"
             ]
-          ]
+          ],
+          "rest": "example?"
         },
         "components.headers": {
           "kind": "object",
@@ -550,7 +556,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "header?"
             ]
-          ]
+          ],
+          "rest": "header?"
         },
         "components.links": {
           "kind": "object",
@@ -559,7 +566,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "link?"
             ]
-          ]
+          ],
+          "rest": "link?"
         },
         "components.parameters": {
           "kind": "object",
@@ -568,7 +576,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "parameter?"
             ]
-          ]
+          ],
+          "rest": "parameter?"
         },
         "components.requestBodies": {
           "kind": "object",
@@ -577,7 +586,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "requestBody?"
             ]
-          ]
+          ],
+          "rest": "requestBody?"
         },
         "components.responses": {
           "kind": "object",
@@ -586,7 +596,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "response?"
             ]
-          ]
+          ],
+          "rest": "response?"
         },
         "components.schemas": {
           "kind": "object",
@@ -595,7 +606,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "schema"
             ]
-          ]
+          ],
+          "rest": "schema"
         },
         "components.securitySchemes": {
           "kind": "object",
@@ -604,7 +616,8 @@ const OBJECT_MODEL = {
               "^[a-zA-Z0-9\\.\\-_]+$",
               "securityScheme?"
             ]
-          ]
+          ],
+          "rest": "securityScheme?"
         },
         "connection:operationId": {
           "kind": "connection",
@@ -629,7 +642,7 @@ const OBJECT_MODEL = {
           "props": {
             "email": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "contact"
         },
@@ -679,7 +692,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "externalValue": "data",
+            "externalValue": "url:description",
             "summary": "data",
             "value": "data"
           },
@@ -700,7 +713,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "externalDocs"
         },
@@ -752,7 +765,7 @@ const OBJECT_MODEL = {
             "contact": "contact",
             "description": "data",
             "license": "license",
-            "termsOfService": "data",
+            "termsOfService": "url:api",
             "title": "data",
             "version": "data"
           },
@@ -768,7 +781,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "license"
         },
@@ -839,10 +852,10 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "authorizationUrl": "data",
-            "refreshUrl": "data",
+            "authorizationUrl": "url:api",
+            "refreshUrl": "url:api",
             "scopes": "oauthFlow.scopes",
-            "tokenUrl": "data"
+            "tokenUrl": "url:api"
           },
           "type": "oauthFlow"
         },
@@ -1169,7 +1182,7 @@ const OBJECT_MODEL = {
             "flows": "oauthFlows",
             "in": "data",
             "name": "data",
-            "openIdConnectUrl": "data",
+            "openIdConnectUrl": "url:api",
             "scheme": "data",
             "type": "data"
           },
@@ -1190,7 +1203,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data",
+            "url": "url:retrieval",
             "variables": "server.variables"
           },
           "type": "server"
@@ -1233,6 +1246,22 @@ const OBJECT_MODEL = {
           },
           "type": "tag"
         },
+        "url:api": {
+          "kind": "url",
+          "type": "api"
+        },
+        "url:description": {
+          "kind": "url",
+          "type": "description"
+        },
+        "url:none": {
+          "kind": "url",
+          "type": "none"
+        },
+        "url:retrieval": {
+          "kind": "url",
+          "type": "retrieval"
+        },
         "xml": {
           "kind": "object",
           "patterns": [
@@ -1244,7 +1273,7 @@ const OBJECT_MODEL = {
           "props": {
             "attribute": "data",
             "name": "data",
-            "namespace": "data",
+            "namespace": "url:none",
             "prefix": "data",
             "wrapped": "data"
           },
@@ -1254,9 +1283,16 @@ const OBJECT_MODEL = {
     },
     "3.1": {
       "dialect": "2020-12",
+      "dialects": {
+        "2019-09": "schema@2019-09",
+        "2020-12": "schema",
+        "draft-04": "schema@draft-04",
+        "draft-06": "schema@draft-06",
+        "draft-07": "schema@draft-07"
+      },
       "meta": "https://spec.openapis.org/oas/3.1/meta/2024-11-10",
       "root": "root",
-      "source": "https://spec.openapis.org/oas/3.1/schema/2026-08-03",
+      "source": "https://spec.openapis.org/oas/3.1/schema/2026-11-05",
       "states": {
         "callback": {
           "kind": "object",
@@ -1363,7 +1399,7 @@ const OBJECT_MODEL = {
           "props": {
             "email": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "contact"
         },
@@ -1424,7 +1460,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "externalValue": "data",
+            "externalValue": "url:description",
             "summary": "data",
             "value": "data"
           },
@@ -1445,7 +1481,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "externalDocs"
         },
@@ -1492,7 +1528,7 @@ const OBJECT_MODEL = {
             "description": "data",
             "license": "license",
             "summary": "data",
-            "termsOfService": "data",
+            "termsOfService": "url:description",
             "title": "data",
             "version": "data"
           },
@@ -1509,7 +1545,7 @@ const OBJECT_MODEL = {
           "props": {
             "identifier": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "license"
         },
@@ -1581,10 +1617,10 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "authorizationUrl": "data",
-            "refreshUrl": "data",
+            "authorizationUrl": "url:api",
+            "refreshUrl": "url:api",
             "scopes": "mapOfStrings",
-            "tokenUrl": "data"
+            "tokenUrl": "url:api"
           },
           "type": "oauthFlow"
         },
@@ -1883,6 +1919,193 @@ const OBJECT_MODEL = {
           "rest": "data",
           "type": "schema"
         },
+        "schema@2019-09": {
+          "dialect": "2019-09",
+          "items": "schema@2019-09",
+          "kind": "schema",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "$defs": "schema@2019-09{}",
+            "$ref": "data",
+            "additionalItems": "schema@2019-09",
+            "additionalProperties": "schema@2019-09",
+            "allOf": "schema@2019-09[]",
+            "anyOf": "schema@2019-09[]",
+            "const": "data",
+            "contains": "schema@2019-09",
+            "contentSchema": "schema@2019-09",
+            "default": "data",
+            "dependentSchemas": "schema@2019-09{}",
+            "discriminator": "discriminator",
+            "else": "schema@2019-09",
+            "enum": "data",
+            "example": "data",
+            "examples": "data",
+            "externalDocs": "externalDocs",
+            "if": "schema@2019-09",
+            "items": "schema@2019-09",
+            "not": "schema@2019-09",
+            "oneOf": "schema@2019-09[]",
+            "patternProperties": "schema@2019-09{}",
+            "properties": "schema@2019-09{}",
+            "propertyNames": "schema@2019-09",
+            "then": "schema@2019-09",
+            "unevaluatedItems": "schema@2019-09",
+            "unevaluatedProperties": "schema@2019-09",
+            "xml": "xml"
+          },
+          "rest": "data",
+          "type": "schema"
+        },
+        "schema@2019-09[]": {
+          "items": "schema@2019-09",
+          "kind": "list"
+        },
+        "schema@2019-09{}": {
+          "kind": "object",
+          "rest": "schema@2019-09"
+        },
+        "schema@draft-04": {
+          "dialect": "draft-04",
+          "items": "schema@draft-04",
+          "kind": "schema",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "$ref": "data",
+            "additionalItems": "schema@draft-04",
+            "additionalProperties": "schema@draft-04",
+            "allOf": "schema@draft-04[]",
+            "anyOf": "schema@draft-04[]",
+            "const": "data",
+            "default": "data",
+            "definitions": "schema@draft-04{}",
+            "dependencies": "schema@draft-04{}",
+            "discriminator": "discriminator",
+            "enum": "data",
+            "example": "data",
+            "examples": "data",
+            "externalDocs": "externalDocs",
+            "items": "schema@draft-04",
+            "not": "schema@draft-04",
+            "oneOf": "schema@draft-04[]",
+            "patternProperties": "schema@draft-04{}",
+            "properties": "schema@draft-04{}",
+            "xml": "xml"
+          },
+          "rest": "data",
+          "type": "schema"
+        },
+        "schema@draft-04[]": {
+          "items": "schema@draft-04",
+          "kind": "list"
+        },
+        "schema@draft-04{}": {
+          "kind": "object",
+          "rest": "schema@draft-04"
+        },
+        "schema@draft-06": {
+          "dialect": "draft-06",
+          "items": "schema@draft-06",
+          "kind": "schema",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "$ref": "data",
+            "additionalItems": "schema@draft-06",
+            "additionalProperties": "schema@draft-06",
+            "allOf": "schema@draft-06[]",
+            "anyOf": "schema@draft-06[]",
+            "const": "data",
+            "contains": "schema@draft-06",
+            "default": "data",
+            "definitions": "schema@draft-06{}",
+            "dependencies": "schema@draft-06{}",
+            "discriminator": "discriminator",
+            "enum": "data",
+            "example": "data",
+            "examples": "data",
+            "externalDocs": "externalDocs",
+            "items": "schema@draft-06",
+            "not": "schema@draft-06",
+            "oneOf": "schema@draft-06[]",
+            "patternProperties": "schema@draft-06{}",
+            "properties": "schema@draft-06{}",
+            "propertyNames": "schema@draft-06",
+            "xml": "xml"
+          },
+          "rest": "data",
+          "type": "schema"
+        },
+        "schema@draft-06[]": {
+          "items": "schema@draft-06",
+          "kind": "list"
+        },
+        "schema@draft-06{}": {
+          "kind": "object",
+          "rest": "schema@draft-06"
+        },
+        "schema@draft-07": {
+          "dialect": "draft-07",
+          "items": "schema@draft-07",
+          "kind": "schema",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "$ref": "data",
+            "additionalItems": "schema@draft-07",
+            "additionalProperties": "schema@draft-07",
+            "allOf": "schema@draft-07[]",
+            "anyOf": "schema@draft-07[]",
+            "const": "data",
+            "contains": "schema@draft-07",
+            "default": "data",
+            "definitions": "schema@draft-07{}",
+            "dependencies": "schema@draft-07{}",
+            "discriminator": "discriminator",
+            "else": "schema@draft-07",
+            "enum": "data",
+            "example": "data",
+            "examples": "data",
+            "externalDocs": "externalDocs",
+            "if": "schema@draft-07",
+            "items": "schema@draft-07",
+            "not": "schema@draft-07",
+            "oneOf": "schema@draft-07[]",
+            "patternProperties": "schema@draft-07{}",
+            "properties": "schema@draft-07{}",
+            "propertyNames": "schema@draft-07",
+            "then": "schema@draft-07",
+            "xml": "xml"
+          },
+          "rest": "data",
+          "type": "schema"
+        },
+        "schema@draft-07[]": {
+          "items": "schema@draft-07",
+          "kind": "list"
+        },
+        "schema@draft-07{}": {
+          "kind": "object",
+          "rest": "schema@draft-07"
+        },
         "schema[]": {
           "items": "schema",
           "kind": "list"
@@ -1915,7 +2138,7 @@ const OBJECT_MODEL = {
             "flows": "oauthFlows",
             "in": "data",
             "name": "data",
-            "openIdConnectUrl": "data",
+            "openIdConnectUrl": "url:api",
             "scheme": "data",
             "type": "data"
           },
@@ -1936,7 +2159,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data",
+            "url": "url:retrieval",
             "variables": "server.variables"
           },
           "type": "server"
@@ -1979,6 +2202,22 @@ const OBJECT_MODEL = {
           },
           "type": "tag"
         },
+        "url:api": {
+          "kind": "url",
+          "type": "api"
+        },
+        "url:description": {
+          "kind": "url",
+          "type": "description"
+        },
+        "url:none": {
+          "kind": "url",
+          "type": "none"
+        },
+        "url:retrieval": {
+          "kind": "url",
+          "type": "retrieval"
+        },
         "xml": {
           "kind": "object",
           "patterns": [
@@ -1990,7 +2229,7 @@ const OBJECT_MODEL = {
           "props": {
             "attribute": "data",
             "name": "data",
-            "namespace": "data",
+            "namespace": "url:none",
             "prefix": "data",
             "wrapped": "data"
           },
@@ -2000,9 +2239,16 @@ const OBJECT_MODEL = {
     },
     "3.2": {
       "dialect": "2020-12",
-      "meta": "https://spec.openapis.org/oas/3.2/meta/2025-09-17",
+      "dialects": {
+        "2019-09": "schema@2019-09",
+        "2020-12": "schema",
+        "draft-04": "schema@draft-04",
+        "draft-06": "schema@draft-06",
+        "draft-07": "schema@draft-07"
+      },
+      "meta": "https://spec.openapis.org/oas/3.2/meta/2026-02-26",
       "root": "root",
-      "source": "https://spec.openapis.org/oas/3.2/schema/2026-08-30",
+      "source": "https://spec.openapis.org/oas/3.2/schema/2026-11-12",
       "states": {
         "callback": {
           "kind": "object",
@@ -2114,7 +2360,7 @@ const OBJECT_MODEL = {
           "props": {
             "email": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "contact"
         },
@@ -2188,7 +2434,7 @@ const OBJECT_MODEL = {
           "props": {
             "dataValue": "data",
             "description": "data",
-            "externalValue": "data",
+            "externalValue": "url:description",
             "serializedValue": "data",
             "summary": "data",
             "value": "data"
@@ -2210,7 +2456,7 @@ const OBJECT_MODEL = {
           ],
           "props": {
             "description": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "externalDocs"
         },
@@ -2257,7 +2503,7 @@ const OBJECT_MODEL = {
             "description": "data",
             "license": "license",
             "summary": "data",
-            "termsOfService": "data",
+            "termsOfService": "url:description",
             "title": "data",
             "version": "data"
           },
@@ -2274,7 +2520,7 @@ const OBJECT_MODEL = {
           "props": {
             "identifier": "data",
             "name": "data",
-            "url": "data"
+            "url": "url:description"
           },
           "type": "license"
         },
@@ -2322,7 +2568,6 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "description": "data",
             "encoding": "mediaType.encoding",
             "example": "data",
             "examples": "mediaType.examples",
@@ -2359,11 +2604,11 @@ const OBJECT_MODEL = {
             ]
           ],
           "props": {
-            "authorizationUrl": "data",
-            "deviceAuthorizationUrl": "data",
-            "refreshUrl": "data",
+            "authorizationUrl": "url:api",
+            "deviceAuthorizationUrl": "url:api",
+            "refreshUrl": "url:api",
             "scopes": "mapOfStrings",
-            "tokenUrl": "data"
+            "tokenUrl": "url:api"
           },
           "type": "oauthFlow"
         },
@@ -2668,6 +2913,193 @@ const OBJECT_MODEL = {
           "rest": "data",
           "type": "schema"
         },
+        "schema@2019-09": {
+          "dialect": "2019-09",
+          "items": "schema@2019-09",
+          "kind": "schema",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "$defs": "schema@2019-09{}",
+            "$ref": "data",
+            "additionalItems": "schema@2019-09",
+            "additionalProperties": "schema@2019-09",
+            "allOf": "schema@2019-09[]",
+            "anyOf": "schema@2019-09[]",
+            "const": "data",
+            "contains": "schema@2019-09",
+            "contentSchema": "schema@2019-09",
+            "default": "data",
+            "dependentSchemas": "schema@2019-09{}",
+            "discriminator": "discriminator",
+            "else": "schema@2019-09",
+            "enum": "data",
+            "example": "data",
+            "examples": "data",
+            "externalDocs": "externalDocs",
+            "if": "schema@2019-09",
+            "items": "schema@2019-09",
+            "not": "schema@2019-09",
+            "oneOf": "schema@2019-09[]",
+            "patternProperties": "schema@2019-09{}",
+            "properties": "schema@2019-09{}",
+            "propertyNames": "schema@2019-09",
+            "then": "schema@2019-09",
+            "unevaluatedItems": "schema@2019-09",
+            "unevaluatedProperties": "schema@2019-09",
+            "xml": "xml"
+          },
+          "rest": "data",
+          "type": "schema"
+        },
+        "schema@2019-09[]": {
+          "items": "schema@2019-09",
+          "kind": "list"
+        },
+        "schema@2019-09{}": {
+          "kind": "object",
+          "rest": "schema@2019-09"
+        },
+        "schema@draft-04": {
+          "dialect": "draft-04",
+          "items": "schema@draft-04",
+          "kind": "schema",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "$ref": "data",
+            "additionalItems": "schema@draft-04",
+            "additionalProperties": "schema@draft-04",
+            "allOf": "schema@draft-04[]",
+            "anyOf": "schema@draft-04[]",
+            "const": "data",
+            "default": "data",
+            "definitions": "schema@draft-04{}",
+            "dependencies": "schema@draft-04{}",
+            "discriminator": "discriminator",
+            "enum": "data",
+            "example": "data",
+            "examples": "data",
+            "externalDocs": "externalDocs",
+            "items": "schema@draft-04",
+            "not": "schema@draft-04",
+            "oneOf": "schema@draft-04[]",
+            "patternProperties": "schema@draft-04{}",
+            "properties": "schema@draft-04{}",
+            "xml": "xml"
+          },
+          "rest": "data",
+          "type": "schema"
+        },
+        "schema@draft-04[]": {
+          "items": "schema@draft-04",
+          "kind": "list"
+        },
+        "schema@draft-04{}": {
+          "kind": "object",
+          "rest": "schema@draft-04"
+        },
+        "schema@draft-06": {
+          "dialect": "draft-06",
+          "items": "schema@draft-06",
+          "kind": "schema",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "$ref": "data",
+            "additionalItems": "schema@draft-06",
+            "additionalProperties": "schema@draft-06",
+            "allOf": "schema@draft-06[]",
+            "anyOf": "schema@draft-06[]",
+            "const": "data",
+            "contains": "schema@draft-06",
+            "default": "data",
+            "definitions": "schema@draft-06{}",
+            "dependencies": "schema@draft-06{}",
+            "discriminator": "discriminator",
+            "enum": "data",
+            "example": "data",
+            "examples": "data",
+            "externalDocs": "externalDocs",
+            "items": "schema@draft-06",
+            "not": "schema@draft-06",
+            "oneOf": "schema@draft-06[]",
+            "patternProperties": "schema@draft-06{}",
+            "properties": "schema@draft-06{}",
+            "propertyNames": "schema@draft-06",
+            "xml": "xml"
+          },
+          "rest": "data",
+          "type": "schema"
+        },
+        "schema@draft-06[]": {
+          "items": "schema@draft-06",
+          "kind": "list"
+        },
+        "schema@draft-06{}": {
+          "kind": "object",
+          "rest": "schema@draft-06"
+        },
+        "schema@draft-07": {
+          "dialect": "draft-07",
+          "items": "schema@draft-07",
+          "kind": "schema",
+          "patterns": [
+            [
+              "^x-",
+              "data"
+            ]
+          ],
+          "props": {
+            "$ref": "data",
+            "additionalItems": "schema@draft-07",
+            "additionalProperties": "schema@draft-07",
+            "allOf": "schema@draft-07[]",
+            "anyOf": "schema@draft-07[]",
+            "const": "data",
+            "contains": "schema@draft-07",
+            "default": "data",
+            "definitions": "schema@draft-07{}",
+            "dependencies": "schema@draft-07{}",
+            "discriminator": "discriminator",
+            "else": "schema@draft-07",
+            "enum": "data",
+            "example": "data",
+            "examples": "data",
+            "externalDocs": "externalDocs",
+            "if": "schema@draft-07",
+            "items": "schema@draft-07",
+            "not": "schema@draft-07",
+            "oneOf": "schema@draft-07[]",
+            "patternProperties": "schema@draft-07{}",
+            "properties": "schema@draft-07{}",
+            "propertyNames": "schema@draft-07",
+            "then": "schema@draft-07",
+            "xml": "xml"
+          },
+          "rest": "data",
+          "type": "schema"
+        },
+        "schema@draft-07[]": {
+          "items": "schema@draft-07",
+          "kind": "list"
+        },
+        "schema@draft-07{}": {
+          "kind": "object",
+          "rest": "schema@draft-07"
+        },
         "schema[]": {
           "items": "schema",
           "kind": "list"
@@ -2701,8 +3133,8 @@ const OBJECT_MODEL = {
             "flows": "oauthFlows",
             "in": "data",
             "name": "data",
-            "oauth2MetadataUrl": "data",
-            "openIdConnectUrl": "data",
+            "oauth2MetadataUrl": "url:api",
+            "openIdConnectUrl": "url:api",
             "scheme": "data",
             "type": "data"
           },
@@ -2724,7 +3156,7 @@ const OBJECT_MODEL = {
           "props": {
             "description": "data",
             "name": "data",
-            "url": "data",
+            "url": "url:retrieval",
             "variables": "server.variables"
           },
           "type": "server"
@@ -2770,6 +3202,22 @@ const OBJECT_MODEL = {
           },
           "type": "tag"
         },
+        "url:api": {
+          "kind": "url",
+          "type": "api"
+        },
+        "url:description": {
+          "kind": "url",
+          "type": "description"
+        },
+        "url:none": {
+          "kind": "url",
+          "type": "none"
+        },
+        "url:retrieval": {
+          "kind": "url",
+          "type": "retrieval"
+        },
         "xml": {
           "kind": "object",
           "patterns": [
@@ -2781,7 +3229,7 @@ const OBJECT_MODEL = {
           "props": {
             "attribute": "data",
             "name": "data",
-            "namespace": "data",
+            "namespace": "url:none",
             "nodeType": "data",
             "prefix": "data",
             "wrapped": "data"
