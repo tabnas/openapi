@@ -552,7 +552,7 @@ times the work of reading the document once, and 100,000 steps besides.
 No description of the 5,168 measured comes near that. Past it,
 `resolve` throws `openapi_work`.
 
-`resolve` needs a `@tabnas/expr` after 0.6.3. With an earlier one it
+`resolve` needs `@tabnas/expr` 0.6.4 or later. With an earlier one it
 throws a `TypeError` that says so, except under `refs: 'pointer'` with
 neither `maxSteps` nor `onCheck`, which asks nothing new of it.
 

@@ -2,24 +2,31 @@
 
 What `voxgig/apidef` changes so that it reads and resolves an OpenAPI
 description with this package. This is apidef's side of T1 and T2 in
-[`../typescript-plan.md`](../typescript-plan.md). The change is kept here
-as three diffs until it can live on a branch of apidef, which is the
-plan's Decision 20 and is the maintainer's to take.
+[`../typescript-plan.md`](../typescript-plan.md).
 
-The diffs are against apidef at `3b24341`, and each applies after the one
-before it:
+The change lives in apidef, on its branch `claude/jolly-maxwell-jhjgus`,
+as the pull request voxgig/apidef#230. That is the plan's Decision 20,
+taken on 20 November 2026: a pushed branch of apidef, proven by the gate
+here, and merged after this package's first release. Until 21 November
+2026 the change was kept in this folder as three diffs against apidef
+at `3b24341`. The branch's first three commits are those diffs, each with
+the build apidef commits beside its source. The two after them merge
+apidef's `main`, the second at `00778c4`, which is apidef 8.33.1.
 
-| Diff | What it changes |
+| Commit | What it changes |
 |---|---|
-| [`1-error-wrapping.diff`](1-error-wrapping.diff) | The two faults in how apidef's parse stage wraps an error. It needs nothing from this package, so it can go to apidef by itself |
-| [`2-swap.diff`](2-swap.diff) | `parse` and `resolve` from `@tabnas/openapi` in place of apidef's own reader and resolver. Every other step of its parse stage stays |
-| [`3-source-checks.diff`](3-source-checks.diff) | The checks apidef made on the text before reading it, and its repair of lone surrogates, taken from this package in place of apidef's own |
+| `Say syntax for a syntax error, and prefix apidef's own parse errors once` | The two faults in how apidef's parse stage wraps an error. It needs nothing from this package, so it can go to apidef's `main` by itself |
+| `Read and resolve OpenAPI definitions with @tabnas/openapi` | `parse` and `resolve` from `@tabnas/openapi` in place of apidef's own reader and resolver. Every other step of its parse stage stays |
+| `Take the source checks, the alias limit and the surrogate repair from @tabnas/openapi` | The checks apidef made on the text before reading it, and its repair of lone surrogates, taken from this package in place of apidef's own |
 
-They hold source and fixtures only. apidef commits its build, so a commit
-made from any of them also carries `ts/dist`, from `npm run build` in
-apidef's `ts/`.
+Against apidef's `main` the branch changes five files of source and
+fixtures: `ts/src/parse.ts`, `ts/src/yamlalias.ts`, which goes,
+`ts/test/tsv.test.ts`, `test/parse-errors.tsv`, and one comment in the
+other implementation. apidef commits its build, so the branch also
+carries `ts/dist` and `ts/dist-test` as `npm run build` in apidef's
+`ts/` makes them.
 
-## What each diff does
+## What each commit does
 
 **The error wrapping.** apidef's parse stage wrapped every failure of the
 reader in two ways that did not hold:
@@ -51,7 +58,7 @@ apidef's suites run that file, and both pass.
 The source and alias checks, the version check, `wellFormed`, the
 `components` default, the path keys, colon path parameters, ignored
 headers, and `decycle` with its markers all stay as they were in this
-diff. The third takes the first two and `wellFormed`.
+commit. The third takes the first two and `wellFormed`.
 
 **The source checks.** Before it read an OpenAPI text, apidef checked it
 twice, and after reading it repaired the tree once. All three are now
@@ -77,7 +84,7 @@ this package's:
   refused as well.
 
   apidef's own guard lets two shapes of alias bomb through on its
-  `main`, and this diff closes both. Its scan reads the text as YAML,
+  `main`, and this commit closes both. Its scan reads the text as YAML,
   and apidef's reader also takes the comments of JSON with comments:
   after `components: /*`, a line `|` and a line `*/`, the scan takes
   what follows for a block scalar and finds no alias, while the reader
@@ -102,10 +109,10 @@ it was given.
 apidef's table for the scan, `test/yaml-aliased-size.tsv`, stays, and its
 TypeScript suite now runs it against `aliasedSize`. So the two
 implementations of the scan are still held to one table. One comment in
-the other implementation named the file this diff deletes, and is
+the other implementation named the file this commit deletes, and is
 reworded.
 
-Two sources read differently after this diff, both of them texts with
+Two sources read differently after this commit, both of them texts with
 nothing in them:
 
 | Source | Before | After |
@@ -115,62 +122,71 @@ nothing in them:
 
 Both are refused before and after. apidef's fixtures pin neither.
 
-## What the diffs leave out
+## What the branch leaves out
 
-Neither diff touches apidef's manifests. `@tabnas/openapi` is not
+It does not touch apidef's manifests. `@tabnas/openapi` is not
 published, so apidef cannot declare it yet, and the gate runs apidef
 against this checkout through a link at
-`ts/node_modules/@tabnas/openapi`. After the swap apidef's source no
-longer imports `@tabnas/yaml`. Declaring the one and dropping the other
-are dependency changes, which apidef's maintainer instructs when this
-package is released.
+`ts/node_modules/@tabnas/openapi`. After the swap apidef's source
+imports neither `@tabnas/jsonic` nor `@tabnas/yaml`, which its parse
+stage read with before. Declaring the one, and what becomes of the other
+two, are dependency changes, which apidef's maintainer instructs when
+this package is released. The sentence of apidef's pages that names the
+packages its parse stage reads with changes with them.
+
+So apidef's own build cannot pass on the branch yet. Its workflow
+installs published packages, and `ts/src/parse.ts` imports one that is
+not published, so the build fails there until the release. That is the
+one failure the branch is expected to show. apidef's comment gate and
+its dependency gate pass on it.
 
 apidef has a second implementation of its parser, which this change does
-not touch. Its fixtures still pass, because apidef's output does not
-move.
+not touch, but for the one comment. Its suite passes on the branch,
+because apidef's output does not move.
 
 ## How it is proven
 
-From this repository's root, with apidef cloned beside it and its
-dependencies installed:
+From this repository's root, with apidef cloned beside it, its branch
+checked out and its dependencies installed:
 
 ```bash
-node tools/apidef-gate.cjs ../apidef \
-  --patch docs/design/apidef-swap/1-error-wrapping.diff \
-  --patch docs/design/apidef-swap/2-swap.diff \
-  --patch docs/design/apidef-swap/3-source-checks.diff
+git -C ../apidef fetch origin main
+node tools/apidef-gate.cjs ../apidef --base "$(git -C ../apidef merge-base HEAD origin/main)"
 ```
 
-The gate applies the diffs to a worktree of the apidef checkout's commit,
-builds it, runs apidef's suite there against this checkout's build, and
-compares apidef's guide and model with those of the same commit
-unpatched. A diff that no longer applies stops the gate before anything
-runs, and is to be made again at apidef's new commit.
+The gate builds two worktrees of the apidef clone, one at the branch and
+one at the commit of apidef's `main` that the branch last merged. It
+runs apidef's suite in the first against this checkout's build, and
+compares apidef's guide and model with those of the second. The base is
+that commit, and not wherever `main` has moved to since, so that the two
+differ by the swap alone. When apidef's `main` moves, it is merged into
+the branch, and the gate is run again.
 
-At apidef `3b24341` the gate passes with nothing allowed to fail: 2,478
-tests, 2,477 passing, none failing and one skipped, as on apidef's
-`main`. apidef's guide and model are byte-identical for all 45
-definitions the gate compares by itself, which are apidef's 43 and this
-repository's two, and for the twelve more that the plan's G2 names,
-given with `--extra`.
+At apidef `a774fb5`, the branch with `main` merged, against `00778c4`,
+the gate passes with nothing allowed to fail: 2,589 tests, 2,588
+passing, none failing and one skipped, the one apidef's `main` skips.
+apidef's guide and model are byte-identical for all 95 definitions the
+gate compares by itself, which are apidef's 93 and this repository's
+two, and for the twelve more that the plan's G2 names, given with
+`--extra`. That run was on this checkout's build, with its
+dependencies as the registry serves them: `@tabnas/expr` 0.6.4, yaml
+0.5.34 and parser 0.12.21.
 
-With the first diff alone the suite passes the same, and the gate ends
-with 3, since apidef does not import this package until the second. With
-the first two, or with all three, the result is the one above.
+At apidef `3b24341`, where the change was made, the three diffs gave
+the same result on the suite and definitions apidef had then: 2,477 of
+2,478 tests, and 57 definitions. With the first of them alone the suite
+passed the same and the gate ended with 3, since apidef does not import
+this package until the second.
 
 The preset itself is held to apidef's resolver by
 `tools/apidef-preset.cjs`, document by document. That comparison needs
-apidef's resolver, which the swap deletes, so it is run against apidef
-without these diffs.
+apidef's resolver, which the swap deletes, so it is run against a commit
+of apidef's `main`, which keeps that resolver until the branch merges.
 
-## The commits
+## When it merges
 
-When the change goes to apidef it is three commits, one for each diff,
-with these subjects:
-
-1. `Say syntax for a syntax error, and prefix apidef's own parse errors once`
-2. `Read and resolve OpenAPI definitions with @tabnas/openapi`
-3. `Take the source checks, the alias limit and the surrogate repair from @tabnas/openapi`
-
-The second and third cannot merge until `@tabnas/openapi` is released and
-apidef's `ts/package.json` names it.
+After this package's first release, in this order: apidef's
+`ts/package.json` names `@tabnas/openapi`, on its maintainer's
+instruction; apidef's build passes on the branch; and the branch merges.
+Until then each step of the plan that changes what apidef takes from
+this package adds a commit to the branch, and the gate above holds it.
