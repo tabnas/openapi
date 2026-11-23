@@ -17,9 +17,12 @@
 // are look-ups in it. What depends on the tree being built stays here:
 // the values, what is shared, and which edge of a cycle is cut.
 //
-// One document for now: a reference into another document is reported
-// as external and left as written. The plan is
-// docs/design/typescript-plan.md, step T3.
+// A description may be several documents. The others are given with
+// it, in `documents`, each by the URI it was retrieved from, and a
+// reference that names one resolves into it. Nothing is loaded here: a
+// reference into a document that was not given is reported as external
+// and left as written. The plan is docs/design/typescript-plan.md, steps
+// T3 and T4.
 
 import { fold, FoldError } from '@tabnas/expr'
 import type { FoldOptions, Op, Positions, Site } from '@tabnas/expr'
@@ -30,8 +33,10 @@ import { dialectOf } from './dialect'
 import type { DialectUse } from './dialect'
 import type { ModelVersion } from './model'
 import { version as readVersion } from './oas-version'
+import { parse } from './openapi'
+import type { ParseOptions } from './openapi'
 import { Loc, buildIndex, hasIds } from './site-index'
-import type { Kind, SiteFacts, Why } from './site-index'
+import type { DocFacts, DocInput, Kind, SiteFacts, Why } from './site-index'
 import { NOTHING, define, isMap, merged, normalizeUri, own, pointer, resolveUri, stepInto, withoutFragment } from './uri'
 import type { Path } from './uri'
 
@@ -61,6 +66,19 @@ type ResolveOptions = {
   // The URI the description was retrieved from: the base of its relative
   // references when it has no `$self`.
   retrievalUri?: string
+  // The other documents of the description, each by the URI it was
+  // retrieved from: a tree, as `parse` gives one, or text or bytes, which
+  // `parse` reads. A name that is relative is read against
+  // `retrievalUri`, which it then needs. A reference that names one of
+  // them resolves into it: by that URI, by the document's own `$self`,
+  // or by an identifier one of its schemas declares. A document whose
+  // root declares a version is read as a description of that version.
+  // Any other is read as the references that land in it type it: a
+  // schema, a Path Item, a map of parameters. Not read under
+  // `refs: 'pointer'`.
+  documents?: Record<string, unknown>
+  // How `parse` reads a document given as text or bytes.
+  parse?: ParseOptions
   // Raise an error, rather than report it, for a reference that names
   // nothing, a malformed fragment, and a `$ref` whose value is not a
   // string.
@@ -137,12 +155,17 @@ type ResolveOptions = {
 // site.
 type Status = 'resolved' | 'unresolved' | 'cut' | 'kept'
 
-// A reference left as written, and why.
-type Unresolved = { at: string; ref: unknown; why: Why }
+// A reference left as written, and why. `doc` is the document it is in,
+// by the URI that document was given under, where that is not the
+// description itself.
+type Unresolved = { at: string; ref: unknown; why: Why; doc?: string }
 
 // One reference site, whatever became of it.
 type Provenance = {
   at: string
+  // The document the site is in, by the URI it was given under, where
+  // that is not the description itself.
+  doc?: string
   ref: unknown
   kind: Kind
   // What a Reference Object stands for: response, parameter, and so on.
@@ -154,9 +177,15 @@ type Provenance = {
   // was read in what that reference names. Null when it lands nowhere
   // here, and under `refs: 'pointer'`, which reads a pointer otherwise.
   landing: string | null
+  // The document `target` and `landing` are in, by the URI it was given
+  // under, where that is not the document the site is in.
+  targetDoc?: string
   // The references the pointer was read through to land there, when
   // there are any.
   through?: string[]
+  // The document `landing` is in, where a pointer read through a
+  // reference ended in another than `target` is in.
+  landingDoc?: string
   // For a reference into another document: that document's URI, and the
   // fragment of the reference when it has one.
   uri?: string
@@ -173,7 +202,7 @@ type Provenance = {
 
 // A reference left as written because resolving it would close a cycle:
 // the edge that closes one, or a reference to such an edge.
-type Cut = { at: string; ref: string; target: string }
+type Cut = { at: string; ref: string; target: string; doc?: string; targetDoc?: string }
 
 type ResolveResult = {
   tree: any
@@ -224,6 +253,9 @@ function quoted(value: unknown): string {
 
 // $self exists in OpenAPI from 3.2.
 const hasSelf = (v: ModelVersion) => '3.2' === v
+
+// A URI with a scheme, which needs no base to be read against.
+const ABSOLUTE = /^[A-Za-z][A-Za-z0-9+.-]*:/
 
 const DEFAULT_DIALECT: Record<string, string> = {
   '3.1': 'https://spec.openapis.org/oas/3.1/dialect/base',
@@ -277,7 +309,17 @@ const CHOICES: Record<string, string[]> = {
   refs: ['uri', 'pointer'],
 }
 
-type Loose = 'positions' | 'maxDepth' | 'maxSteps' | 'onCheck' | 'checkEveryN' | 'budget' | 'retrievalUri' | 'compat'
+type Loose =
+  | 'positions'
+  | 'maxDepth'
+  | 'maxSteps'
+  | 'onCheck'
+  | 'checkEveryN'
+  | 'budget'
+  | 'retrievalUri'
+  | 'compat'
+  | 'documents'
+  | 'parse'
 
 type Settled = Required<Omit<ResolveOptions, Loose>> & Pick<ResolveOptions, Loose>
 
@@ -389,6 +431,8 @@ type SiteInfo = {
   seq: number
   row: SiteFacts
   at: string
+  // The document it is in, where that is not the description.
+  doc?: string
   kind: Kind
   type: string | null
   ref: unknown
@@ -436,6 +480,50 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   const limit = o.maxDepth ?? 1000
   const pointers = 'pointer' === o.refs
 
+  // The other documents of the description, each by the URI it was
+  // retrieved from, in its normal form. One whose root declares a
+  // version is a description of that version, with a `$self` and a
+  // default dialect of its own. Any other is read by the version of the
+  // description, and its schemas by that version's own dialect, as the
+  // specification has it for a schema document that names none.
+  const others: DocInput[] = []
+  if (undefined !== o.documents) {
+    if (pointers) throw new TypeError("resolve: documents are read under refs: 'uri', and refs is 'pointer'")
+    if (!isMap(o.documents)) throw new TypeError('resolve: documents must be a map from URI to document')
+    const taken = new Set([retrieved, entry])
+    for (const name of Object.keys(o.documents)) {
+      if (undefined === o.retrievalUri && !ABSOLUTE.test(name)) {
+        throw new TypeError(
+          `resolve: documents names ${quoted(name)}, which is relative, and no retrievalUri says what it is relative to`,
+        )
+      }
+      const key = withoutFragment(normalizeUri(resolveUri(retrieved, name)))
+      if (taken.has(key)) {
+        throw new TypeError(`resolve: documents names ${quoted(name)}, and ${quoted(key)} is a document already`)
+      }
+      taken.add(key)
+      let doc: any = o.documents[name]
+      if ('string' === typeof doc || doc instanceof Uint8Array) doc = parse(doc, o.parse)
+      const said = readVersion(doc)
+      const described = null !== said.field
+      const dmv: ModelVersion = !described ? mv : 'unknown' === said.version ? '3.2' : (said.version as ModelVersion)
+      others.push({
+        key,
+        uri:
+          described && hasSelf(dmv) && 'string' === typeof doc.$self
+            ? withoutFragment(normalizeUri(resolveUri(key, doc.$self)))
+            : key,
+        raw: doc,
+        mv: dmv,
+        described,
+        rootDialect:
+          described && hasIds(dmv) && 'string' === typeof doc.jsonSchemaDialect
+            ? doc.jsonSchemaDialect
+            : (DEFAULT_DIALECT[dmv] ?? ''),
+      })
+    }
+  }
+
   // The steps taken, the index's and then the fold's, for `maxSteps` and
   // `onCheck`.
   const maxSteps = o.maxSteps ?? Infinity
@@ -465,6 +553,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     entry,
     retrieved,
     rootDialect,
+    others,
     slots: o.slots,
     extensions,
     pointers,
@@ -472,6 +561,14 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     refuse,
     tick: counting ? tick : undefined,
   })
+  const home = index.docs[0]
+  const byKey = new Map<string, DocFacts>()
+  for (const doc of index.docs) byKey.set(doc.key, doc)
+  // A document's key, where it is not the description.
+  const keyOf = (doc: DocFacts | undefined): string | undefined => (undefined === doc || doc === home ? undefined : doc.key)
+  // A place for a message: its pointer, and its document where that is
+  // not the description.
+  const where = (info: SiteInfo): string => (undefined === info.doc ? info.at : info.doc + '#' + info.at)
 
   const infos = new Map<SiteFacts, SiteInfo>()
   const sites: SiteInfo[] = []
@@ -527,14 +624,20 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   const unresolvedHere = (info: SiteInfo, why: Why) => {
     const code = STRICT[why]
     if (strict && null != code) {
-      throw new ResolveError(code, `${why}: the reference at ${quoted(info.at)} (${quoted(info.ref)})`, info.at, info.ref)
+      throw new ResolveError(code, `${why}: the reference at ${quoted(where(info))} (${quoted(info.ref)})`, info.at, info.ref)
     }
-    unresolvedRows.push([info.seq, { at: info.at, ref: info.ref, why }])
+    const row: Unresolved = { at: info.at, ref: info.ref, why }
+    if (undefined !== info.doc) row.doc = info.doc
+    unresolvedRows.push([info.seq, row])
     info.status = 'unresolved'
   }
 
   const cutHere = (info: SiteInfo) => {
-    cutRows.push([info.seq, { at: info.at, ref: info.ref as string, target: pointer(info.target!) }])
+    const row: Cut = { at: info.at, ref: info.ref as string, target: pointer(info.target!) }
+    if (undefined !== info.doc) row.doc = info.doc
+    const to = info.row.targetDoc
+    if (undefined !== to && to !== info.row.loc.doc) row.targetDoc = to.key
+    cutRows.push([info.seq, row])
     info.status = 'cut'
   }
 
@@ -563,6 +666,8 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   // The sibling rule, by the site's kind and the version.
   const combine = (hit: any, siblings: any, info: SiteInfo) => {
     if (!isMap(hit) || !isMap(siblings) || 0 === Object.keys(siblings).length) return hit
+    // The rule is that of the version of the document the site is in.
+    const mv = info.row.loc.doc.mv
     // A Path Item's $ref is a field of the Path Item in every version,
     // Swagger 2.0 included: the fields merge, and a field on both sides,
     // which the specification leaves undefined, is reported.
@@ -643,7 +748,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   const landingAt = (row: SiteFacts): string | null => {
     const land = row.landing
     if (undefined === land || !land.found) return null
-    return undefined === land.through ? pointer(row.target!) : pointer(land.path!)
+    return (keyOf(land.doc) ?? '') + (undefined === land.through ? pointer(row.target!) : pointer(land.path!))
   }
 
   // A pointer with a step missing as written, read on in what a reference
@@ -652,9 +757,15 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   const readThrough = (info: SiteInfo): boolean => !strict || undefined === info.row.landing!.through
   const MISSING = { found: false, cycle: false, value: undefined }
 
+  // Under 'keep', the finished tree of each other document a site lands
+  // in: see `keepCycles`.
+  const folded = new Map<string, any>()
+
   const opts: FoldOptions = {
     op: OPS,
-    doc: entry,
+    // A document is known to the fold by the URI it was given under.
+    doc: home.key,
+    load: (key: string) => byKey.get(key)?.raw,
     positions: o.positions,
     maxDepth: limit,
     // The bag of every map is its location in the index, which has its
@@ -668,8 +779,10 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     // between the two has a location and no bag of its own.
     inherit: (site, _node, k) => {
       const path = site.path
-      let loc: Loc | undefined = k instanceof Loc ? k : index.root
-      for (let i = loc.depth; i < path.length && undefined !== loc; i++) loc = index.child(loc, path[i])
+      // Every document's root starts from the same bag, which is no
+      // location: its own root is found from there.
+      let loc: Loc | undefined = k instanceof Loc ? k : byKey.get(site.doc)?.root
+      for (let i = undefined === loc ? 0 : loc.depth; i < path.length && undefined !== loc; i++) loc = index.child(loc, path[i])
       if (undefined === loc) throw new Error('resolve: no location in the index for ' + quoted(pointer(path)))
       return loc as any
     },
@@ -686,6 +799,8 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       const row = loc.site
       if (undefined === row) return false
       const info: SiteInfo = { seq: seq++, row, at: row.at, kind: row.kind, type: row.type, ref: row.ref, status: 'resolved' }
+      const inDoc = keyOf(loc.doc)
+      if (undefined !== inDoc) info.doc = inDoc
       if (null != site.token) info.token = site.token
       if (undefined !== row.why) info.why = row.why
       else {
@@ -693,7 +808,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
         if ('inline-once' === o.sharing) {
           // Two references that land on one location name one target,
           // however each is written.
-          info.key = (pointers ? null : landingAt(row)) ?? pointer(row.target!)
+          info.key = (pointers ? null : landingAt(row)) ?? (keyOf(row.targetDoc) ?? '') + pointer(row.target!)
           if (!firstFor.has(info.key)) firstFor.set(info.key, info.seq)
         }
       }
@@ -717,6 +832,15 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       // is read from the finished tree: see `keepCycles`. The site holds a
       // placeholder until then.
       if ('keep' === o.cycles) {
+        // A landing in another document is read off that document's
+        // finished tree, so the document is folded, whole, the first time
+        // a site lands in it. Every site in it holds a placeholder too.
+        const far = info.row.landing?.doc
+        if (undefined !== far && far !== home && !folded.has(far.key)) {
+          folded.set(far.key, undefined)
+          const whole = site.written([], far.key)
+          if (whole.found) folded.set(far.key, whole.value)
+        }
         const placeholder = Object.create(null)
         deferred.set(placeholder, { info, siblings, plain: site.plain() })
         return placeholder
@@ -746,7 +870,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
         cutHere(info)
         return asWritten(site.plain(), info, { cut: true })
       }
-      const hit = !land.found || !readThrough(info) ? MISSING : site.written(land.path!)
+      const hit = !land.found || !readThrough(info) ? MISSING : site.written(land.path!, land.doc!.key)
       if (hit.cycle) {
         cutHere(info)
         return asWritten(site.plain(), info, { cut: true })
@@ -801,6 +925,13 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     // Where every walk starts: the root's own map, whatever `$ref` the
     // root has itself.
     const start = deferred.has(root) ? deferred.get(root)!.plain : root
+    // The finished root of the document a landing is in, and where a
+    // walk in it starts.
+    const rootIn = (doc: DocFacts | undefined): any => (undefined === doc || doc === home ? root : folded.get(doc.key))
+    const startIn = (doc: DocFacts | undefined): any => {
+      const top = rootIn(doc)
+      return null != top && deferred.has(top) ? deferred.get(top)!.plain : top
+    }
 
     const finalOf = (ph: object): any => {
       if (finals.has(ph)) return finals.get(ph)
@@ -822,9 +953,9 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       const landing = d.info.row.landing
       if (!pointers) {
         if (true === landing!.loop) node = LOOP
-        else if (!landing!.found || !readThrough(d.info)) node = NOTHING
+        else if (!landing!.found || !readThrough(d.info) || undefined === rootIn(landing!.doc)) node = NOTHING
         else {
-          if (0 === landing!.path!.length) node = root
+          node = 0 === landing!.path!.length ? rootIn(landing!.doc) : startIn(landing!.doc)
           for (const seg of landing!.path!) {
             if (deferred.has(node)) node = deferred.get(node)!.plain
             node = stepInto(node, seg)
@@ -993,7 +1124,10 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       landing: undefined === land || !land.found ? null : undefined === land.through ? target : pointer(land.path!),
       status: info.status,
     }
+    if (undefined !== info.doc) p.doc = info.doc
+    if (undefined !== row.targetDoc && row.targetDoc !== row.loc.doc && null !== target) p.targetDoc = row.targetDoc.key
     if (undefined !== land && undefined !== land.through) p.through = land.through.slice()
+    if (undefined !== land && land.found && land.doc !== (row.targetDoc ?? row.loc.doc)) p.landingDoc = land.doc!.key
     if (undefined !== row.uri) {
       p.uri = row.uri
       if (undefined !== row.fragment) p.fragment = row.fragment
@@ -1012,10 +1146,13 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   // The dialects the description declares: the root's, then each
   // schema's.
   const dialects: DialectUse[] = []
-  if (!pointers && hasIds(mv)) {
-    if (isMap(raw) && 'string' === typeof raw.jsonSchemaDialect) {
-      const d = dialectOf(raw.jsonSchemaDialect)
-      dialects.push({ at: '/jsonSchemaDialect', dialect: raw.jsonSchemaDialect, as: d.dialect.name, known: d.known })
+  if (!pointers) {
+    for (const doc of index.docs) {
+      if (!doc.described || !hasIds(doc.mv) || !isMap(doc.raw) || 'string' !== typeof doc.raw.jsonSchemaDialect) continue
+      const d = dialectOf(doc.raw.jsonSchemaDialect)
+      const use: DialectUse = { at: '/jsonSchemaDialect', dialect: doc.raw.jsonSchemaDialect, as: d.dialect.name, known: d.known }
+      if (doc !== home) use.doc = doc.key
+      dialects.push(use)
     }
     for (const use of index.dialects()) dialects.push(use)
   }
