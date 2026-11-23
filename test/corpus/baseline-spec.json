@@ -85,11 +85,11 @@
   },
   "environment": {
     "dependencies": {
-      "@tabnas/expr": "0.6.3",
+      "@tabnas/expr": "0.6.4",
       "@tabnas/json": "0.5.20",
       "@tabnas/jsonic": "0.7.12",
-      "@tabnas/parser": "0.12.20",
-      "@tabnas/yaml": "0.5.33"
+      "@tabnas/parser": "0.12.21",
+      "@tabnas/yaml": "0.5.34"
     },
     "node": 24,
     "options": {
@@ -176,6 +176,10 @@
         "count": 1,
         "notFound": 1
       },
+      "implicitMapping": {
+        "count": 8241,
+        "notFound": 0
+      },
       "mapping": {
         "count": 3863,
         "notFound": 47
@@ -201,30 +205,30 @@
         "notFound": 0
       }
     },
-    "cuts": 1913,
-    "dataSlots": 53937,
+    "cuts": 1924,
+    "dataSlots": 53741,
     "documentsByUnresolved": {
       "external": 789,
       "not-found": 1
     },
-    "documentsHeldAsWritten": 23,
-    "documentsWithCuts": 600,
-    "documentsWithDataSlots": 893,
-    "heldAsWritten": 180,
+    "documentsHeldAsWritten": 0,
+    "documentsWithCuts": 601,
+    "documentsWithDataSlots": 886,
+    "heldAsWritten": 0,
     "kinds": {
       "pathItem": 13,
       "reference": 437418,
-      "schema": 707932
+      "schema": 708128
     },
     "notRun": 0,
     "resolved": 5180,
-    "sites": 1145363,
+    "sites": 1145559,
     "skipped": {
       "no-version": 3803
     },
     "status": {
-      "cut": 1913,
-      "resolved": 1113851,
+      "cut": 1924,
+      "resolved": 1114036,
       "unresolved": 29599
     },
     "threwByCode": {},

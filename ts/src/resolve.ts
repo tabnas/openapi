@@ -350,7 +350,7 @@ function checkFold(): void {
   if (!foldIsNewEnough) {
     throw new TypeError(
       'resolve: the installed @tabnas/expr is too old. Its fold has no step budget and no site.written, ' +
-        'which @tabnas/openapi needs: install a release after 0.6.3',
+        'which @tabnas/openapi needs: install 0.6.4 or later',
     )
   }
 }

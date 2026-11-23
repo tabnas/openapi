@@ -168,10 +168,10 @@ default that a shared row pins changes until porting starts.
 | 1 | raw mode: `parse`, root and stream checks, version detection, fixtures | done in all three runtimes |
 | 2 | the resolver over `fold` | TypeScript done within one document: the object model, `resolve` with every option and output shape, the connections report, and the apidef preset. Porting it is deferred |
 | T0 | gates: the corpus sweep and its ledger, the apidef gate, the fixture homes | done |
-| T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is two diffs in [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), which the apidef gate applies. Where they live in apidef is the plan's Decision 20, which is not taken |
-| T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as a third diff. Built on the plan's defaults for Decisions 21 to 25, which are the maintainer's to change |
+| T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is a branch of apidef, voxgig/apidef#230, which the apidef gate holds to apidef's `main`: the plan's Decision 20, taken on 20 November 2026. [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md) describes it. It merges after this package's first release |
+| T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as the third commit of its branch. Built on the plan's defaults for Decisions 21 to 25, which the maintainer took as they stood on 20 November 2026 |
 | T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger is 5 rows where it was 190, three of them accepted and two the descriptions refused for their size, and under the base reading it is 235 where it was 254. The rule history is measured, and turning it on is Decision 34 |
-| T3 | the site index, and `resolve` on it | all five items built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. Item 3 is the dialects: a schema of 3.1 or 3.2 is read by the dialect it declares, draft-04 to 2020-12, an unknown one as 2020-12 and reported in `dialects`; URIs are compared in their normal form; and the vendored schemas are the latest published, with the model held to the 3.1.2 and 3.2.1 texts. W4 and W5 are repaired. Items 2 to 5 need what tabnas/expr#117 added to the fold, which is on `expr`'s `main` and in no release: until one carries it, `resolve` runs in CI and in the linked model only, and the corpus baselines stay as swept on the released packages. Item 4 is the three reports the audit found missing, each read from the index and none changing the resolved tree: the `implicitMapping` rows of `connections`, `conflict` on a `provenance` row whose reference lands on a type it does not expect, and `urls`, the URLs a description gives with what a relative one is relative to. Item 5 is the fixtures: every probe of the audit has a row under its number, in `test/resolve/probes.tsv` or `test/pending/parse-probes.tsv`, and `ts/test/probes.test.ts` holds the two files to the audit's list. With it, the last leniency of Decision 25 that the object model owed: a 3.0 component is read under any name, as 3.1 and 3.2 read it |
+| T3 | the site index, and `resolve` on it | all five items built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. Item 3 is the dialects: a schema of 3.1 or 3.2 is read by the dialect it declares, draft-04 to 2020-12, an unknown one as 2020-12 and reported in `dialects`; URIs are compared in their normal form; and the vendored schemas are the latest published, with the model held to the 3.1.2 and 3.2.1 texts. W4 and W5 are repaired. Items 2 to 5 need what tabnas/expr#117 added to the fold, which `expr` 0.6.4 released: with it `resolve` runs on an install from the registry, and the corpus baselines are swept on the released packages. Item 4 is the three reports the audit found missing, each read from the index and none changing the resolved tree: the `implicitMapping` rows of `connections`, `conflict` on a `provenance` row whose reference lands on a type it does not expect, and `urls`, the URLs a description gives with what a relative one is relative to. Item 5 is the fixtures: every probe of the audit has a row under its number, in `test/resolve/probes.tsv` or `test/pending/parse-probes.tsv`, and `ts/test/probes.test.ts` holds the two files to the audit's list. With it, the last leniency of Decision 25 that the object model owed: a 3.0 component is read under any name, as 3.1 and 3.2 read it |
 | T4 to T6 | several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -277,8 +277,8 @@ in `test/pending/` and its other tests in `ts/test/openapi.test.ts` and
   own size.
 - **`aliasedSize`** is a scan of the text, not a parse, and it is
   apidef's measure wherever it measures to the end, which is every
-  document of the corpus: `docs/design/apidef-swap/` has apidef's suite
-  run its own table against it. Change it only with that table. The two
+  document of the corpus: apidef's branch has its suite run its own
+  table against it. Change it only with that table. The two
   part in one place, where apidef's is wrong: a tag between an anchor
   and its node, `&a !!map {`, which apidef's takes for a scalar.
 - **The alias budget is held twice, and the second time is what makes
@@ -444,8 +444,8 @@ to share.
 the fold's, through the fold's `budget`, and `keepCycles` counts each
 reference it reads. The fold's own codes for its bounds are renamed on
 the way out (`FOLD_CODES`). `checkFold` probes once for the fold this
-needs: a step budget and `site.written` arrived together in `expr`,
-after 0.6.3, and `resolve` throws a `TypeError` on an older one. Under
+needs: a step budget and `site.written` arrived together in `expr`
+0.6.4, and `resolve` throws a `TypeError` on an older one. Under
 `refs: 'pointer'` with no step bound and no check it needs neither, and
 does not probe, so the preset reads on any fold.
 
@@ -584,7 +584,9 @@ The counts are those of 2026-11-10, before the site index, but for
 GitHub's connections, which were 1284: the 12 more are the implicit
 mappings of its five discriminators. On the same machine the build
 before the index takes about 180 ms and 365 ms, since the index types
-every map before the fold asks.
+every map before the fold asks. On 2026-11-21 the counts of both
+tables were measured again on an install from the registry, with
+`@tabnas/expr` 0.6.4, and are the same.
 
 These are the plan's acceptance for Phase 2, and T3's holds them:
 nothing unresolved, and the cut count stable. Under `compat: 'apidef'` every one of the `$ref` maps
@@ -602,7 +604,7 @@ keeps cycles.
 | [`test/petstore/`](test/petstore/) | One OpenAPI 3.1 description in YAML and the same in JSON. Every runtime's suite reads both and holds them to `JSON.parse` of the JSON form. |
 | [`test/resolve/`](test/resolve/), [`test/model/`](test/model/), [`test/pending/`](test/pending/) | Fixtures only the TypeScript suite runs: the resolver's, the object model's, and parse fixtures for what only the TypeScript `parse` gives yet. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
 | [`test/corpus/`](test/corpus/) | The corpus sweep's record over real documents: `ledger.tsv`, one row per way a document fails, and `baseline.json`, the headline figures, both written by the sweep and never by hand; `ledger-spec.tsv` and `baseline-spec.json`, the same under `reading: 'spec'`; and `accepted.tsv`, written by hand, the ledger rows that are not this package's defect, each with its reason. |
-| [`docs/design/`](docs/design/) | The design notes, the plan, the prototypes, and [`apidef-swap/`](docs/design/apidef-swap/README.md): apidef's side of T1, as two diffs. Working documents, outside the prose gate. |
+| [`docs/design/`](docs/design/) | The design notes, the plan, the prototypes, and [`apidef-swap/`](docs/design/apidef-swap/README.md): what apidef's side of T1 and T2 changes, and where it lives. Working documents, outside the prose gate. |
 | [`ts/doc/`](ts/doc/), [`go/doc/`](go/doc/) | Per-runtime Diátaxis docs: `tutorial.md`, `guide.md`, `reference.md`, `concepts.md`. Gated, with the READMEs, by [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). |
 | [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions; [`corpus/`](tools/corpus/README.md), the corpus sweep; `apidef-gate.cjs`, the apidef gate, with its helpers in `apidef-gate/`; `apidef-preset.cjs`, the preset comparison, with its helpers in `apidef-preset/`. The last three are gates run by hand: see "Verify your work". |
 | [`model/`](model/) | The object model's inputs (the vendored OAI schemas, the applicator lists, the overlay) and the generated `object-model.json`. |
@@ -636,11 +638,9 @@ path, a `replace` or a `go.work`.
   resolver, which is built on expr's tree layer. That layer shipped in
   expr 0.5.20, and `ci.yml` names `expr` in the shared workflow's
   `deps`. The resolver now needs what tabnas/expr#117 added to the fold,
-  a step budget and `site.written`, which are on `expr`'s `main` and in
-  no release yet. Until one carries them, `resolve` works in the linked
-  model and in CI. On an install from the registry it throws the
-  `TypeError` of `checkFold`, except under `refs: 'pointer'`, which the
-  preset sets.
+  a step budget and `site.written`, which shipped in expr 0.6.4. With an
+  older expr installed it throws the `TypeError` of `checkFold`, except
+  under `refs: 'pointer'`, which the preset sets.
 
   `tools/port-deps.json` records the difference between the ports, with
   its repair: Go and Rust take expr when they port the resolver.
@@ -837,8 +837,8 @@ names in `ts/package.json`:
 ```bash
 node tools/corpus/sweep.cjs --fetch    # needs the network, 1.1 GB of disk and about half an hour
 node tools/corpus/sweep.cjs --reading spec    # the same documents under the other reading, as long again
-node tools/apidef-gate.cjs ../apidef --patch docs/design/apidef-swap/1-error-wrapping.diff --patch docs/design/apidef-swap/2-swap.diff --patch docs/design/apidef-swap/3-source-checks.diff
-node tools/apidef-preset.cjs ../apidef --ref 3b24341 --corpus .corpus/src --rows test/resolve/apidef.tsv test/resolve/apidef-extra.tsv
+node tools/apidef-gate.cjs ../apidef --base "$(git -C ../apidef merge-base HEAD origin/main)"    # with apidef's clone at the branch that holds its swap
+node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows test/resolve/apidef.tsv test/resolve/apidef-extra.tsv
 ```
 
 - **The corpus sweep** reads 8,986 real documents with this checkout's
@@ -862,28 +862,36 @@ node tools/apidef-preset.cjs ../apidef --ref 3b24341 --corpus .corpus/src --rows
 - **The apidef gate** runs `voxgig/apidef`'s own TypeScript suite on
   this checkout's build, and compares apidef's guide and model, for its
   test definitions and `test/petstore/`, with those of apidef as it was.
-  It needs a clone of apidef with `npm ci` run in its `ts/`. It works in
-  temporary worktrees of that clone and changes no tracked file there;
-  its one write is the link `ts/node_modules/@tabnas/openapi`, made only
-  when it is absent. It ends with 0 for a pass, 1 for a failure, 2 when
-  it could not run, and 3 when apidef at that commit does not import
-  this package, so that the run proved nothing about it. Until a branch
-  of apidef imports this package, the gate applies apidef's side of T1
-  and T2 with `--patch`, once for each diff of
-  [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md), and
-  nothing is allowed to fail. At apidef 3b24341 that is 2,477 of 2,478
-  tests passing, none failing, one skipped as on apidef's `main`, and
-  every definition byte-identical: the 45 it compares by itself, and
-  the twelve of G2 below. A diff that no longer applies stops
-  the gate, and is to be made again at apidef's new commit. `--extra`
-  adds descriptions to the comparison. The plan's G2 names the eleven
+  It needs a clone of apidef with `npm ci` run in its `ts/`, checked out
+  at the branch that holds apidef's side of T1 and T2,
+  `claude/jolly-maxwell-jhjgus`, which
+  [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md)
+  describes. It works in temporary worktrees of that clone and changes
+  no tracked file there; its one write is the link
+  `ts/node_modules/@tabnas/openapi`, made only when it is absent. It
+  ends with 0 for a pass, 1 for a failure, 2 when it could not run, and
+  3 when apidef at that commit does not import this package, so that
+  the run proved nothing about it. The candidate is the branch, and
+  `--base` names what it is compared with: the commit of apidef's `main`
+  that the branch last merged, so that the two differ by the swap alone.
+  Nothing is allowed to fail. At apidef a774fb5 against 00778c4 that is
+  2,588 of 2,589 tests passing, none failing, one skipped as on apidef's
+  `main`, and every definition byte-identical: the 95 it compares by
+  itself, and the twelve of G2 below. When apidef's `main` moves, merge
+  it into the branch and run the gate again. `--patch` applies a
+  diff to the candidate first, for a change to apidef that is not
+  committed yet, and then the base is the candidate's own commit.
+  `--extra` adds descriptions to the comparison. The plan's G2 names the eleven
   OpenAPI Initiative examples and GitHub's description, which the corpus
   fetch leaves under `.corpus/src/oai-learn/examples/` and
   `.corpus/src/github-json/`.
 - **The preset comparison** holds `resolve(raw, { compat: 'apidef' })`
   to the resolver inside apidef, as apidef built it at the commit
-  `--ref` names. 3b24341 is the last commit before the swap deletes that
-  resolver, so the reference stays there. It runs both resolvers on one
+  `--ref` names. The swap deletes that resolver, so the reference is a
+  commit of apidef's `main` from before its branch merges: 0f41ce1 in
+  the latest record, where `ts/src/parse.ts` is as it was at 3b24341,
+  the reference of the earlier records, and as it still is on apidef's
+  `main`. It runs both resolvers on one
   raw tree for each document of four sets: 167 hand-written edge shapes,
   documents from a seeded generator, the corpus, and the rows of the two
   apidef fixtures. It ends with 0 when every document compared is equal,
@@ -897,7 +905,11 @@ node tools/apidef-preset.cjs ../apidef --ref 3b24341 --corpus .corpus/src --rows
   --heap-mb 12288` runs them by themselves, in about two and a half
   minutes. On 2026-11-13 the comparison found no difference: 167 shapes,
   94,000 generated documents under seeds 1 to 12, 8,966 corpus
-  documents with the 20 that `parse` refuses unread, and all 46 rows.
+  documents with the 20 that `parse` refuses unread, and all 46 rows. On
+  2026-11-21, on the released packages, it found none again: 167
+  shapes, 6,000 generated documents under seed 1, 8,964 corpus documents
+  with the 13 that `parse` refuses unread, all 46 rows, and the nine
+  documents over 10 MB.
 
 All three print a status line at least every 20 seconds. None
 publishes, pushes or installs anything. The code in each that decides

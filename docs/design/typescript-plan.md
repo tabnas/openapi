@@ -260,10 +260,10 @@ with the raw tree. With `C` written first, `q` is cut and `A` with it,
 which is the right answer for both orders. Unlike W1 to W6, this one
 shows in the corpus: under the default options, 180 references in 23
 documents, all versions of one Azure description. The repair is merged
-in `expr`, as tabnas/expr#117, and is in no release yet.
-`ts/test/resolve.test.ts` expects the cut in both orders, so it passes
-on `expr`'s `main`, which CI builds against, and fails on 0.6.3, the
-latest release. `cycles: 'keep'` no longer meets it (section 11). The
+in `expr`, as tabnas/expr#117, and released in 0.6.4.
+`ts/test/resolve.test.ts` expects the cut in both orders, so it fails
+on an `expr` before that. `cycles: 'keep'` no longer meets it
+(section 11). The
 sweep counts such sites since T3, as `heldAsWritten` in each baseline
 (section 11).
 
@@ -526,6 +526,12 @@ to it.
 Acceptance: the apidef gate fully green with apidef's resolver deleted;
 models byte-identical.
 
+Both items are done. apidef's side is the branch
+`claude/jolly-maxwell-jhjgus` of apidef, open there as
+voxgig/apidef#230 since 21 November 2026 and not merged, as
+Decision 20 has it. [`apidef-swap/`](apidef-swap/README.md) describes
+it, and section 11 has what the gate gave on it.
+
 ### T2: reading, in this repository (M)
 
 Every valid text gives the right tree, and a hostile one gives a code.
@@ -642,12 +648,11 @@ has what it found beside them.
 
 Item 2 is built, but for W4 and W5, which item 3's text also has and
 which are left to it. Its three changes in `expr` (section 7) are
-merged as tabnas/expr#117, and no release of `expr` has them yet. Here
+merged as tabnas/expr#117, and released in `expr` 0.6.4. Here
 the index is `ts/src/site-index.ts`, with `resolve` and the
 `connections` report built on it, and section 11 has what it was held
-to. Until `expr` is released, `resolve` runs in CI and with the
-siblings linked, and the corpus baselines stay as swept on the released
-packages.
+to. With that release `resolve` runs on an install from the registry,
+and the corpus baselines are swept on the released packages.
 
 Item 3 is built, on the defaults of Decisions 29 and 30, and section 11
 has its record. The rules of each dialect are in `ts/src/dialect.ts`,
@@ -776,15 +781,15 @@ Numbered from 16, after the earlier plan's fifteen.
 | 17 | A reference YAML parser for the corpus tool | the npm `yaml` package, declared as this repository's other third-party development dependencies are. **Taken, 12 November 2026** | T0 |
 | 18 | A repeated member name. No document of the corpus has one; one apidef test does | `duplicates: 'merge'` added and used by apidef; last wins stays the default. This replaces the earlier Decision 11, which put the merge in the preset. **Taken, 12 November 2026** | T1 |
 | 19 | The apidef preset | exact: it reads pointers as apidef does and resolves nothing apidef leaves as written. The other course keeps what it resolves today and documents each difference from apidef. **Taken, 12 November 2026: exact** | T1 |
-| 20 | Where apidef's changes live until this package is published | on a pushed branch of apidef, proven by the gate, merged after the release. The other course teaches apidef's continuous integration to check out and build this repository, which its guide allows | T1 |
-| 21 | How YAML plain scalars and comments are read. 3.2 recommends YAML 1.2 and names no schema; 3.0 and 3.1 point at YAML's JSON schema for tags | `reading: 'spec'`: comments are `#` alone, numbers and words follow the core schema; an option now, the default when porting starts; merge keys stay | T2 |
-| 22 | Integers past 2^53 | the tree unchanged and a `lossy` report with the source text; no BigInt in the tree | T2 |
-| 23 | YAML aliases | copies, as today, since apidef writes on the nodes; a budget of the larger of 1 MB and ten times the input, as apidef has it, settable by the caller, checked on the text in this package | T2 |
-| 24 | A lone surrogate read as U+FFFD | a function here, `wellFormed(tree)`, which apidef calls; raw mode itself rewrites nothing | T2 |
-| 25 | Leniency: a trailing empty YAML document, a byte-order mark under `strict`, a 3.0 component name outside the pattern, a version this package does not know read as the latest, the specification's text over its schema where they differ | accept each, and report where a report exists | T2, T3 |
-| 26 | Which changes to ask of `@tabnas/yaml`, `@tabnas/expr` and the engine, and in what order. Those repositories' own rules govern how each lands | the rows of section 7, in that order, each its own instruction | T2b, T3 |
-| 27 | A pointer that passes through a reference | lenient: the document first, then through the reference, reported in the row; `strict` raises it. E8 recommended the strict reading. E12 counted: no reference of the corpus needs the lenient step, so the two cost the same there, and six references pass a site at all, each landing on an empty stub beside the `$ref` (section 11) | T3 |
-| 28 | A target the object model does not type | the rounds of section 3; a conflict reported. E12 ran them: they end, with one answer however the members are ordered, but for two references of one round that give one target different types, which the order of the document decides. Taking the sites of a round in the order of their pointers decides it one way (section 11) | T3 |
+| 20 | Where apidef's changes live until this package is published | on a pushed branch of apidef, proven by the gate, merged after the release. The other course teaches apidef's continuous integration to check out and build this repository, which its guide allows. **Taken, 20 November 2026: a pushed branch of apidef** | T1 |
+| 21 | How YAML plain scalars and comments are read. 3.2 recommends YAML 1.2 and names no schema; 3.0 and 3.1 point at YAML's JSON schema for tags | `reading: 'spec'`: comments are `#` alone, numbers and words follow the core schema; an option now, the default when porting starts; merge keys stay. **Taken, 20 November 2026** | T2 |
+| 22 | Integers past 2^53 | the tree unchanged and a `lossy` report with the source text; no BigInt in the tree. **Taken, 20 November 2026** | T2 |
+| 23 | YAML aliases | copies, as today, since apidef writes on the nodes; a budget of the larger of 1 MB and ten times the input, as apidef has it, settable by the caller, checked on the text in this package. **Taken, 20 November 2026** | T2 |
+| 24 | A lone surrogate read as U+FFFD | a function here, `wellFormed(tree)`, which apidef calls; raw mode itself rewrites nothing. **Taken, 20 November 2026** | T2 |
+| 25 | Leniency: a trailing empty YAML document, a byte-order mark under `strict`, a 3.0 component name outside the pattern, a version this package does not know read as the latest, the specification's text over its schema where they differ | accept each, and report where a report exists. **Taken, 20 November 2026** | T2, T3 |
+| 26 | Which changes to ask of `@tabnas/yaml`, `@tabnas/expr` and the engine, and in what order. Those repositories' own rules govern how each lands | the rows of section 7, in that order, each its own instruction. **Taken, 20 November 2026** | T2b, T3 |
+| 27 | A pointer that passes through a reference | lenient: the document first, then through the reference, reported in the row; `strict` raises it. E8 recommended the strict reading. E12 counted: no reference of the corpus needs the lenient step, so the two cost the same there, and six references pass a site at all, each landing on an empty stub beside the `$ref` (section 11). **Taken, 20 November 2026: lenient** | T3 |
+| 28 | A target the object model does not type | the rounds of section 3; a conflict reported. E12 ran them: they end, with one answer however the members are ordered, but for two references of one round that give one target different types, which the order of the document decides. Taking the sites of a round in the order of their pointers decides it one way (section 11). **Taken, 20 November 2026: the rounds, with a conflict reported and the reference resolved all the same** | T3 |
 | 29 | Schema dialects. This replaces the earlier Decision 13 | draft-04, 06, 07 and 2019-09 read; an unknown dialect read as 2020-12 and reported | T3 |
 | 30 | The texts the object model follows | 3.1.2 and 3.2.1, the latest published, with the vendored schemas refreshed to match | T3 |
 | 31 | Loaders | a confined file loader and an allow-listed HTTP loader, both opt-in; nothing loads by default | T4 |
@@ -798,7 +803,7 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 
 | Repository | Change | Needed by | Size |
 |---|---|---|---|
-| expr | fold a location as written, not through the sites above it. Prototyped in E12 as `site.written`, 11 lines, with `expr`'s suite unchanged. Merged, as tabnas/expr#117, and not yet released | T3 | S |
+| expr | fold a location as written, not through the sites above it. Prototyped in E12 as `site.written`, 11 lines, with `expr`'s suite unchanged. Merged, as tabnas/expr#117, and released in 0.6.4 | T3 | S |
 | expr | a step budget, so that a caller can bound or cancel a walk. Merged, in tabnas/expr#117, as the option `budget`: past `steps` the fold fails with `fold_budget`, and `onCheck`, called every `checkEveryN` steps, cancels it with `fold_cancel` | T3 | S |
 | expr | W10: a result folded while a site it needs is still being folded is not final. The plan had the fold report a cycle to that site and fold the container again once the site is settled. Merged, in tabnas/expr#117, without the second fold: the site that asks for such a container is told it has met a cycle before the container is started, so nothing is folded twice and each site's resolver is asked once (section 11) | T3; 23 documents | S to M |
 | yaml | an option for the core schema's words | T2b; 166 documents | S to M |
@@ -809,7 +814,7 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 | yaml | W11: a token's row and column, counted as its offset is | T2b; every error's place | S |
 | yaml | W12: a plain scalar that starts as a number and runs on to the next line | T2b | S |
 | yaml, parser | memory per byte of YAML. Measured: the lever is this package's own setting, Decision 34, and nothing is asked of either repository. The bound's cost in time is the engine's to lower, if it is wanted | T2b | S here, after Decision 34 |
-| apidef | the change of T1, which grows as T2 and T5 land. Until Decision 20 is taken it is the three diffs of `docs/design/apidef-swap/` | G2 | M |
+| apidef | the change of T1, which grows as T2 and T5 land. It is the branch `claude/jolly-maxwell-jhjgus` of apidef, voxgig/apidef#230, as Decision 20 has it, and [`apidef-swap/`](apidef-swap/README.md) describes it | G2 | M |
 | aontu | at the release: pins that let `@tabnas/expr` 0.5.20 reach apidef, or apidef overrides them | T6 | S |
 | admin | at the release: the workflows and the descriptor restamped | T6 | S |
 
@@ -861,6 +866,81 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, once `expr` 0.6.4 was released:
+
+- **`@tabnas/expr` 0.6.4 is released**, on 21 November 2026, with the
+  three changes of tabnas/expr#117: a location folded as written, the
+  step budget, and W10's repair. T3's items 2 to 5 call them, so until
+  that release `resolve` ran against `expr`'s `main` alone, linked here
+  or cloned in CI. An install from the registry threw the `TypeError`
+  of `checkFold`, except under `refs: 'pointer'`, which the preset
+  sets. It now runs there, and that error, which an earlier `expr`
+  still gets, names the version to install.
+- **T3 is accepted on the released packages.** Its acceptance was run
+  again on a clean install from the registry: `@tabnas/expr` 0.6.4,
+  yaml 0.5.34, parser 0.12.21, jsonic 0.7.12 and json 0.5.20, where the
+  earlier records had `expr`'s `main` linked, yaml 0.5.33 and parser
+  0.12.20.
+
+  | Run | Result |
+  |---|---|
+  | The suite | 888 tests and the 11 of the pages' style, none failing |
+  | Sweep, base reading | every one of the 8,986 documents gives the record the linked build gave, time and memory apart. No ledger row moves |
+  | Sweep, `reading: 'spec'` | the same: every document gives the linked build's record, and no ledger row moves |
+  | A reference not found whose target exists | none. The four reported not found are the ones in a test document of the specification's own |
+  | A site reported resolved that holds its map as written | none, under either reading |
+  | apidef gate | passes on apidef's branch against its `main`: 2,588 of its 2,589 tests with one skipped, and all 107 definitions byte-identical |
+  | Preset comparison | no difference in 15,177 documents, nor in the nine over 10 MB, which are run by themselves |
+  | The Stripe and GitHub censuses of `AGENTS.md` | unchanged, in the object model's counts and in what `resolve` reports |
+
+  The target check of item 5's record was not made again. It ran on
+  this build, and neither the build nor what the sweep records of each
+  document has moved since.
+- **The corpus baselines are rewritten from those sweeps**, which is
+  what item 2's record left for this release. They were last written
+  as item 2 was begun, on the packages then released, since a baseline
+  names its dependencies by version and no released `expr` gave the
+  later figures. Both now name `expr` 0.6.4, yaml 0.5.34 and parser
+  0.12.21. Under the base reading the ten figures of item 2 move by
+  the amounts its record gives, the 180 sites held as written among
+  them, which fall to none. The count of implicit mappings is new:
+  8,232, none of them not found. Under `reading: 'spec'` the same ten
+  move by the same amounts, and the implicit mappings are 8,241.
+  Neither ledger changes: 235 rows under the base reading and 5 under
+  the other.
+- **The newer yaml and parser change nothing the sweep measures.** The
+  linked build's sweeps had yaml 0.5.33 and parser 0.12.20, and every
+  record of theirs is the record of these.
+- **The maintainer took Decisions 20 to 28** on 20 November 2026, each
+  as section 6 had it: 21 to 26 as they stood, 27 as the lenient
+  reading with `strict` to raise, and 28 as the rounds with a conflict
+  reported and the reference resolved all the same. Nothing built moves
+  for them, since each was built on its default. Decisions 29 to 34 are
+  open.
+- **apidef's side is a branch of apidef**, which is Decision 20:
+  `claude/jolly-maxwell-jhjgus`, open as voxgig/apidef#230 and not
+  merged. Its first three commits are the three diffs this repository
+  kept in `docs/design/apidef-swap/`, which applied to apidef 3b24341
+  give those commits' source to the byte. The two after them merge
+  apidef's `main`, the second at 00778c4, its release 8.33.1. The
+  diffs are gone from here, and that folder's page describes the
+  branch. The gate now compares the branch with the commit of apidef's
+  `main` it last merged, where it compared a patched worktree with its
+  own commit.
+  apidef's `main` has grown since: its suite is 2,589 tests where it
+  was 2,478, and the gate compares 107 definitions where it compared
+  57, which are apidef's 93, this repository's two and the twelve of
+  G2.
+- **apidef's own build cannot pass on that branch until this package is
+  published.** Its workflow installs published packages, and the branch
+  imports one that is not. Its comment gate and its dependency gate
+  pass there. So the pull request stays open, with that one failure,
+  until the release of T6.
+- **The peer range still admits an earlier `expr`.** `resolve` needs
+  0.6.4 and the manifest says `>=0`, so an install can pair this
+  package with an `expr` on which `resolve` throws. The floor is
+  Decision 33, which is not taken.
 
 **Since acceptance**, as T3's fifth item was built:
 
