@@ -10,7 +10,7 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert'
 
-import { parse, resolve, ResolveError } from '../dist/openapi'
+import { parse, resolve, resolveAll, ResolveError } from '../dist/openapi'
 
 const HERE = 'https://example.com/api/openapi.yaml'
 const at = (name: string) => new URL(name, HERE).href
@@ -195,5 +195,108 @@ describe('several documents', () => {
       () => resolve(doc, { ...options, checkEveryN: 100, onCheck: () => 3 > ++checks }),
       (e: any) => e instanceof ResolveError && 'openapi_cancel' === e.code,
     )
+  })
+})
+
+describe('several documents, loaded', () => {
+  // A loader over a table, which says what it was asked for.
+  const loader = (table: Record<string, unknown>) => {
+    const asked: string[] = []
+    return { asked, load: (uri: string) => (asked.push(uri), table[uri]) }
+  }
+  const chain = {
+    [at('a.yaml')]: { A: { type: 'object', properties: { b: { $ref: 'b.yaml#/B' } } } },
+    [at('b.yaml')]: 'B:\n  type: object\n  properties:\n    c: {$ref: "sub/c.yaml"}\n    again: {$ref: "a.yaml#/A"}\n',
+    [at('sub/c.yaml')]: new TextEncoder().encode('{"type":"array","items":{"$ref":"../d.yaml#/D"}}'),
+    [at('d.yaml')]: { D: { type: 'string' } },
+    [at('unused.yaml')]: { never: 'asked for' },
+  }
+
+  test('the documents a description names are loaded in rounds, each once', async () => {
+    const { asked, load } = loader(chain)
+    const r = await resolveAll(entry({ A: { $ref: 'a.yaml#/A' }, Too: { $ref: 'a.yaml#/A' } }), { retrievalUri: HERE, load })
+    assert.deepEqual(asked, [at('a.yaml'), at('b.yaml'), at('sub/c.yaml'), at('d.yaml')])
+    assert.deepEqual(r.documents, asked)
+    assert.deepEqual(plain(r.tree.components.schemas.A), {
+      type: 'object',
+      properties: {
+        b: { type: 'object', properties: { c: { type: 'array', items: { type: 'string' } }, again: { $ref: 'a.yaml#/A' } } },
+      },
+    })
+    assert.deepEqual(r.unresolved, [])
+    assert.deepEqual(r.cuts.map((c) => [c.doc, c.at, c.targetDoc, c.target]), [[at('b.yaml'), '/B/properties/again', at('a.yaml'), '/A']])
+    assert.equal(r.tree.components.schemas.A, r.tree.components.schemas.Too)
+  })
+
+  test('a document the loader does not have stays another document, and is asked for once', async () => {
+    const { asked, load } = loader({ [at('a.yaml')]: { A: { $ref: 'gone.yaml#/X' }, B: { $ref: 'gone.yaml#/Y' } } })
+    const doc = entry({ A: { $ref: 'a.yaml#/A' }, B: { $ref: 'a.yaml#/B' }, C: { $ref: 'https://elsewhere.example/c.yaml' } })
+    const r = await resolveAll(doc, { retrievalUri: HERE, load })
+    assert.deepEqual(asked, [at('a.yaml'), 'https://elsewhere.example/c.yaml', at('gone.yaml')])
+    assert.deepEqual(r.documents, [at('a.yaml')])
+    // A reference to a reference left as written is left as written, for
+    // the same reason, in whichever document each is.
+    assert.deepEqual(
+      r.unresolved.map((u) => [u.doc ?? '', u.at, u.why]),
+      [
+        ['', '/components/schemas/A', 'external'],
+        [at('a.yaml'), '/A', 'external'],
+        ['', '/components/schemas/B', 'external'],
+        [at('a.yaml'), '/B', 'external'],
+        ['', '/components/schemas/C', 'external'],
+      ],
+    )
+    // Under `strict` the rounds still run, and what is left is refused.
+    await assert.rejects(
+      () => resolveAll(doc, { retrievalUri: HERE, load, strict: true }),
+      (e: any) => e instanceof ResolveError && 'openapi_unresolved' === e.code,
+    )
+  })
+
+  test('a document given is not asked for, and a loader may be asynchronous', async () => {
+    const asked: string[] = []
+    const load = async (uri: string) => {
+      asked.push(uri)
+      await new Promise((done) => setTimeout(done, 1))
+      return chain[uri]
+    }
+    const r = await resolveAll(entry({ A: { $ref: 'a.yaml#/A' } }), {
+      retrievalUri: HERE,
+      load,
+      documents: { 'a.yaml': chain[at('a.yaml')], 'b.yaml': chain[at('b.yaml')] },
+    })
+    assert.deepEqual(asked, [at('sub/c.yaml'), at('d.yaml')])
+    assert.deepEqual(r.documents, [at('a.yaml'), at('b.yaml'), at('sub/c.yaml'), at('d.yaml')])
+    assert.deepEqual(r.unresolved, [])
+  })
+
+  test('a document named by a connection alone is loaded too', async () => {
+    const { asked, load } = loader({
+      [at('ops.yaml')]: { openapi: '3.1.0', info: { title: 'ops', version: '1' }, paths: { '/pets': { get: { operationId: 'list', responses: {} } } } },
+    })
+    const doc = {
+      openapi: '3.1.0',
+      info: { title: 'entry', version: '1' },
+      paths: {},
+      components: { links: { Next: { operationRef: 'ops.yaml#/paths/~1pets/get' } } },
+    }
+    const r = await resolveAll(doc, { retrievalUri: HERE, load })
+    assert.deepEqual(asked, [at('ops.yaml')])
+    const row = r.connections.find((c) => 'operationRef' === c.kind)!
+    assert.deepEqual([row.found, row.target, row.targetDoc, row.type], [true, '/paths/~1pets/get', at('ops.yaml'), 'operation'])
+  })
+
+  test('the documents loaded are held to a count', async () => {
+    const many: Record<string, unknown> = {}
+    for (let i = 0; i < 12; i++) many[at(`n${i}.yaml`)] = { N: { $ref: `n${i + 1}.yaml#/N` } }
+    const doc = entry({ N: { $ref: 'n0.yaml#/N' } })
+    const all = await resolveAll(doc, { retrievalUri: HERE, load: loader(many).load })
+    assert.equal(all.documents.length, 12)
+    await assert.rejects(
+      () => resolveAll(doc, { retrievalUri: HERE, load: loader(many).load, maxDocuments: 5 }),
+      (e: any) => e instanceof ResolveError && 'openapi_work' === e.code && at('n5.yaml') === e.at,
+    )
+    await assert.rejects(() => resolveAll(doc, { retrievalUri: HERE } as any), TypeError)
+    await assert.rejects(() => resolveAll(doc, { retrievalUri: HERE, load: loader(many).load, maxDocuments: 0 }), TypeError)
   })
 })

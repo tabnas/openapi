@@ -932,12 +932,14 @@ const VERSION = '0.1.0'
 
 export { OpenApi, aliasedSize, make, parse, version, wellFormed, VERSION }
 
-export { resolve, ResolveError } from './resolve'
+export { resolve, resolveAll, ResolveError } from './resolve'
 export type {
   Cut,
   Cycles,
   Kind,
+  Loader,
   Provenance,
+  ResolveAllOptions,
   ResolveOptions,
   ResolveResult,
   Sharing,

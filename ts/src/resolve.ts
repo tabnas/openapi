@@ -207,6 +207,10 @@ type Cut = { at: string; ref: string; target: string; doc?: string; targetDoc?: 
 type ResolveResult = {
   tree: any
   version: '2.0' | '3.0' | '3.1' | '3.2' | 'unknown'
+  // The other documents of the description that were read, each by the
+  // URI it was retrieved from, in its normal form: those given in
+  // `documents`, and under `resolveAll` those that were loaded.
+  documents: string[]
   unresolved: Unresolved[]
   provenance: Provenance[]
   cuts: Cut[]
@@ -561,6 +565,14 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     refuse,
     tick: counting ? tick : undefined,
   })
+  // For `resolveAll`: the documents this set names and does not have. The
+  // names and URIs of the `connections` report are located too, since a
+  // document may be named by one of those alone.
+  if (true === (options as any)[WANTED]) {
+    connectionsOf(raw, mv, index, hasIds(mv), counting ? tick : undefined)
+    return { wanted: [...index.wanted] } as any
+  }
+
   const home = index.docs[0]
   const byKey = new Map<string, DocFacts>()
   for (const doc of index.docs) byKey.set(doc.key, doc)
@@ -1160,6 +1172,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   return {
     tree,
     version: detected,
+    documents: others.map((doc) => doc.key),
     unresolved: bySeq(unresolvedRows),
     provenance,
     cuts: bySeq(cutRows),
@@ -1169,6 +1182,63 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     urls: named.urls,
   }
 
+}
+
+// What `resolveAll` takes beside the options of `resolve`.
+type Loader = (uri: string) => unknown | Promise<unknown>
+
+type ResolveAllOptions = ResolveOptions & {
+  // Reads a document by its URI, which is absolute and in its normal
+  // form: its tree, its text or its bytes, or `undefined` when it has
+  // none, which leaves the references to it as written. It is the only
+  // thing here that reaches outside the process, and what it may reach is
+  // its own to bound: see the loaders of `@tabnas/openapi/loaders`.
+  load: Loader
+  // The most documents that may be loaded. Default 10,000. Past it
+  // `resolveAll` raises `openapi_work`.
+  maxDocuments?: number
+}
+
+// An option of `resolve` that only `resolveAll` gives: stop once the
+// index is built, and say which documents it names and does not have.
+const WANTED = Symbol('wanted')
+
+// Resolve a description that is several documents, loading each document
+// it names. The documents are found in rounds: the set so far is indexed,
+// the documents it names and does not have are loaded, and so on until a
+// round names nothing new. A document is asked for once. The description
+// is then resolved as `resolve` resolves it, given those documents.
+async function resolveAll(raw: any, options: ResolveAllOptions): Promise<ResolveResult> {
+  const { load, maxDocuments = 10_000, ...rest } = options
+  if ('function' !== typeof load) throw new TypeError('resolveAll: load must be a function, not ' + quoted(load))
+  if (!((Number.isInteger(maxDocuments) && 0 < maxDocuments) || Infinity === maxDocuments)) {
+    throw new TypeError('resolveAll: maxDocuments must be a whole number above 0, not ' + quoted(maxDocuments))
+  }
+  // Each document is read once, here, so that a round does not read the
+  // texts of the rounds before it again.
+  const documents: Record<string, unknown> = {}
+  for (const [name, doc] of Object.entries(rest.documents ?? {})) {
+    documents[name] = 'string' === typeof doc || doc instanceof Uint8Array ? parse(doc, rest.parse) : doc
+  }
+  const asked = new Set<string>()
+  let loaded = 0
+  for (;;) {
+    // A round is never strict: a document it lacks is what it is for.
+    const found = resolve(raw, { ...rest, documents, strict: false, [WANTED]: true } as any) as unknown as { wanted: string[] }
+    const fresh = found.wanted.filter((uri) => !asked.has(uri))
+    if (0 === fresh.length) break
+    for (const uri of fresh) {
+      asked.add(uri)
+      if (maxDocuments <= loaded) {
+        throw new ResolveError('openapi_work', `resolveAll: more than ${maxDocuments} documents to load, at ${quoted(uri)}`, uri)
+      }
+      const doc = await load(uri)
+      if (undefined === doc) continue
+      loaded++
+      documents[uri] = 'string' === typeof doc || doc instanceof Uint8Array ? parse(doc, rest.parse) : doc
+    }
+  }
+  return resolve(raw, { ...rest, documents })
 }
 
 // A tree with nothing shared: every map and list copied, so a value two
@@ -1204,6 +1274,19 @@ function unshare(root: any, budget?: number): any {
   return copy(root)
 }
 
-export { resolve, ResolveError }
+export { resolve, resolveAll, ResolveError }
 
-export type { Cut, Cycles, Kind, Provenance, ResolveOptions, ResolveResult, Sharing, Status, Unresolved, Why }
+export type {
+  Cut,
+  Cycles,
+  Kind,
+  Loader,
+  Provenance,
+  ResolveAllOptions,
+  ResolveOptions,
+  ResolveResult,
+  Sharing,
+  Status,
+  Unresolved,
+  Why,
+}

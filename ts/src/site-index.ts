@@ -244,6 +244,9 @@ type SiteIndex = {
   // description first.
   root: Loc
   docs: DocFacts[]
+  // The documents that something located here names and the set does not
+  // have, by URI.
+  wanted: Set<string>
   // The URI the document was retrieved from, which is not its own where
   // it has `$self`.
   retrieved: string
@@ -400,6 +403,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
   // with one URI the first given has it.
   const docs: DocFacts[] = []
   const docByUri = new Map<string, DocFacts>()
+  const wanted = new Set<string>()
   const addDoc = (d: DocInput) => {
     const doc = { ...d } as DocFacts
     doc.root = new Loc(undefined, '', d.raw, 0, doc)
@@ -725,6 +729,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     } else {
       const whole = docByUri.get(doc)
       if (undefined === whole) {
+        wanted.add(doc)
         return undefined === fragment ? { why: 'external', uri: doc } : { why: 'external', uri: doc, fragment }
       }
       start = []
@@ -1015,6 +1020,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
   return {
     root,
     docs,
+    wanted,
     retrieved: cfg.retrieved,
     sites,
     dataSlots,
