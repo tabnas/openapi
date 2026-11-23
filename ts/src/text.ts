@@ -152,14 +152,16 @@ function stepsOf(bytes: number): number {
 // of a description other than the description itself. Such a document
 // may be anything at its root, a schema that is `true` or a list of
 // parameters, and declares no version, so `parse` checks neither. Its
-// value is a map `parse` and `resolve` pass word through: `steps` is the
-// most rule passes this text may take, where that is fewer than its own
-// limit gives it, and `parse` leaves in it the passes the text took
-// (`taken`) and what its aliases copied out (`copied`). `resolve` holds
-// the documents of one description to one limit with them: see
-// `partReader` there.
+// value is a map `parse` and `resolve` pass word through. `name` is the
+// document's URI, which an error then gives as the file it is in: a
+// description may be thousands of files, and an error that names none
+// of them is no help. `steps` is the most rule passes this text may
+// take, where that is fewer than its own limit gives it, and `parse`
+// leaves in it the passes the text took (`taken`) and what its aliases
+// copied out (`copied`). `resolve` holds the documents of one
+// description to one limit with them: see `partReader` there.
 const PART: unique symbol = Symbol('part')
-type Part = { steps?: number; taken?: number; copied?: number }
+type Part = { name?: string; steps?: number; taken?: number; copied?: number }
 
 export { decode, hasContent, utf8Length, stepsOf, HISTORY_OVER, MAX_BYTES, PART }
 

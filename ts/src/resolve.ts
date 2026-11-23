@@ -59,11 +59,12 @@ import type { Path } from './uri'
 //   they share the floor between them. A caller's own `aliasBudget` is
 //   each text's, as given.
 //
-// A tree is not counted: its size was whoever built it to bound.
+// A tree is not counted: its size was whoever built it to bound. An
+// error `parse` raises for a text names the document, as its file.
 function partReader(given: ParseOptions | undefined): (doc: string | Uint8Array, uri: string) => any {
   const limit = 'number' === typeof given?.maxBytes ? given.maxBytes : null == given?.instance ? MAX_BYTES : HISTORY_OVER
   // A limit that is no number of bytes is `parse`'s to refuse.
-  if (!(0 <= limit)) return (doc) => parse(doc, { ...given, [PART]: {} } as ParseOptions)
+  if (!(0 <= limit)) return (doc, uri) => parse(doc, { ...given, [PART]: { name: uri } } as ParseOptions)
   const all = stepsOf(limit)
   const pool = { bytes: limit, steps: all, spare: ALIAS_FLOOR }
   const shared = undefined === given?.aliasBudget
@@ -77,7 +78,7 @@ function partReader(given: ParseOptions | undefined): (doc: string | Uint8Array,
       )
     }
     pool.bytes -= size
-    const part: Part = { steps: pool.steps }
+    const part: Part = { name: uri, steps: pool.steps }
     const options: any = { ...given, [PART]: part }
     if (shared) options.aliasBudget = ALIAS_FACTOR * size + pool.spare
     try {

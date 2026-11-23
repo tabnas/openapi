@@ -1011,7 +1011,10 @@ what the code does.
   or by a loader is now read as a part: any root, and no version. A
   name in `documents` with no document is a `TypeError`, where it was
   read as a document that is not there, and a loader that answers
-  `null` has no document.
+  `null` has no document. An error `parse` raises for such a text now
+  names the document, as the file the engine shows: DigitalOcean's
+  description is 3,622 files, and an error with no file in it said
+  which line and not which file.
 - **The HTTP loader's connections are its own, and it tries every
   address it judged.** It handed Node the first judged address alone,
   so a host with an IPv6 address first was out of reach from a machine

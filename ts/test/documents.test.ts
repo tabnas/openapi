@@ -95,6 +95,24 @@ describe('several documents', () => {
       () => resolve(doc, { retrievalUri: HERE, documents: { 'never.json': 'a: 1\n---\nb: 2\n' } }),
       (e: any) => 'openapi_stream' === e.code,
     )
+    // An error in one of them says which, as the file it is in.
+    const broken = (documents: Record<string, unknown>) => {
+      try {
+        resolve(doc, { retrievalUri: HERE, documents: { ...texts, ...documents } })
+      } catch (e: any) {
+        return e
+      }
+      return undefined
+    }
+    const syntax = broken({ 'list.yaml': '- {type: string}\n- }\n' })
+    assert.equal(syntax.code, 'unexpected')
+    assert.equal(syntax.fileName, at('list.yaml'))
+    assert.ok(String(syntax.message).includes(at('list.yaml') + ':2:'), String(syntax.message))
+    const copied = broken({ 'never.json': 'a: &a [' + 'x,'.repeat(400) + 'x]\nb: [' + '*a,'.repeat(4000) + '*a]\n' })
+    assert.equal(copied.code, 'openapi_alias_budget')
+    assert.equal(copied.fileName, at('never.json'))
+    // The description's own text has no name to give.
+    assert.throws(() => parse('- }\n'), (e: any) => undefined === e.fileName && String(e.message).includes('<no-file>'))
     // `parse` by itself reads a description, and holds it to its root.
     assert.throws(() => parse('false'), (e: any) => 'openapi_root' === e.code)
     assert.throws(() => parse('{"type":"object"}', { strict: true }), (e: any) => 'openapi_version' === e.code)
@@ -513,6 +531,11 @@ describe('several documents, loaded', () => {
     await assert.rejects(
       () => resolveAll(doc, { retrievalUri: HERE, load, parse: { maxBytes: 1200 }, documents: { 'given.yaml': text } }),
       (e: any) => e instanceof ResolveError && 'openapi_size' === e.code,
+    )
+    // A text that does not parse says which document it is.
+    await assert.rejects(
+      () => resolveAll(doc, { retrievalUri: HERE, load: (uri: string) => (uri.endsWith('n1.yaml') ? 'a: }\n' : 'type: string\n') }),
+      (e: any) => 'unexpected' === e.code && at('n1.yaml') === e.fileName,
     )
     // A loader's text may be a schema that is not a map.
     const never = await resolveAll(entry({ Never: { $ref: 'never.json' } }), { retrievalUri: HERE, load: () => 'false' })

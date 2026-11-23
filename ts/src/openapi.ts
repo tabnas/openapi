@@ -107,6 +107,8 @@ type ParseState = {
   // The text is a document of a description other than the description
   // itself, which may be anything at its root and declares no version.
   part: boolean
+  // The URI of such a document, which an error gives as its file.
+  file?: string
   docs: number
   // A refusal decided from the text before the grammar ran. It is raised
   // on the first rule pass, where an error can carry its place.
@@ -693,6 +695,7 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
     reading,
     empty,
     part: undefined !== part,
+    file: part?.name,
     docs: 0,
     placing: PLACING,
     work: { left: kept, steps: kept, limit: maxBytes },
@@ -769,7 +772,7 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
 
   const read = (by: Tabnas): any => {
     try {
-      return by.parse(given, { openapi: state })
+      return by.parse(given, metaOf(state))
     } finally {
       if (ours && RELEASE_OVER < text.length) release(by)
     }
@@ -843,6 +846,13 @@ function whole(piece: string): string {
 // when it ends inside the text's first token.
 const OPENS_ANY = '{}'
 
+// What a parse is handed with its text: the state for the plugin, and
+// for a document that has a name, the name the engine gives an error's
+// file.
+function metaOf(state: ParseState): Record<string, unknown> {
+  return undefined === state.file ? { openapi: state } : { openapi: state, fileName: state.file }
+}
+
 // Raise the refusal `parse` decided from the text. An error needs a
 // token and a context to carry its place, so the opening of the text is
 // parsed, and `check` raises the refusal on its first rule pass.
@@ -851,7 +861,7 @@ function refuseAt(tn: Tabnas, state: ParseState, shown: string): never {
   for (const stand of [shown, OPENS_ANY]) {
     state.refuse = refuse
     try {
-      tn.parse(stand, { openapi: state })
+      tn.parse(stand, metaOf(state))
     } catch (err: any) {
       if (refuse.code === err?.code) throw err
     }

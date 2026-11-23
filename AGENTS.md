@@ -661,7 +661,9 @@ hold, as first built, and `ts/test/documents.test.ts` pins each:
 
 `PART` also says that the text is no description: it may be anything at
 its root, a schema that is `false` or a list a pointer reads into, and
-has no version to check, under `strict` either. Without it `parse`
+has no version to check, under `strict` either. It carries the
+document's URI, which `parse` hands the engine as the file's name, so
+an error in one of thousands of files says which file. Without it `parse`
 refused a schema document that is a Boolean with `openapi_root`. A
 loader that answers `null` has no document, as one that answers
 `undefined` has none. In `documents`, `null` is a document with nothing

@@ -642,9 +642,13 @@ nothing in it.
   that `parse` raises `openapi_alias_budget`. With
   `parse.aliasBudget` given, each text has that budget to itself.
 
-Each error has the URI of the document it stopped at in `at`. A tree
-does not count toward any of the three, and neither does the
+The first two have the URI of the document they stopped at in `at`. A
+tree does not count toward any of the three, and neither does the
 description: whoever built a tree had its size to bound.
+
+An error that `parse` raises for one of these texts says which document
+it is in. The document's URI is the error's `fileName`, and the file in
+the place its message shows, where the description's own text has none.
 
 `resolve` indexes every document it has before it judges any
 reference, so a reference resolves into whichever document holds what
