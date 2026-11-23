@@ -888,7 +888,14 @@ and the installed peers to the floors.
 A floor is the oldest release on which this package's suite passes with
 every other peer at its latest, and the five pass together at their
 floors. `node tools/peer-floors.cjs` measures them again, in a worktree
-of its own, in about ten minutes; `--write` rewrites the record. When
+of its own, in about ten minutes; `--write` rewrites the record. A
+trial runs the suite without `ts/test/peer-floors.test.ts`. That test
+holds the installed peers to the record, so in a trial it would fail
+every release under the last floor measured, whether or not the package
+works with it, and the tool could then never find a floor that had
+moved down, or the first floor of a new peer. While a trial installs,
+builds or runs the suite, the tool says so at least every 20 seconds,
+with the trials so far out of the most its search can take. When
 the package comes to call something a later release of a peer adds, the
 floor moves to that release in the same change: measure, write the
 record, and set the range. Moving a floor to follow the code is the

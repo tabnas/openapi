@@ -9,11 +9,16 @@
 // so that a floor is not moved without a measurement, and it holds the
 // peers that are installed to the floors, so that a floor is not put
 // above what a clean install gives.
+//
+// The tool leaves this file out of the suite it measures with: held to
+// the record, every release under the last floor would fail a trial
+// whether or not the package works with it. The parts of the tool that
+// see to that, and to saying how far a run is, are tested at the end.
 
 import { describe, test } from 'node:test'
 import assert from 'node:assert'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readdirSync, readFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 
 // At runtime this file is loaded from `dist-test/`.
 const TS = join(__dirname, '..')
@@ -81,5 +86,107 @@ describe('peer floors', () => {
         `${name} ${have} is installed, under the floor ${floor} that package.json declares`,
       )
     }
+  })
+})
+
+// The tool's own parts. Requiring it runs nothing.
+type Ran = { status: number | null; stdout: string; stderr: string }
+type Tool = {
+  RECORD_TEST: string
+  trialTests: (names: string[]) => string[]
+  mostTrials: (releases: number) => number
+  during: (what: () => string, cmd: string, args: string[], opts?: object, beatMs?: number, say?: (line: string) => void) => Promise<Ran>
+  failingTests: (out: string, most?: number) => string
+}
+const tool: Tool = require(join(ROOT, 'tools', 'peer-floors.cjs'))
+
+describe('the peer floors tool', () => {
+  test('a trial runs every test of the suite but this one', () => {
+    // This file is the one that holds the peers to the record.
+    assert.equal(basename(__filename), tool.RECORD_TEST)
+    const built = readdirSync(__dirname)
+    const all = built.filter((name) => name.endsWith('.test.js'))
+    const tests = tool.trialTests(built)
+    assert.equal(tests.includes(tool.RECORD_TEST), false)
+    assert.deepEqual(tests, all.filter((name) => tool.RECORD_TEST !== name).sort())
+    assert.ok(20 < tests.length, 'a trial would run next to nothing')
+    assert.deepEqual(tool.trialTests(['b.test.js', 'a.test.js', 'a.test.js.map', 'helper.js', tool.RECORD_TEST]), ['a.test.js', 'b.test.js'])
+  })
+
+  test('the most trials a search over releases takes', () => {
+    // The latest, the first, and a halving of what is between them.
+    const search = (releases: number, floor: number) => {
+      const seen = new Set<number>()
+      const passes = (i: number) => (seen.add(i), floor <= i)
+      if (!passes(releases - 1)) return seen.size
+      let lo = 0
+      let hi = releases - 1
+      if (passes(0)) hi = 0
+      else
+        while (1 < hi - lo) {
+          const mid = (lo + hi) >> 1
+          if (passes(mid)) hi = mid
+          else lo = mid
+        }
+      return seen.size
+    }
+    for (let releases = 1; releases <= 70; releases++) {
+      let worst = 0
+      for (let floor = 0; floor <= releases; floor++) worst = Math.max(worst, search(releases, floor))
+      assert.equal(tool.mostTrials(releases), worst, `${releases} releases`)
+    }
+  })
+
+  test('a failed trial names the tests that failed', () => {
+    const out = [
+      '▶ the file loader',
+      '  ✖ a link is followed, and judged by where it leads (4.584653ms)',
+      '✖ the file loader (136.773568ms)',
+      'ℹ tests 958',
+      'ℹ pass 955',
+      'ℹ fail 3',
+      '',
+      '✖ failing tests:',
+      '',
+      'test at dist-test/loaders.test.js:105:3',
+      '✖ a link is followed, and judged by where it leads (4.584653ms)',
+      '  Error [ResolveError]: load: "file:///tmp/x" is outside the directory this loader reads',
+      '',
+      'test at dist-test/history.test.js:1:1',
+      '✖ dist-test/history.test.js (97.772908ms)',
+      '',
+      'test at dist-test/hostile.test.js:40:3',
+      '✖ at the default limit, a text past the steps of a parser that keeps every rule is read by the other (22160.018691ms)',
+    ].join('\n')
+    assert.equal(
+      tool.failingTests(out),
+      'a link is followed, and judged by where it leads; dist-test/history.test.js; and 1 more',
+    )
+    assert.equal(tool.failingTests(out, 3).split('; ')[2], 'at the default limit, a text past the steps of a parser t...')
+    // A suite that was stopped has no list to read.
+    assert.equal(tool.failingTests('ℹ tests 3\nℹ pass 3\n'), '')
+  })
+
+  test('a command says that it is running while it runs, and one that does not end is stopped', async () => {
+    const lines: string[] = []
+    const waited = await tool.during(() => 'trial 1 of at most 4: the suite', process.execPath, ['-e', 'setTimeout(() => console.log("done"), 400)'], {}, 50, (line) =>
+      lines.push(line),
+    )
+    assert.equal(waited.status, 0)
+    assert.equal(waited.stdout, 'done\n')
+    assert.ok(3 <= lines.length, `${lines.length} lines in 400 ms at one each 50 ms`)
+    assert.match(lines[0], /^ {3}trial 1 of at most 4: the suite, \d+s$/)
+    // Nothing more is said once it has ended.
+    const said = lines.length
+    await new Promise((done) => setTimeout(done, 120))
+    assert.equal(lines.length, said)
+
+    const failed = await tool.during(() => '', process.execPath, ['-e', 'console.error("no"); process.exit(3)'], {}, 1000, () => {})
+    assert.equal(failed.status, 3)
+    assert.equal(failed.stderr, 'no\n')
+    const stopped = await tool.during(() => '', process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { timeout: 150 }, 1000, () => {})
+    assert.equal(stopped.status, null)
+    const absent = await tool.during(() => '', 'no-such-command-as-this', [], {}, 1000, () => {})
+    assert.equal(absent.status, null)
   })
 })
