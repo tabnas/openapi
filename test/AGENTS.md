@@ -101,14 +101,24 @@ section 5 of
 | a parse only the TypeScript package gives: a new option, a new code, a default no `spec/` row pins | `pending/`, in the format of `spec/` | `ts/test/pending.test.ts` |
 | what `resolve` gives | `resolve/` | `ts/test/resolve-spec.test.ts` |
 | the object model | `model/` | `ts/test/model.test.ts` |
-| a description in several files | `docs/<case>/` | a TypeScript runner |
+| a description in several files | `docs/<case>/` | `ts/test/documents-spec.test.ts` |
 
-`docs/` is not on disk yet. It arrives with the first case of several
-files and brings its runner in the same change, as `pending/` did. A
-folder is not made ahead of its contents, because a fixture folder with
-nothing in it fails here, as an empty fixture does. When porting starts,
-a file in `pending/` moves to `spec/` as it is, and every suite runs it
-from then on.
+A case of `docs/` is a folder: the documents as files, and `case.json`.
+That file names the `entry` document and the `retrievalUri` it was
+retrieved from, gives each other document in `documents` by the URI it
+was retrieved from, and says what `resolve` makes of them: the entry's
+resolved `tree`, the `unresolved` and `cuts` rows, and each site in
+`sites` as its document, where it is, its target's document, its
+target and its status, a document being `""` where it is the entry or
+the site's own. `source` says where the case comes from, and `options`,
+when present, is given to `resolve`. Every file of a folder must be one
+the case names. The first five are the examples of OpenAPI 3.2.0's
+Appendix F and Appendix G, written as the specification writes them.
+
+A folder is not made ahead of its contents, because a fixture folder
+with nothing in it fails here, as an empty fixture does. When porting
+starts, a file in `pending/` moves to `spec/` as it is, and every suite
+runs it from then on.
 
 Two things hold until then:
 

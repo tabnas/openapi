@@ -710,6 +710,19 @@ left as written that exists on disk, and DigitalOcean's source does
 under `slots: 'all'`; a reference outside the allow-list is refused
 with `openapi_load`; the walk stops at its budgets.
 
+Built, on the maintainer's word of 23 November 2026, and section 11
+has the record. The index is over a set of documents, `resolve` takes
+them in a table, `resolveAll` loads what a description names through a
+loader the caller gives, the two loaders of Decision 31 are in a
+module of their own, the `connections` report covers every document,
+and the specification's examples are the first cases of `test/docs/`.
+The acceptance holds: the specification's examples resolve; the Azure
+sample, Redocly's starter and DigitalOcean's source under
+`slots: 'all'` resolve from their roots with nothing left as written,
+which `tools/corpus/documents.cjs` measures; a reference outside the
+HTTP loader's list is refused with `openapi_load`; and the walk stops
+at `maxDocuments` and `maxSteps`.
+
 ### T5: beyond references (M each, to the scope of Decision 32)
 
 1. **The operation as the specification reads it.** An opt-in view of
@@ -868,6 +881,101 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T4 was begun:
+
+- **One index, many roots.** The site index was built over one
+  document, and is now built over a set: the description, and each
+  document given with it, by the URI it was retrieved from. A location
+  knows its document, and each document is read by the object model of
+  its own version. The identifiers, the sites, the landings and the
+  typing rounds are those of the set, so a reference is looked for
+  among the identifiers schemas declare, in every document, and then
+  among the documents, each by its own URI and the one it was given
+  under. With one document the index says what it said: the suites
+  that hold it to itself and to `resolve` pass unchanged, and the index
+  carried forward equals the one worked out from nothing across
+  documents as within one.
+- **`expr` needed nothing.** Its fold already folds several documents:
+  a key for the main one, a `load` for the others, a location read in
+  another document, and one stack, one budget and one sharing across
+  them. What `resolve` had to learn was to give each document's own
+  root its own start, since the fold gives every root the one starting
+  bag.
+- **`resolve` takes the documents in a table**, `documents`, as trees,
+  text or bytes, with `parse` for how a text is read. A document whose
+  root declares a version is a description of that version, with a
+  `$self` and a default dialect of its own. A fragment document, with
+  no version, is data of which nothing is known until a reference
+  lands in it, which is section 3's typing by reference carried across
+  documents. It is read by the description's version, and a schema in
+  it by that version's own dialect, as the specification has it for a
+  schema document that names none.
+- **Cycles across documents.** Under `cycles: 'cut'` the fold finds
+  them, on its one stack. Under `cycles: 'keep'` the fold follows no
+  reference, so the tree of another document is never built by the
+  walk: each is folded, whole, the first time a site lands in it, and
+  the finished trees are then walked together.
+- **`resolveAll` is `resolve` in rounds.** The set so far is indexed,
+  the documents it names and does not have are asked of the caller's
+  `load`, and so on until a round names nothing new. A document is
+  asked for once. The URIs the `connections` report locates are found
+  too, since a document may be named by an `operationRef` alone. It
+  loads 10,000 documents at most unless told otherwise.
+- **The file loader** (Decision 31) reads under one directory. It
+  refuses a path out of it as the path is written, before anything is
+  looked for, and again once every link is followed. It is the one
+  module that needs Node: it takes Node's types by a reference of its
+  own, the main module does not load it, and a test holds both.
+- **The specification's examples resolve.** `test/docs/` has the five
+  of OpenAPI 3.2.0's appendices as it writes them: a base URI within
+  the content, from the retrieval URI, relative `$self` and `$id`, the
+  parts of a `multipart/related` archive, and the two documents of the
+  implicit connection example. The archive example's own
+  `#/components/api/schemas/Foo` names nothing in it, and is reported
+  so.
+- **On the corpus, each description resolved from its own file** with
+  `resolveAll` and the file loader, confined to its source. Of the 885
+  Azure descriptions, 585 are in several documents: 1,409 documents
+  are loaded, seven at most for one, and of 118,246 references 117,850
+  resolve, 396 are cut as cycles and none is left as written. The sweep
+  counted 29,155 of those as references into other documents. Redocly's
+  starter resolves from its root, 39 documents and 110 references.
+  DigitalOcean's source does under `slots: 'all'`: 3,622 documents and
+  14,456 references, 14 of them cut and none unresolved, in five
+  seconds. The two descriptions of the OpenAPI Initiative's examples
+  that are in several files resolve too. No reference is left naming a
+  document that is on disk. `tools/corpus/documents.cjs` is that run,
+  in half a minute, and `test/corpus/documents.json` its record.
+- **What a row says.** A site's rows carry `doc` where the site is in
+  another document, `targetDoc` where its target is in another than
+  its own, and `landingDoc` where a pointer read through a reference
+  ended in a third. The result lists the documents read. The members
+  beside a reference follow the rule of the version of the document
+  the reference is in.
+- **The HTTP loader** (Decision 31) reads from the hosts the caller
+  lists, over `https` unless told otherwise. It judges every hop of a
+  redirect as it judges the first URI, five hops at most, so a listed
+  host cannot hand it on. It refuses a host at an address that is not
+  public, an IPv4 address inside an IPv6 one included, and then sends
+  its request to the address it judged, so that the name is not
+  resolved again in between. It has a byte cap, a timeout, a cancel
+  signal and a cache, and headers are given by origin and go to that
+  origin alone. A document's format is read from its content, by
+  `parse`, under the alias budget.
+- **The `connections` report covers every document** (item 5), each
+  walked by the model of its own version. A security scheme, a tag and
+  a mapping value by name are the description's, whichever document
+  uses the name, and an `operationId` is looked for among the
+  operations of every document, as the specification recommends. Its
+  own example of implicit connections pins the first: the requirement
+  in the referenced document names the entry document's scheme.
+- **What T4 leaves as it is.** Under `refs: 'pointer'` no other
+  document is read, and `documents` is refused there. The implicit
+  mapping of a discriminator is worked out for the description's own
+  schemas. The result holds the description's resolved tree, and no
+  tree for another document: a caller who wants one resolves that
+  document as the entry.
 
 **Since acceptance**, on the maintainer's rulings of 21 to 23 November:
 

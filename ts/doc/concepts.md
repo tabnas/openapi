@@ -97,6 +97,27 @@ that visits every reference and works out its target. That pass is
 `resolve`, and it leaves the raw tree alone: the tools that want the
 document as written still have it.
 
+## Several documents
+
+A description may be spread over several documents: a file of schemas,
+a file for each path, a shared file of parameters. The specification
+asks that every document be read whole before any reference is judged,
+because a reference can name a document by an identifier inside it, a
+`$self` or the `$id` of a schema, and not only by where it was found.
+
+So `resolve` takes the other documents as a table, indexes all of them
+with the description, and only then follows references. A document
+that declares a version is a description in its own right, read by
+that version. Any other is read by what refers to it: a file that
+holds one schema is a schema because a schema refers to it.
+
+Reading a document from a disk or a network is a different matter from
+resolving, and a riskier one, since the description says which
+documents to read. `resolve` reads nothing. `resolveAll` reads through
+a loader that the caller gives, and the loaders this package offers
+each state a bound when they are made: the file loader a directory,
+the HTTP loader a list of hosts. None is on unless you make it.
+
 ## What is a reference
 
 Not every map that owns `$ref` is a reference. An example payload can
