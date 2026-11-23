@@ -545,12 +545,16 @@ Three options bound the work:
   so far. When it returns `false`, `resolve` throws a `ResolveError`
   coded `openapi_cancel`. A caller keeps a deadline there.
 
-One bound needs no option. Typing maps by the references that land on
+Two bounds need no option. Typing maps by the references that land on
 them, and reading pointers on through references, can each cost more
 than one pass over the document. Together they are held to sixteen
 times the work of reading the document once, and 100,000 steps besides.
-No description of the 5,168 measured comes near that. Past it,
-`resolve` throws `openapi_work`.
+The walk of routes for the `connections` report has the same allowance
+to itself. It visits a value once for each route that reaches it, so
+callbacks that branch to one shared Path Item double the routes at
+every level. No description of the 5,168 measured comes near either
+bound, and the longest walk of routes takes 7.5% of its allowance. Past
+either, `resolve` throws `openapi_work`.
 
 `resolve` needs `@tabnas/expr` 0.6.4 or later. With an earlier one it
 throws a `TypeError` that says so, except under `refs: 'pointer'` with

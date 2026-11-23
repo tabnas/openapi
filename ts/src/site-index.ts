@@ -231,6 +231,11 @@ type SiteIndex = {
   // The type of what a site's reference lands on, where the model types
   // that and it is not the type the reference expects.
   conflict: (site: SiteFacts) => string | undefined
+  // The most work that anything past one reading of the document may
+  // take: `EXTRA_FACTOR` times that reading, and `EXTRA_FLOOR` besides.
+  // The index holds its own later rounds and pointer steps to it, and the
+  // `connections` report its walk of routes.
+  allowance: number
 }
 
 // Two things the index does can cost more than one pass over the
@@ -898,9 +903,10 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     stateAt,
     dialects,
     conflict: conflictOf,
+    allowance: extraLimit,
   }
 }
 
-export { Loc, buildIndex, hasIds }
+export { Loc, buildIndex, hasIds, EXTRA_FACTOR }
 
 export type { IndexConfig, Kind, Known, Landing, Located, Region, SiteFacts, SiteIndex, Why }

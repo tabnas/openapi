@@ -22,6 +22,7 @@
 
 import { slot, step } from './model'
 import type { ModelVersion } from './model'
+import { EXTRA_FACTOR } from './site-index'
 import type { Landing, Loc, SiteIndex } from './site-index'
 import { ANCHOR, NOTHING, fragmentOf, hierarchical, isMap, normalizeUri, own, pointer, resolveUri, stepInto } from './uri'
 import type { Path } from './uri'
@@ -461,10 +462,19 @@ function connectionsOf(
 // that comes back to a value it is already in ends there.
 //
 // A value that two routes reach is walked once for each, so the walk can
-// be far longer than the document: every visit is a step of the caller's
-// count, where one is kept.
-function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex, tick?: () => void): Connection[] {
+// be far longer than the document: callbacks that branch to a shared Path
+// Item double the routes at every level. Every visit is a step of the
+// caller's count, where one is kept. Kept or not, the visits are held to
+// the index's allowance, and past it the walk ends as `openapi_work`.
+function reuseOf(
+  raw: any,
+  mv: ModelVersion,
+  index: SiteIndex,
+  refuse: (code: string, message: string, at: string) => never,
+  tick?: () => void,
+): Connection[] {
   const routes = new Map<string, string[]>()
+  let visits = 0
   const onPath = new Set<any>()
   type Member = { value: any; loc: Loc | undefined }
   type Frame = { node: any; loc: Loc | undefined; at: string; state: string; leaving: boolean }
@@ -477,6 +487,13 @@ function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex, tick?: () => void
     }
     if (null == f.node || 'object' !== typeof f.node) continue
     if (undefined !== tick) tick()
+    if (index.allowance < ++visits) {
+      refuse(
+        'openapi_work',
+        'walking the routes of this document takes more than ' + EXTRA_FACTOR + ' times the work of reading it once',
+        f.at,
+      )
+    }
     const s = slot(mv, f.state)
     if ('schema' === s.kind) continue
     // What a reference here stands for, and the fields a Path Item has

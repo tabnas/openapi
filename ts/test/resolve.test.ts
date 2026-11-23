@@ -623,6 +623,44 @@ describe('resolve', () => {
     assert.equal(calls, 3)
   })
 
+  test('the routes are held to a bound with no option given', () => {
+    // The same shape, deeper: thirty levels would be two thousand million
+    // routes, in a document of 241 maps. The walk is held to sixteen times
+    // the work of reading the document once and 100,000 visits besides,
+    // and ends there with a code.
+    const doubling = (levels: number) => {
+      const pathItems: Record<string, unknown> = {}
+      for (let i = 0; i < levels; i++) {
+        const next = { $ref: '#/components/pathItems/L' + (i + 1) }
+        pathItems['L' + i] = {
+          post: {
+            operationId: 'op' + i,
+            responses: {},
+            callbacks: i + 1 < levels ? { a: { '{$url}': next }, b: { '{$url}': next } } : {},
+          },
+        }
+      }
+      return parse(JSON.stringify({ openapi: '3.1.0', paths: { '/start': { $ref: '#/components/pathItems/L0' } }, components: { pathItems } }))
+    }
+    const started = Date.now()
+    assert.throws(
+      () => resolve(doubling(30)),
+      (e: any) =>
+        e instanceof ResolveError &&
+        'openapi_work' === e.code &&
+        /walking the routes of this document takes more than 16 times the work of reading it once/.test(e.message) &&
+        e.at.startsWith('/paths/~1start/post/callbacks/'),
+    )
+    assert.ok(Date.now() - started < 5000, 'refused in ' + (Date.now() - started) + ' ms')
+    // The preset reads the same report, and is held to the same bound.
+    assert.throws(() => resolve(doubling(30), { compat: 'apidef' }), (e: any) => 'openapi_work' === e.code)
+    // Twelve levels are under it, as the test above has them, and so are
+    // fourteen: 16,382 routes.
+    const out = resolve(doubling(14))
+    const routes = out.connections.filter((c) => 'operationIdReuse' === c.kind).reduce((n, c) => n + c.routes!.length, 0)
+    assert.equal(routes, 16382)
+  })
+
   test('nesting and references past maxDepth raise openapi_depth, whatever is asked of the tree', () => {
     const S = '#/components/schemas/'
     const chain = (n: number) => {

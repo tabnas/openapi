@@ -456,6 +456,10 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     }
   }
 
+  const refuse = (code: string, message: string, at: string): never => {
+    throw new ResolveError(code, `resolve: ${message}` + ('' === at ? '' : ` at ${quoted(at)}`), at)
+  }
+
   const index = buildIndex(raw, {
     mv,
     entry,
@@ -465,9 +469,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     extensions,
     pointers,
     maxDepth: limit,
-    refuse: (code, message, at) => {
-      throw new ResolveError(code, `resolve: ${message}` + ('' === at ? '' : ` at ${quoted(at)}`), at)
-    },
+    refuse,
     tick: counting ? tick : undefined,
   })
 
@@ -971,7 +973,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   const connections = [
     ...named.rows,
     ...mergeRows.sort((a, b) => a[0] - b[0]).map((r) => r[1]),
-    ...reuseOf(raw, mv, index, counting ? tick : undefined),
+    ...reuseOf(raw, mv, index, refuse, counting ? tick : undefined),
   ]
 
   if ('copy' === o.sharing || 'inline-once' === o.sharing) {

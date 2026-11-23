@@ -67,6 +67,45 @@ For example, “Delivery `rounds`, task `restart`.” Keep repository names,
 URLs, paths, skill names, project and session identifiers, and transcript
 references private. Describe the product work and test results normally.
 
+## Set up the client checkout
+
+Create a relative symlink named `CLAUDE.md` at the repository root pointing to
+`AGENTS.md` and commit the symlink. On first setup, run `ln -s AGENTS.md CLAUDE.md`
+from the root. On repeat setup, verify `readlink CLAUDE.md` prints `AGENTS.md`.
+If a regular file already exists there, preserve its instructions in `AGENTS.md`
+before replacing it. The target belongs to this client checkout.
+
+The link is named `CLAUDE.md` here, as `tabnas/parser` has it. The file
+of that name held this guide's two core principles and nothing else, and
+a `CLAUDE.MD` beside it would differ from it only in case, which the
+file systems of macOS and Windows do not tell apart. The maintainer
+ruled so on 23 November 2026.
+
+## Track the current session
+
+When you start a delivery, rename the active chat to its plain delivery ID if
+the chat host supports renaming. Update the title when you switch deliveries.
+Keep the private session key stable. If renaming is unavailable, continue
+recording the worked tasks in the same session.
+
+In the deliverable description README, link to the session that worked on it.
+Use the host's existing client-accessible conversation URL for a client README.
+Keep private tracking links inside the private delivery report. Record the
+real chat URL privately when available and link every worked task so the
+report can link the session record even when the host supplies no URL.
+Keep links to earlier sessions when another session takes over.
+
+Record a timestamped session history entry of `working` when work starts or
+resumes. Once the final response has been delivered and work is waiting on the
+user, record `awaiting_input`. Keep `working` through progress updates. If
+the host exposes delivery only after the turn ends, use its completion hook
+or record the observed event on resume. Use `unknown` if activity cannot be
+confirmed. Refresh the reports after a transition.
+
+Capture each turn once in the session's private `turns.csv`. Use the capture
+helper to maintain `requests.idx`, which lists only the physical CSV line
+numbers of user requests. Preserve the exact message, role and turn number.
+
 ## Describe the goal
 
 For every private node you create or update, keep both fields short and to the
@@ -476,6 +515,16 @@ the document, a reference on the way standing for its landing. None of
 it reads the resolved tree, so it does not depend on the shape asked
 for.
 
+**The route walk is bounded with no option given.** A value that two
+routes reach is walked once for each, so callbacks that branch to a
+shared Path Item double the routes at every level. `reuseOf` holds its
+visits to `index.allowance`, the bound the index keeps for its own
+later rounds: sixteen times the work of reading the document once, and
+100,000 besides. Past it `resolve` raises `openapi_work`. Of the
+corpus's 5,168 descriptions the longest walk takes 7.5% of its
+allowance, and none takes more than 2.2 times the first reading. The
+maintainer ruled the bound in on 22 November 2026.
+
 The same walk gives two more things. A schema with a discriminator has
 its **implicit mapping** worked out after the walk, by `implied`: the
 schema components it lists by reference in `oneOf` and `anyOf`, and the
@@ -606,7 +655,7 @@ keeps cycles.
 | [`test/corpus/`](test/corpus/) | The corpus sweep's record over real documents: `ledger.tsv`, one row per way a document fails, and `baseline.json`, the headline figures, both written by the sweep and never by hand; `ledger-spec.tsv` and `baseline-spec.json`, the same under `reading: 'spec'`; and `accepted.tsv`, written by hand, the ledger rows that are not this package's defect, each with its reason. |
 | [`docs/design/`](docs/design/) | The design notes, the plan, the prototypes, and [`apidef-swap/`](docs/design/apidef-swap/README.md): what apidef's side of T1 and T2 changes, and where it lives. Working documents, outside the prose gate. |
 | [`ts/doc/`](ts/doc/), [`go/doc/`](go/doc/) | Per-runtime Diátaxis docs: `tutorial.md`, `guide.md`, `reference.md`, `concepts.md`. Gated, with the READMEs, by [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). |
-| [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions; [`corpus/`](tools/corpus/README.md), the corpus sweep; `apidef-gate.cjs`, the apidef gate, with its helpers in `apidef-gate/`; `apidef-preset.cjs`, the preset comparison, with its helpers in `apidef-preset/`. The last three are gates run by hand: see "Verify your work". |
+| [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions; [`corpus/`](tools/corpus/README.md), the corpus sweep; `apidef-gate.cjs`, the apidef gate, with its helpers in `apidef-gate/`; `apidef-preset.cjs`, the preset comparison, with its helpers in `apidef-preset/`. Those three are gates run by hand: see "Verify your work". `peer-floors.cjs` measures the floor of each peer range, and `peer-floors.json` is its record: see "The tabnas dependencies". |
 | [`model/`](model/) | The object model's inputs (the vendored OAI schemas, the applicator lists, the overlay) and the generated `object-model.json`. |
 | [`ci/`](ci/) | `ci/rust/run.sh`, the Rust gate; see [`ci/README.md`](ci/README.md). |
 | [`tabnas.plugin.json`](tabnas.plugin.json) | The plugin descriptor. **Generated by admin `make ax-descriptor`; never hand-edit it.** It still describes the ZON template until admin regenerates it. |
@@ -618,8 +667,8 @@ on the Go proxy, `tabnas-*` on crates.io). No manifest names a `file:`
 path, a `replace` or a `go.work`.
 
 - **TypeScript.** `@tabnas/parser`, `@tabnas/jsonic`, `@tabnas/yaml` and
-  `@tabnas/json` are `peerDependencies` (`">=0"`), each mirrored as a
-  `"*"` devDependency. `@tabnas/debug`, `@tabnas/railroad` and
+  `@tabnas/json` are `peerDependencies`, each with a floor and no
+  ceiling (below), and each mirrored as a `"*"` devDependency. `@tabnas/debug`, `@tabnas/railroad` and
   `@tabnas/support` are dev-only `"*"`: debug for the composition test,
   support for the shared fixture runner. `ts/package.json` is the
   authority; `engines.node` there is `">=24"`.
@@ -634,7 +683,7 @@ path, a `replace` or a `go.work`.
   siblings' recorded versions.
 - **`@tabnas/expr` is a TypeScript dependency, and not yet a Go or Rust
   one.** The maintainer instructed it on 2026-11-09 (the plan's
-  Decision 7): a peer (`>=0`) mirrored as a `"*"` devDependency, for the
+  Decision 7): a peer mirrored as a `"*"` devDependency, for the
   resolver, which is built on expr's tree layer. That layer shipped in
   expr 0.5.20, and `ci.yml` names `expr` in the shared workflow's
   `deps`. The resolver now needs what tabnas/expr#117 added to the fold,
@@ -653,6 +702,37 @@ path, a `replace` or a `go.work`.
   depend on the reference parser's version, which the baseline records.
   Nothing in `ts/src/` may import it: the package reads YAML with
   `@tabnas/yaml`.
+
+**The peer ranges have floors, and no ceilings.** That is the plan's
+Decision 33, which the maintainer took on 23 November 2026 as a standing
+rule: each peer starts at the first release that has what this package
+calls. `tools/peer-floors.json` records each floor as it was measured,
+and `ts/test/peer-floors.test.ts` holds `ts/package.json` to that record
+and the installed peers to the floors.
+
+| Peer | Range | The release under it |
+|---|---|---|
+| `@tabnas/expr` | `>=0.6.4` | 0.6.3 does not build: its fold has no `budget` |
+| `@tabnas/yaml` | `>=0.5.33` | 0.5.32 fails 62 tests: it has no `schema: 'core'` option |
+| `@tabnas/parser` | `>=0.12.16` | 0.12.15 fails 281 tests |
+| `@tabnas/jsonic` | `>=0.3.1` | 0.2.0 cannot be installed beside the others |
+| `@tabnas/json` | `>=0.3.2` | 0.2.0 cannot be installed beside the others |
+
+A floor is the oldest release on which this package's suite passes with
+every other peer at its latest, and the five pass together at their
+floors. `node tools/peer-floors.cjs` measures them again, in a worktree
+of its own, in about ten minutes; `--write` rewrites the record. When
+the package comes to call something a later release of a peer adds, the
+floor moves to that release in the same change: measure, write the
+record, and set the range. Moving a floor to follow the code is the
+standing rule and needs no further instruction. Anything else about a
+peer still does: adding or dropping one, a ceiling, or a floor held
+above what was measured.
+
+The ranges stay open above on purpose, as every `@tabnas` peer range
+is: an install then resolves the latest release of each peer, which is
+how the fleet stays tested against current versions. A caret would pin
+a peer to one minor and defeat that, and the test refuses one.
 
 All three ports must depend on the same tabnas repositories at runtime:
 `ts/test/port-deps.test.ts` runs `tools/port-deps.cjs`, which compares
