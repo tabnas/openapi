@@ -198,6 +198,87 @@ describe('several documents', () => {
   })
 })
 
+describe('several documents, connections', () => {
+  const info = { title: 't', version: '1' }
+  const other = {
+    openapi: '3.1.0',
+    info,
+    paths: {
+      '/far': {
+        get: { operationId: 'farOp', tags: ['pets', 'unknown'], security: [{ Key: [] }, { Missing: [] }], responses: {} },
+      },
+    },
+    components: {
+      securitySchemes: { Key: { type: 'http', scheme: 'basic' } },
+      links: { L: { operationId: 'nearOp' }, M: { operationId: 'farOp' }, N: { operationId: 'nowhere' } },
+    },
+  }
+  const doc = {
+    openapi: '3.1.0',
+    info,
+    tags: [{ name: 'pets' }],
+    paths: { '/near': { get: { operationId: 'nearOp', responses: {} } }, '/far': { $ref: 'other.yaml#/paths/~1far' } },
+    components: {
+      securitySchemes: { Key: { type: 'apiKey', name: 'k', in: 'header' } },
+      links: { ToFar: { operationId: 'farOp' } },
+    },
+  }
+  const OTHER = at('other.yaml')
+
+  test('a name used in another document is looked for in the description, and an operationId in every document', () => {
+    const r = resolve(doc, { retrievalUri: HERE, documents: { 'other.yaml': other } })
+    assert.deepEqual(
+      r.connections.map((c) => [c.doc ?? '', c.kind, c.at, c.name, c.found, c.targetDoc ?? '', c.target]),
+      [
+        // The description names an operation that only the other document has.
+        ['', 'operationId', '/components/links/ToFar/operationId', 'farOp', true, OTHER, '/paths/~1far/get'],
+        // The other document's tag and security scheme are the description's.
+        [OTHER, 'tag', '/paths/~1far/get/tags/0', 'pets', true, '', '/tags/0'],
+        [OTHER, 'tag', '/paths/~1far/get/tags/1', 'unknown', false, '', null],
+        [OTHER, 'securityScheme', '/paths/~1far/get/security/0/Key', 'Key', true, '', '/components/securitySchemes/Key'],
+        [OTHER, 'securityScheme', '/paths/~1far/get/security/1/Missing', 'Missing', false, '', null],
+        [OTHER, 'operationId', '/components/links/L/operationId', 'nearOp', true, '', '/paths/~1near/get'],
+        [OTHER, 'operationId', '/components/links/M/operationId', 'farOp', true, OTHER, '/paths/~1far/get'],
+        [OTHER, 'operationId', '/components/links/N/operationId', 'nowhere', false, '', null],
+      ],
+    )
+    // With no other document the description's own names are judged as before.
+    const alone = resolve(doc, { retrievalUri: HERE })
+    assert.deepEqual(
+      alone.connections.map((c) => [c.kind, c.at, c.found]),
+      [['operationId', '/components/links/ToFar/operationId', false]],
+    )
+  })
+
+  test('an operationId that two documents declare names both', () => {
+    const twice = { ...other, paths: { '/far': { get: { operationId: 'nearOp', responses: {} } } }, components: {} }
+    const r = resolve({ ...doc, components: { links: { Both: { operationId: 'nearOp' } } } }, { retrievalUri: HERE, documents: { 'other.yaml': twice } })
+    const row = r.connections.find((c) => 'operationId' === c.kind)!
+    assert.deepEqual([row.found, row.target, row.targetDoc, row.targets], [true, '/paths/~1near/get', undefined, ['/paths/~1near/get', OTHER + '#/paths/~1far/get']])
+  })
+
+  test('a document with no version is walked where a reference types it', () => {
+    const r = resolve(
+      { openapi: '3.1.0', info, paths: { '/pets': { $ref: 'pets.yaml' } }, components: { securitySchemes: { Key: { type: 'http', scheme: 'basic' } } } },
+      {
+        retrievalUri: HERE,
+        documents: {
+          'pets.yaml': { get: { security: [{ Key: [] }], externalDocs: { url: 'docs/pets.html' }, responses: {} }, 'x-notes': { security: [{ Ignored: [] }] } },
+        },
+      },
+    )
+    assert.deepEqual(
+      r.connections.map((c) => [c.doc, c.kind, c.at, c.found, c.target]),
+      [[at('pets.yaml'), 'securityScheme', '/get/security/0/Key', true, '/components/securitySchemes/Key']],
+    )
+    // A URL in it is read against the document it is written in.
+    assert.deepEqual(
+      r.urls.map((u) => [u.doc, u.at, u.uri]),
+      [[at('pets.yaml'), '/get/externalDocs/url', at('docs/pets.html')]],
+    )
+  })
+})
+
 describe('several documents, loaded', () => {
   // A loader over a table, which says what it was asked for.
   const loader = (table: Record<string, unknown>) => {

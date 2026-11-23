@@ -686,10 +686,18 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     if ('pathItem' === info.kind) {
       const both = Object.keys(siblings).filter((k) => own(hit, k))
       if (0 < both.length) {
-        mergeRows.push([
-          info.seq,
-          { kind: 'pathItemMerge', at: info.at, name: info.ref as string, found: true, target: pointer(info.target!), fields: both },
-        ])
+        const row: Connection = {
+          kind: 'pathItemMerge',
+          at: info.at,
+          name: info.ref as string,
+          found: true,
+          target: pointer(info.target!),
+          fields: both,
+        }
+        if (undefined !== info.doc) row.doc = info.doc
+        const to = info.row.targetDoc
+        if (undefined !== to && to !== info.row.loc.doc) row.targetDoc = to.key
+        mergeRows.push([info.seq, row])
       }
       return merged(hit, siblings)
     }

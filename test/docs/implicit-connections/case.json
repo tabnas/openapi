@@ -1,6 +1,6 @@
 {
   "source": "OpenAPI 3.2.0, Appendix G, Implicit Connection Resolution Examples",
-  "note": "The entry document's Path Item is a reference into `other`, named with no file extension. Each excerpt of the specification is completed with the `openapi` and `info` members a document needs. Both documents have a security scheme named MySecurity.",
+  "note": "The entry document's Path Item is a reference into `other`, named with no file extension. Each excerpt of the specification is completed with the `openapi` and `info` members a document needs. Both documents have a security scheme named MySecurity. The security requirement in `other` names the scheme of the entry document, as the specification recommends.",
   "entry": "openapi.yaml",
   "retrievalUri": "https://www.example.com/api/description/openapi",
   "documents": {
@@ -8,13 +8,51 @@
   },
   "tree": {
     "openapi": "3.2.0",
-    "info": { "title": "Entry", "version": "1" },
-    "components": {
-      "securitySchemes": { "MySecurity": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } }
+    "info": {
+      "title": "Entry",
+      "version": "1"
     },
-    "paths": { "/foo": { "get": { "security": [{ "MySecurity": [] }] } } }
+    "components": {
+      "securitySchemes": {
+        "MySecurity": {
+          "type": "http",
+          "scheme": "bearer",
+          "bearerFormat": "JWT"
+        }
+      }
+    },
+    "paths": {
+      "/foo": {
+        "get": {
+          "security": [
+            {
+              "MySecurity": []
+            }
+          ]
+        }
+      }
+    }
   },
   "unresolved": [],
   "cuts": [],
-  "sites": [["", "/paths/~1foo", "https://www.example.com/api/description/other", "/components/pathItems/Foo", "resolved"]]
+  "sites": [
+    [
+      "",
+      "/paths/~1foo",
+      "https://www.example.com/api/description/other",
+      "/components/pathItems/Foo",
+      "resolved"
+    ]
+  ],
+  "connections": [
+    {
+      "kind": "securityScheme",
+      "at": "/components/pathItems/Foo/get/security/0/MySecurity",
+      "name": "MySecurity",
+      "found": true,
+      "target": "/components/securitySchemes/MySecurity",
+      "doc": "https://www.example.com/api/description/other",
+      "via": "name"
+    }
+  ]
 }
