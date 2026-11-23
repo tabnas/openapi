@@ -656,7 +656,8 @@ A report row for a site in another document carries that document's
 URI in `doc`. Where a target is in another document than its site,
 `targetDoc` names it, and `landingDoc` does the same for a landing that
 a pointer reached in a third by reading through a reference. The
-result's `documents` lists the documents `resolve` read.
+result's `documents` lists the documents `resolve` read, each by its
+URI in normal form.
 
 `resolve` loads nothing. It leaves a reference into a document it does
 not have as written, with `why: 'external'` and the document's URI in
@@ -872,6 +873,18 @@ looks for anything, and again once it has followed every symbolic link
 on the path, so it refuses a link under `root` that leads out of it as
 well. It refuses a file past `maxBytes`, 128 MiB unless given, before
 reading it.
+
+As written, a path is under `root` when it starts with `root` as the
+caller gave it, or with the real path of that directory, which has no
+link left in it. A document named by any other path to the same
+directory, through a second link or by a short name on Windows, is
+outside as written, and the loader refuses it without looking for it.
+So the `retrievalUri` of a description starts with the path given as
+`root`, or with the real path of that directory.
+
+The result names a document by its URI in normal form, which has `~`
+where Node's `pathToFileURL` writes `%7E`. The two name one file, and
+the loader reads either.
 
 The loader bounds what a description can name. It is no defence
 against someone who can write to `root` while it reads.

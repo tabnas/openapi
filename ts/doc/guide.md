@@ -443,6 +443,12 @@ result instanceof Promise // => true
 // (await result).tree.components.schemas.Pet is { type: 'object' }
 ```
 
+Write the description's `retrievalUri` from the same path as `root`, as
+the example does. `fileLoader` knows its directory by the path you give
+it and by that directory's real path. It refuses a document named
+through any other route to the directory, such as a second link,
+without looking for it.
+
 `httpLoader` reads over HTTP from the hosts you list, and from no
 others.
 It checks the list again at every redirect, and refuses a host that

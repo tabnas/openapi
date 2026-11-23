@@ -11,13 +11,14 @@ import { spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { parse, resolveAll, ResolveError } from '../dist/openapi'
 import { fileLoader, httpLoader, isPublicAddress } from '../dist/loaders'
+import { normalizeUri } from '../dist/uri'
 
 const refused = (e: any) => e instanceof ResolveError && 'openapi_load' === e.code
 
@@ -55,14 +56,20 @@ describe('the loaders are apart from the rest', () => {
 
 describe('the file loader', () => {
   // A directory to read under, with one beside it that is out of bounds.
-  const base = mkdtempSync(join(tmpdir(), 'openapi-loaders-'))
+  // Its path is the real one, with every link followed. The temporary
+  // folder is reached through a link on macOS, and is written with a
+  // short name on Windows, and the tests below name a document by the
+  // directory's own path.
+  const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'openapi-loaders-')))
   const root = join(base, 'api')
   const outside = join(base, 'outside')
   mkdirSync(join(root, 'schemas'), { recursive: true })
+  mkdirSync(join(root, 'a~b'))
   mkdirSync(outside)
   writeFileSync(join(root, 'openapi.yaml'), 'openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Pet: {$ref: schemas/Pet.yaml}\n')
   writeFileSync(join(root, 'schemas', 'Pet.yaml'), 'type: object\nproperties:\n  owner: {$ref: Owner.json}\n')
   writeFileSync(join(root, 'schemas', 'Owner.json'), '{"type":"string"}')
+  writeFileSync(join(root, 'a~b', 'Tag.yaml'), 'type: string\n')
   writeFileSync(join(outside, 'secret.yaml'), 'type: string\ndescription: not for reading\n')
   // Links, where the platform lets a test make them.
   let links = true
@@ -71,12 +78,15 @@ describe('the file loader', () => {
     symlinkSync(outside, join(root, 'way-out'), 'dir')
     symlinkSync(join(outside, 'secret.yaml'), join(root, 'schemas', 'borrowed.yaml'), 'file')
     symlinkSync(root, join(base, 'alias'), 'dir')
+    symlinkSync(root, join(base, 'other'), 'dir')
   } catch {
     links = false
   }
   test.after(() => rmSync(base, { recursive: true, force: true }))
 
   const uri = (...parts: string[]) => pathToFileURL(join(...parts)).href
+  // The same URI as `resolveAll` knows a document by: in its normal form.
+  const known = (...parts: string[]) => normalizeUri(uri(...parts))
   const text = (bytes: unknown) => new TextDecoder().decode(bytes as Uint8Array)
 
   test('it reads a file under its directory, and has none for anything else it may look for', async () => {
@@ -114,6 +124,27 @@ describe('the file loader', () => {
     await assert.rejects(async () => linked(uri(base, 'alias', 'way-out', 'secret.yaml')), refused)
   })
 
+  test('a directory is known by the path it was given and by its real one, and by no other', { skip: !links }, async () => {
+    // `other` is a second link to the directory. A document named
+    // through it is in the directory, and to find that out the loader
+    // would have to look, which it does not do for a path that is
+    // outside as written. This is what a temporary folder reached
+    // through a link gives, when the directory is given by one path and
+    // a document is named by another.
+    const linked = fileLoader({ root: join(base, 'alias') })
+    await assert.rejects(async () => linked(uri(base, 'other', 'schemas', 'Owner.json')), refused)
+    await assert.rejects(async () => linked(uri(base, 'other', 'schemas', 'Missing.yaml')), refused)
+    const real = fileLoader({ root })
+    await assert.rejects(async () => real(uri(base, 'alias', 'schemas', 'Owner.json')), refused)
+    // Given through `other`, it is `other` that the documents are named by.
+    const through = fileLoader({ root: join(base, 'other') })
+    assert.equal(text(await through(uri(base, 'other', 'schemas', 'Owner.json'))), '{"type":"string"}')
+    const raw = parse('openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Pet: {$ref: schemas/Pet.yaml}\n')
+    const r = await resolveAll(raw, { retrievalUri: uri(base, 'other', 'openapi.yaml'), load: through })
+    assert.deepEqual(r.documents, [known(base, 'other', 'schemas', 'Pet.yaml'), known(base, 'other', 'schemas', 'Owner.json')])
+    assert.deepEqual(r.unresolved, [])
+  })
+
   test('a file past the size it reads is refused before it is read', async () => {
     await assert.rejects(async () => fileLoader({ root, maxBytes: 8 })(uri(root, 'schemas', 'Owner.json')), refused)
     assert.equal(text(await fileLoader({ root, maxBytes: 17 })(uri(root, 'schemas', 'Owner.json'))), '{"type":"string"}')
@@ -127,11 +158,28 @@ describe('the file loader', () => {
     const raw = parse(new TextEncoder().encode('openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Pet: {$ref: schemas/Pet.yaml}\n'))
     const r = await resolveAll(raw, { retrievalUri: pathToFileURL(entry).href, load: fileLoader({ root }) })
     assert.deepEqual(JSON.parse(JSON.stringify(r.tree.components.schemas.Pet)), { type: 'object', properties: { owner: { type: 'string' } } })
-    assert.deepEqual(r.documents, [uri(root, 'schemas', 'Pet.yaml'), uri(root, 'schemas', 'Owner.json')])
+    assert.deepEqual(r.documents, [known(root, 'schemas', 'Pet.yaml'), known(root, 'schemas', 'Owner.json')])
     assert.deepEqual(r.unresolved, [])
 
     const reaching = parse('openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Secret: {$ref: ../outside/secret.yaml}\n')
     await assert.rejects(() => resolveAll(reaching, { retrievalUri: pathToFileURL(entry).href, load: fileLoader({ root }) }), refused)
+  })
+
+  test('a document is known by its URI in normal form, which is not always how a path is written as a URI', async () => {
+    // Node writes `~` in a path as `%7E`, and the normal form of a URI
+    // has it as `~`. Either names the file, and the result has the
+    // normal form.
+    const written = uri(root, 'a~b', 'Tag.yaml')
+    assert.ok(written.includes('a%7Eb'), written)
+    const load = fileLoader({ root })
+    assert.equal(text(await load(written)), 'type: string\n')
+    assert.equal(text(await load(normalizeUri(written))), 'type: string\n')
+    const raw = parse('openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Tag: {$ref: "a~b/Tag.yaml"}\n    Same: {$ref: "a%7Eb/Tag.yaml"}\n')
+    const r = await resolveAll(raw, { retrievalUri: uri(root, 'openapi.yaml'), load })
+    assert.deepEqual(r.documents, [known(root, 'a~b', 'Tag.yaml')])
+    assert.ok(!r.documents[0].includes('%7E'), r.documents[0])
+    assert.deepEqual(JSON.parse(JSON.stringify(r.tree.components.schemas)), { Tag: { type: 'string' }, Same: { type: 'string' } })
+    assert.deepEqual(r.unresolved, [])
   })
 })
 

@@ -628,8 +628,23 @@ Each round loads what is wanted and not yet asked for, and parses a
 text once.
 
 **The loaders** (`ts/src/loaders.ts`, Decision 31) are each made by the
-caller with a bound stated, and none is on by default. `fileLoader`
-judges a path twice, as written and once every link is followed.
+caller with a bound stated, and none is on by default.
+
+`fileLoader` judges a path twice, as written and once every link is
+followed. The first judging is not a shortcut for the second: it keeps
+the loader from looking for anything outside its directory. A `file:`
+URI with a host is a network path on Windows, a path under an automount
+is a network read, and whether a file is there is itself something a
+description must not learn. So as written a path has to start with the
+directory as it was given, or with the directory's real path. A path
+that reaches the directory by any other route is refused, though the
+file is in it. `ts/test/loaders.test.ts` makes its folder by its real
+path for that reason: the temporary folder is behind a link on macOS
+and has a short name on Windows, and the suite was red on both until it
+did. A document's URI is kept in normal form, which has `~` where
+`pathToFileURL` writes `%7E`, so a test compares one through
+`normalizeUri`.
+
 `httpLoader` judges every hop: scheme, host with its port, no
 credentials in the URI, and every address the host resolves to
 (`isPublicAddress`, which reads an IPv4 address inside an IPv6 one). It
