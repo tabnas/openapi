@@ -26,18 +26,20 @@ import { make, parse } from '../dist/openapi'
 
 // At runtime this file is in ts/dist-test, so the repository root is two up.
 const ROOT = join(__dirname, '..', '..')
-const SOURCE = readFileSync(join(ROOT, 'ts', 'src', 'openapi.ts'), 'utf8')
 
 // The two figures are the source's own, read from it, so that this file
 // builds the parser `parse` builds and pads a text past the size `parse`
-// turns at, whatever they come to be.
-function constant(name: string): number {
-  const found = new RegExp('^const ' + name + ' = ([0-9][0-9 *]*)$', 'm').exec(SOURCE)
-  assert.ok(null !== found, `ts/src/openapi.ts declares no ${name} this test can read`)
+// turns at, whatever they come to be. The size is in ts/src/text.ts,
+// with the other limits of one text, since `resolve` holds the documents
+// of a description to them too.
+function constant(file: string, name: string): number {
+  const source = readFileSync(join(ROOT, 'ts', 'src', file), 'utf8')
+  const found = new RegExp('^const ' + name + ' = ([0-9][0-9 *]*)$', 'm').exec(source)
+  assert.ok(null !== found, `ts/src/${file} declares no ${name} this test can read`)
   return found[1].split('*').reduce((n, part) => n * Number(part), 1)
 }
-const HISTORY_KEPT = constant('HISTORY_KEPT')
-const HISTORY_OVER = constant('HISTORY_OVER')
+const HISTORY_KEPT = constant('openapi.ts', 'HISTORY_KEPT')
+const HISTORY_OVER = constant('text.ts', 'HISTORY_OVER')
 
 type Outcome = { tree: unknown; report: unknown } | { code: unknown; message: string; details: unknown }
 

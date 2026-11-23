@@ -26,7 +26,8 @@ import { version } from './oas-version'
 import type { VersionInfo } from './oas-version'
 import { isLossy, located, lossyInJson } from './lossy'
 import type { Lossy, LossyFound } from './lossy'
-import { decode, hasContent, utf8Length } from './text'
+import { decode, hasContent, utf8Length, stepsOf, HISTORY_OVER, MAX_BYTES, PART } from './text'
+import type { Part } from './text'
 import { wellFormed } from './well-formed'
 import type { WellFormedOptions } from './well-formed'
 import { aliasedBytes, aliasedSize, defaultAliasBudget, weigh } from './yaml-alias'
@@ -103,6 +104,9 @@ type ParseState = {
   // The text holds nothing but white space and YAML comments. Such a text
   // reads to an empty document, which the root check reports as empty.
   empty: boolean
+  // The text is a document of a description other than the description
+  // itself, which may be anything at its root and declares no version.
+  part: boolean
   docs: number
   // A refusal decided from the text before the grammar ran. It is raised
   // on the first rule pass, where an error can carry its place.
@@ -284,6 +288,8 @@ function check(rule: Rule, ctx: Context, done: RuleDone): void {
     // this far only where every document after the first is empty.
     const value = 1 < state.docs && Array.isArray(root.node) ? root.node[0] : root.node
     const at = root.o0 && '#ZZ' !== root.o0.name ? root.o0 : token(rule, ctx)
+    // Neither is asked of a document that is only part of a description.
+    if (state.part) return
     if (!isMap(value)) {
       throw new TabnasError(
         'openapi_root',
@@ -552,36 +558,17 @@ type ParseReport = {
   lossy?: Lossy[]
 }
 
-// The largest text the grammar reads keeping every rule it has run until
-// the parse ends. That record is most of what a large text costs in
-// memory: about a hundred bytes for each byte of a description.
-const HISTORY_OVER = 16 * 1024 * 1024
+// The limits one text is held to are in ./text, since `resolve` holds
+// the other documents of a description to them together: `HISTORY_OVER`,
+// the largest text read keeping every rule; `MAX_BYTES`, the largest the
+// grammar is given by default; and `stepsOf`, the work a size limit
+// gives.
 
-// A text past that is read by a parser that keeps the last few rules
-// only, which is the engine's `rule.history`. It reads to the same tree,
-// in three times the time and far less memory: 434 MB where it took
-// 1,778 MB, for a description of 17.9 MiB.
+// A text past `HISTORY_OVER` is read by a parser that keeps the last few
+// rules only, which is the engine's `rule.history`. It reads to the same
+// tree, in three times the time and far less memory: 434 MB where it
+// took 1,778 MB, for a description of 17.9 MiB.
 const HISTORY_KEPT = 3
-
-// The largest text the grammar is given unless the parse says otherwise.
-// Under that bound a description of this size takes the memory one of
-// `HISTORY_OVER` takes without it, about 1.6 GB, which is what the first
-// limit was set by.
-const MAX_BYTES = 128 * 1024 * 1024
-
-// The work the grammar is given with a size limit: a rule pass for each
-// ten bytes of it, and a hundred thousand passes at least, so that a
-// small limit still reads a small text. The largest descriptions take a
-// pass for each seven to nine bytes (GitHub's 7.9, Stripe's 9.3 and
-// Microsoft Graph's 7.0 and 7.8), so the bound on work comes a little
-// before the limit on size for one. At the default limit it is
-// 13,421,772 passes.
-const BYTES_A_STEP = 10
-const STEPS_FLOOR = 100_000
-
-function stepsOf(bytes: number): number {
-  return Infinity === bytes ? Infinity : Math.max(STEPS_FLOOR, Math.floor(bytes / BYTES_A_STEP))
-}
 
 // The passes a text may take on a parser of `parse`'s own that keeps
 // every rule: those of `HISTORY_OVER`, which are 1,677,721. Each stays in
@@ -674,7 +661,12 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
   // The work the text may take, and what of it a parser of our own that
   // keeps every rule is given: each of its steps stays in memory, so it
   // has those of `HISTORY_OVER` at most, whatever the limit.
-  const steps = stepsOf(maxBytes)
+  // A document that is part of a description has what is left of the
+  // steps its description's documents are given together, where that is
+  // fewer.
+  const part: Part | undefined = (options as any)[PART]
+  const own = stepsOf(maxBytes)
+  const steps = undefined === part?.steps ? own : Math.min(own, part.steps)
   const kept = ours && !large ? Math.min(steps, KEPT_STEPS) : steps
   const report = options.report
   if (undefined !== report && (null == report || 'object' !== typeof report || Array.isArray(report))) {
@@ -700,6 +692,7 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
     duplicates,
     reading,
     empty,
+    part: undefined !== part,
     docs: 0,
     placing: PLACING,
     work: { left: kept, steps: kept, limit: maxBytes },
@@ -737,9 +730,12 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
       }
     }
   }
+  // What the scan finds the aliases of the text add to it, in bytes.
+  let added = 0
   if (null == state.refuse && !strict && text.includes('&') && text.includes('*')) {
     const encoded = new TextEncoder().encode(text)
     const size = aliasedBytes(encoded)
+    added = Math.max(0, size - encoded.length)
     const budget = aliasBudget ?? defaultAliasBudget(encoded.length)
     // Only what the aliases add is refused: a text in which no alias
     // copies anything is its own size, and `maxBytes` is its limit.
@@ -780,31 +776,46 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
   }
   let value: any
   let again = false
+  // The steps of a reading that was given up for a second one.
+  let before = 0
+  const taken = () => state.work.steps - Math.max(0, state.work.left)
   try {
-    value = read(tn)
-  } catch (err: any) {
-    if (kept === steps || 'openapi_work' !== err?.code) throw err
-    again = true
-  }
-  // The text took more steps than a parser that keeps every rule is
-  // given, and has more to its name. It is read again, from its start and
-  // as if for the first time, by the parser that keeps its last few
-  // rules. That is done here and not where the error was caught, since
-  // the error holds every rule of the reading it ended, and those are
-  // most of what that reading cost.
-  if (again) {
-    if (!(RELEASE_OVER < text.length)) release(tn)
-    state.docs = 0
-    state.placing = PLACING
-    state.work = { left: steps, steps, limit: maxBytes }
-    if (undefined !== state.lossy) state.lossy = []
-    if (undefined !== state.copies) state.copies.made = 0
-    value = read(sharedParser(strict, reading, true))
+    try {
+      value = read(tn)
+    } catch (err: any) {
+      if (kept === steps || 'openapi_work' !== err?.code) throw err
+      again = true
+    }
+    // The text took more steps than a parser that keeps every rule is
+    // given, and has more to its name. It is read again, from its start
+    // and as if for the first time, by the parser that keeps its last few
+    // rules. That is done here and not where the error was caught, since
+    // the error holds every rule of the reading it ended, and those are
+    // most of what that reading cost.
+    if (again) {
+      before = taken()
+      if (!(RELEASE_OVER < text.length)) release(tn)
+      state.docs = 0
+      state.placing = PLACING
+      state.work = { left: steps, steps, limit: maxBytes }
+      if (undefined !== state.lossy) state.lossy = []
+      if (undefined !== state.copies) state.copies.made = 0
+      value = read(sharedParser(strict, reading, true))
+    }
+  } finally {
+    // What the text cost, for whoever holds a set of documents to one
+    // limit, whether or not it was read to its end.
+    if (undefined !== part) {
+      part.taken = before + taken()
+      part.copied = Math.max(added, state.copies?.made ?? 0)
+    }
   }
   // Several documents come back as their list. The root check let them
   // by only because each after the first is empty.
   if (1 < state.docs && Array.isArray(value)) value = value[0]
   if (undefined !== report) report.lossy = located(state.lossy!, value, given)
+  // A part with nothing in it is the empty document, which is null.
+  if (undefined !== part && undefined === value) value = null
   return value
 }
 

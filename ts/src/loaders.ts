@@ -250,20 +250,39 @@ function httpLoader(options: HttpLoaderOptions): Loader {
     options.lookup ?? (async (host: string): Promise<Address[]> => dns.lookup(host, { all: true }) as Promise<Address[]>)
   const kept = false === options.cache ? undefined : new Map<string, Promise<Uint8Array | undefined>>()
 
-  // One request, to an address already judged, so that the name is not
-  // resolved again between the judging and the asking.
-  const ask = (url: URL, to: Address, signal: AbortSignal): Promise<Answer> =>
+  // The loader's own connections. The agent a process shares finds a
+  // connection it has kept by the name of its host, whatever address it
+  // was opened to, so a request through it could go out on a connection
+  // that other code of the process opened, to an address this loader
+  // never judged. A kept connection lies unused without holding the
+  // process open.
+  let plain: http.Agent | undefined
+  let secure: https.Agent | undefined
+  const agentFor = (protocol: string): http.Agent =>
+    'https:' === protocol
+      ? (secure ??= new https.Agent({ keepAlive: true }))
+      : (plain ??= new http.Agent({ keepAlive: true }))
+
+  // One request, to the addresses already judged, so that the name is not
+  // resolved again between the judging and the asking. Node is handed
+  // every one of them, and tries the next where it cannot reach the
+  // first: a host with an IPv6 address is otherwise out of reach from a
+  // machine that has no route for one.
+  const ask = (url: URL, to: Address[], signal: AbortSignal, again = true): Promise<Answer> =>
     new Promise((done, fail) => {
       const lib = 'https:' === url.protocol ? https : http
       const pinned = (_host: string, opts: any, cb: any) => {
-        if (opts?.all) cb(null, [to])
-        else cb(null, to.address, to.family)
+        if (opts?.all) cb(null, to)
+        else cb(null, to[0].address, to[0].family)
       }
+      let answered = false
       const req = lib.request(
         url,
         {
           method: 'GET',
           signal,
+          // A second asking opens a connection, and keeps none.
+          agent: again ? agentFor(url.protocol) : false,
           lookup: pinned as any,
           headers: {
             accept: 'application/yaml, application/json, */*;q=0.5',
@@ -272,6 +291,7 @@ function httpLoader(options: HttpLoaderOptions): Loader {
           },
         },
         (res) => {
+          answered = true
           const status = res.statusCode ?? 0
           if (300 <= status && status < 400 && 'string' === typeof res.headers.location) {
             res.resume()
@@ -299,7 +319,16 @@ function httpLoader(options: HttpLoaderOptions): Loader {
           res.on('error', fail)
         },
       )
-      req.on('error', fail)
+      req.on('error', (err: any) => {
+        // A kept connection that its server closed while it lay unused
+        // fails the request that takes it up, before any of it is
+        // answered: as a reset here, and under other names on other
+        // systems. That request is asked once more, on a connection of
+        // its own. One that fails on a new connection is not.
+        const stale = req.reusedSocket && !answered && !signal.aborted
+        if (again && stale) ask(url, to, signal, false).then(done, fail)
+        else fail(err)
+      })
       req.end()
     })
 
@@ -335,7 +364,7 @@ function httpLoader(options: HttpLoaderOptions): Loader {
       }
       let answer: Answer
       try {
-        answer = await ask(url, found[0], signal)
+        answer = await ask(url, found, signal)
       } catch (err: any) {
         if (err instanceof ResolveError) throw err
         const why = signal.aborted ? (limit?.aborted ? `took more than ${timeoutMs} ms` : 'was stopped') : String(err?.code ?? err?.message ?? err)

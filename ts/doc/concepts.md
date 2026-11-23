@@ -118,6 +118,16 @@ a loader that the caller gives, and the loaders this package offers
 each state a bound when they are made: the file loader a directory,
 the HTTP loader a list of hosts. None is on unless you make it.
 
+The description also decides how many documents there are, and how
+large. Each limit that holds one text has a floor, so that `parse`
+still reads a small text, and a description of ten thousand small
+documents would have that floor ten thousand times. So the documents of one description
+share one limit: together they may be as large as one text may be, take
+the work one text may take, and copy out through aliases what one text
+may. `resolveAll` counts the documents it asks for as well, and the
+rounds it takes to find them, since each round reads the index of every
+document again.
+
 ## What is a reference
 
 Not every map that owns `$ref` is a reference. An example payload can

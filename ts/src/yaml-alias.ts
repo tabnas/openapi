@@ -405,4 +405,4 @@ function defaultAliasBudget(bytes: number): number {
   return Math.max(ALIAS_FLOOR, ALIAS_FACTOR * bytes)
 }
 
-export { aliasedSize, aliasedBytes, defaultAliasBudget, measure, weigh }
+export { aliasedSize, aliasedBytes, defaultAliasBudget, measure, weigh, ALIAS_FACTOR, ALIAS_FLOOR }

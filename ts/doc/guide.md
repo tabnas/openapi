@@ -466,6 +466,14 @@ A loader is yours to write, too: any function from a URI to a
 document, given as `resolve` takes one. A description names whatever documents
 its author chose, so decide what yours may read before it reads.
 
+`resolveAll` bounds what a description can ask of it. It asks for
+10,000 documents at most, in 64 rounds at most, and holds the texts it
+loads together to the size and the work that `parse` allows one text.
+Raise `maxDocuments`, `maxRounds`, or `parse.maxBytes` for a
+description you trust that needs more. It sets no deadline: give the
+loader a `signal`, and return `false` from `onCheck` when your time is
+up.
+
 ## Check what the names in a description reach
 
 Tags, `operationId` values, security requirements, and discriminator

@@ -627,6 +627,46 @@ the symbol `WANTED`, stops `resolve` once the index is built and the
 Each round loads what is wanted and not yet asked for, and parses a
 text once.
 
+**A description decides how many documents there are, so every bound
+on one of them is asked what it comes to over a set.** Three did not
+hold, as first built, and `ts/test/documents.test.ts` pins each:
+
+- **The limits of a text have floors, and a set had each floor once
+  for every document.** `parse` gives a text 100,000 steps at least,
+  and its aliases 1,000,000 bytes at least. Twenty documents of 50 kB
+  of small values took four seconds to read, so ten thousand would
+  take half an hour, and small documents full of aliases would run the
+  process out of memory. `partReader` in `ts/src/resolve.ts` therefore
+  reads the texts of one description against one limit: together they
+  are `parse.maxBytes` at most, JSON text included; each is given the
+  steps that are left of that size's; and each may copy out ten times
+  its own size through aliases, with one floor of 1,000,000 bytes
+  between them. `parse` knows such a text by an option keyed by the
+  symbol `PART` (`ts/src/text.ts`), which only `resolve` gives. Its
+  value carries the steps the text may take in, and what the text cost
+  out. The limits one text is held to (`MAX_BYTES`, `HISTORY_OVER`,
+  `stepsOf`) are in `ts/src/text.ts` for that reason. A tree is not
+  counted.
+- **`maxDocuments` counts what `load` is asked for**, not what it
+  gives. A document that is not there costs a request all the same.
+- **The rounds are `maxRounds` at most**, 64 by default. Each round
+  builds the index of every document so far from nothing, so a chain
+  of documents that each name the next costs the square of its length:
+  800 took 2.6 seconds, and 10,000 would take about 400. The corpus's
+  deepest, DigitalOcean's, takes 7 rounds, and Azure's take 1 to 3. An
+  index carried from one round to the next would lift the bound, and
+  it has to give exactly the documents a build from nothing gives: a
+  document asked for that the description does not name is a request
+  its author chose.
+
+`PART` also says that the text is no description: it may be anything at
+its root, a schema that is `false` or a list a pointer reads into, and
+has no version to check, under `strict` either. Without it `parse`
+refused a schema document that is a Boolean with `openapi_root`. A
+loader that answers `null` has no document, as one that answers
+`undefined` has none. In `documents`, `null` is a document with nothing
+in it, and `undefined` is a `TypeError`.
+
 **The loaders** (`ts/src/loaders.ts`, Decision 31) are each made by the
 caller with a bound stated, and none is on by default.
 
@@ -648,11 +688,20 @@ did. A document's URI is kept in normal form, which has `~` where
 `httpLoader` judges every hop: scheme, host with its port, no
 credentials in the URI, and every address the host resolves to
 (`isPublicAddress`, which reads an IPv4 address inside an IPv6 one). It
-then sends the request to the address it judged, through the `lookup`
+then sends the request to the addresses it judged, through the `lookup`
 option of `node:http`, so that a name is not resolved a second time
 between the judging and the asking, which is how a listed name would
-be pointed at a private address. Headers are kept by origin, and are
-chosen again at every hop. Put a new check on the hop, not on the
+be pointed at a private address. It hands Node every judged address,
+not the first alone: Node tries the next where it cannot reach one,
+and a host with an IPv6 address is otherwise out of reach from a
+machine with no route for it. The requests go through agents of the
+loader's own. The agent a process shares finds a kept connection by
+its host's name, whatever address it was opened to, so a request
+through it could go out on a connection that other code opened, to an
+address this loader never judged. A kept connection that its server
+has closed fails the request that takes it up, so that request is
+asked once more, on a new connection. Headers are kept by origin, and
+are chosen again at every hop. Put a new check on the hop, not on the
 first URI. `ts/src/loaders.ts` is the one module that needs Node. It
 takes Node's types by a reference of its own, so the rest of `ts/src/`
 is still built with no types of a runtime, and
@@ -1254,9 +1303,14 @@ that a caller's own function decides:
 | `openapi_work` | resolving takes more steps than `maxSteps`, or its typing rounds and lenient pointer steps take more than sixteen times one pass over the document |
 | `openapi_cancel` | the caller's `onCheck` returned `false` |
 
-`resolveAll` raises `openapi_work` for more documents than
-`maxDocuments`, and a loader raises `openapi_load`, a `ResolveError`
-too, for a document it may not read or cannot. The file loader raises
+`resolve` and `resolveAll` raise two more for the documents of a
+description that are given or loaded as text: `openapi_size` where they
+are past `parse.maxBytes` together, and `openapi_work` where they take
+more steps together than that size gives one text. `resolveAll` raises
+`openapi_work` for more documents to ask for than `maxDocuments`, and
+for more rounds of loading than `maxRounds`. A loader raises
+`openapi_load`, a `ResolveError` too, for a document it may not read or
+cannot. The file loader raises
 it for a file outside its directory, as written or through a link, and
 for one past its size. The HTTP loader raises it for a host or a scheme
 outside its lists, at the first request and at every redirect; for a

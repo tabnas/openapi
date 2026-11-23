@@ -721,7 +721,8 @@ sample, Redocly's starter and DigitalOcean's source under
 `slots: 'all'` resolve from their roots with nothing left as written,
 which `tools/corpus/documents.cjs` measures; a reference outside the
 HTTP loader's list is refused with `openapi_load`; and the walk stops
-at `maxDocuments` and `maxSteps`.
+at `maxDocuments`, `maxRounds` and `maxSteps`, and at the limits of one
+text for the texts of the set, which is Decision 36.
 
 ### T5: beyond references (M each, to the scope of Decision 32)
 
@@ -811,6 +812,7 @@ Numbered from 16, after the earlier plan's fifteen.
 | 33 | Peer ranges of this package, as a standing rule | each floor at the first release that has what the package calls: `@tabnas/expr` 0.5.20 for `fold`, and so on. **Taken, 23 November 2026: a standing rule, set now and not at the release, and moved whenever the package comes to call something newer** | T6 |
 | 34 | The engine's rule history on this package's parser. Bounded at 3 it reads every YAML document of the corpus that is read at all to the same tree, in under half the memory, under a third for the largest, and three times the time (section 11) | bounded for a text past the present limit of 16 MiB, and the limit raised to what the bound then allows, measured as T2 measured the present one; unbounded below it, where nothing changes. That reads both Microsoft Graph descriptions, the last two the sweep refuses. The other courses are a bound for every text, or none. **Taken, 22 November 2026: bounded past 16 MiB, and the limit raised.** Built with the turn on work as well as on size, and the limit at 128 MiB (section 11) | T2b item 5 |
 | 35 | The rate of the bound on work. The grammar is given a step for each ten bytes of `maxBytes`, set when descriptions were thought to take one for each eight to eleven. Measured, they take one for each seven to nine, so a description meets the bound on its work at seven to nine tenths of the limit on its size (section 11) | ten, as it is: the limit is a guard, and a caller with a denser description raises `maxBytes`. The other course is seven, which makes the size limit the one a description meets, and gives every `maxBytes` a caller sets 43% more steps | T6 |
+| 36 | What a description in several documents may cost with no option given. A description names its documents, so each limit on one text is met once for every document: a floor of 100,000 steps, and of 1,000,000 bytes that aliases copy out. Twenty documents of 50 kB of small values took four seconds to read, and a chain of 800 documents that each name the next took 2.6 seconds to find, the square of its length (section 11) | as built: the texts of a description's other documents are held together to the limits of one text, `parse.maxBytes` in size, its steps in work and one alias budget; `load` is asked for 10,000 documents at most, counting the ones it does not have; and the documents are found in 64 rounds at most, where the corpus's deepest description takes 7. The other courses are the limits of each document alone, which leave a set unbounded, or an index carried from round to round, which would lift the bound on rounds and is the larger work | T4 |
 
 ## 7. Work in other repositories
 
@@ -921,7 +923,7 @@ what the code does.
   `load`, and so on until a round names nothing new. A document is
   asked for once. The URIs the `connections` report locates are found
   too, since a document may be named by an `operationRef` alone. It
-  loads 10,000 documents at most unless told otherwise.
+  asks for 10,000 documents at most unless told otherwise.
 - **The file loader** (Decision 31) reads under one directory. It
   refuses a path out of it as the path is written, before anything is
   looked for, and again once every link is followed. It is the one
@@ -958,7 +960,7 @@ what the code does.
   redirect as it judges the first URI, five hops at most, so a listed
   host cannot hand it on. It refuses a host at an address that is not
   public, an IPv4 address inside an IPv6 one included, and then sends
-  its request to the address it judged, so that the name is not
+  its request to the addresses it judged, so that the name is not
   resolved again in between. It has a byte cap, a timeout, a cancel
   signal and a cache, and headers are given by origin and go to that
   origin alone. A document's format is read from its content, by
@@ -970,6 +972,64 @@ what the code does.
   operations of every document, as the specification recommends. Its
   own example of implicit connections pins the first: the requirement
   in the referenced document names the entry document's scheme.
+- **A set of documents is held to what one text is** (Decision 36).
+  T4 was reviewed against its own rule, that a description names
+  whatever documents its author chose, and three bounds did not hold
+  over a set. Each limit `parse` holds a text to has a floor, 100,000
+  steps and 1,000,000 bytes copied out by aliases, and a set had each
+  floor once for every document: twenty documents of 50 kB of small
+  values took four seconds to read, so ten thousand would take half an
+  hour, and twenty of 4.6 kB that copy an anchor out 1,500 times added
+  44 MB to the heap, so ten thousand would take 22 GB. The texts of
+  one description are now read against one limit: `parse.maxBytes`
+  together in size, JSON text included; the steps of that size
+  together in work; and ten times its own size for each in what
+  aliases copy out, with one floor between them. Three hundred of the
+  first documents are stopped after 26 seconds, at the 13,421,772
+  steps one text of 128 MiB is given, and of the second after a
+  seventh of a second. A tree is not counted. The largest set of the
+  corpus, DigitalOcean's, is 3.6 MiB of text.
+- **`maxDocuments` counts what is asked for, and the rounds are
+  counted** (Decision 36). A document the loader does not have costs
+  an asking, which over HTTP is a request, so it counts. And each
+  round builds the index of every document so far from nothing, so a
+  chain of documents that each name the next cost the square of its
+  length: 800 took 2.6 seconds, and 10,000 would take about 400. The
+  rounds are 64 at most unless `maxRounds` says otherwise. Of the
+  corpus's 589 descriptions in several documents, Azure's take one to
+  three rounds, Redocly's starter four and DigitalOcean's seven. An
+  index carried from one round to the next would lift the bound. It is
+  not built: it has to name exactly the documents a build from nothing
+  names, since a document asked for that the description does not name
+  is a request its author chose.
+- **A document that is not the description may be anything at its
+  root.** A schema may be `true` or `false`, and the specification
+  lets a document be a schema. `parse` held such a text to a
+  description's root and, under `strict`, to its version, so a schema
+  document that is a Boolean was refused with `openapi_root` where the
+  same document given as a tree resolved. A text given in `documents`
+  or by a loader is now read as a part: any root, and no version. A
+  name in `documents` with no document is a `TypeError`, where it was
+  read as a document that is not there, and a loader that answers
+  `null` has no document.
+- **The HTTP loader's connections are its own, and it tries every
+  address it judged.** It handed Node the first judged address alone,
+  so a host with an IPv6 address first was out of reach from a machine
+  with no route for one. It now hands over all of them, and Node tries
+  the next. It also went through the agent the process shares, which
+  finds a kept connection by its host's name: a request could go out
+  on a connection that other code had opened, to an address the loader
+  never judged. It has agents of its own now, and asks once more for a
+  document whose kept connection the server had closed.
+- **The file loader's test on macOS and Windows.** The suite failed
+  on both, in the test alone. The temporary folder is behind a link on
+  macOS and is written with a short name on Windows, so a document
+  named by the folder's path was under neither the path the loader was
+  given nor the directory's real one, and the loader refused it, as it
+  is meant to: it looks for nothing that is outside as written, since
+  a `file:` URI with a host is a network path on Windows. The test
+  names its folder by its real path, two tests pin the rule on every
+  platform, and the reference states it.
 - **What T4 leaves as it is.** Under `refs: 'pointer'` no other
   document is read, and `documents` is refused there. The implicit
   mapping of a discriminator is worked out for the description's own

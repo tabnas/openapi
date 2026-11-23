@@ -68,6 +68,82 @@ describe('several documents', () => {
     assert.equal(yes({ parse: { reading: 'spec' } }), 'yes')
   })
 
+  test('a document given as text may be anything at its root, and needs no version', () => {
+    // A schema may be `true` or `false`, and a document may be a list
+    // that a pointer reads into. Only a description has to be a map.
+    const doc = entry({ Never: { $ref: 'never.json' }, Second: { $ref: 'list.yaml#/1' }, All: { $ref: 'list.yaml' }, None: { $ref: 'empty.yaml' } })
+    const texts = { 'never.json': 'false', 'list.yaml': '- {type: string}\n- {type: number}\n', 'empty.yaml': '# nothing here\n' }
+    const want = { Never: false, Second: { type: 'number' }, All: [{ type: 'string' }, { type: 'number' }], None: null }
+    const r = resolve(doc, { retrievalUri: HERE, documents: texts })
+    assert.deepEqual(plain(r.tree.components.schemas), want)
+    assert.deepEqual(r.unresolved, [])
+    // As bytes, and as the trees those texts are.
+    const bytes = Object.fromEntries(Object.entries(texts).map(([name, text]) => [name, new TextEncoder().encode(text)]))
+    assert.deepEqual(plain(resolve(doc, { retrievalUri: HERE, documents: bytes }).tree.components.schemas), want)
+    const trees = { 'never.json': false, 'list.yaml': [{ type: 'string' }, { type: 'number' }], 'empty.yaml': null }
+    assert.deepEqual(plain(resolve(doc, { retrievalUri: HERE, documents: trees }).tree.components.schemas), want)
+    // Strict JSON asks a description for its version, and no other
+    // document for one.
+    const strict = resolve(entry({ Pet: { $ref: 'Pet.json' }, Never: { $ref: 'never.json' } }), {
+      retrievalUri: HERE,
+      parse: { strict: true },
+      documents: { 'Pet.json': '{"type":"object"}', 'never.json': 'false' },
+    })
+    assert.deepEqual(plain(strict.tree.components.schemas), { Pet: { type: 'object' }, Never: false })
+    // A stream of several documents is still not one document.
+    assert.throws(
+      () => resolve(doc, { retrievalUri: HERE, documents: { 'never.json': 'a: 1\n---\nb: 2\n' } }),
+      (e: any) => 'openapi_stream' === e.code,
+    )
+    // `parse` by itself reads a description, and holds it to its root.
+    assert.throws(() => parse('false'), (e: any) => 'openapi_root' === e.code)
+    assert.throws(() => parse('{"type":"object"}', { strict: true }), (e: any) => 'openapi_version' === e.code)
+  })
+
+  test('the texts of a description\'s documents are held together to what one text is', () => {
+    const names = (n: number) => Array.from({ length: n }, (_, i) => `n${i}.yaml`)
+    const refs = (n: number) => entry(Object.fromEntries(names(n).map((name, i) => ['S' + i, { $ref: name }])))
+    const given = (n: number, text: unknown) => Object.fromEntries(names(n).map((name) => [name, text]))
+    const sized = (code: string, where?: string) => (e: any) =>
+      e instanceof ResolveError && code === e.code && (undefined === where || at(where) === e.at)
+
+    // In size: three texts of 400 bytes are more than 1,000, though each
+    // is under it. JSON text counts, which JSON.parse reads without a
+    // limit when it is one text. A tree does not.
+    const yaml = 'description: ' + 'x'.repeat(386) + '\n'
+    const json = JSON.stringify({ description: 'x'.repeat(382) })
+    assert.equal(yaml.length, 400)
+    assert.equal(json.length, 400)
+    for (const text of [yaml, json, new TextEncoder().encode(yaml)]) {
+      assert.equal(resolve(refs(2), { retrievalUri: HERE, parse: { maxBytes: 1000 }, documents: given(2, text) }).unresolved.length, 0)
+      assert.throws(() => resolve(refs(3), { retrievalUri: HERE, parse: { maxBytes: 1000 }, documents: given(3, text) }), sized('openapi_size', 'n2.yaml'))
+    }
+    assert.equal(resolve(refs(3), { retrievalUri: HERE, parse: { maxBytes: 1000 }, documents: given(3, parse(yaml)) }).unresolved.length, 0)
+
+    // In work: a limit of a megabyte gives 100,000 steps. A text of
+    // 12,000 small values takes a share of them, so one is read, and
+    // several are stopped at one of the later ones.
+    const small = 'enum: [' + 'x,'.repeat(12000) + 'x]\n'
+    assert.equal(resolve(refs(1), { retrievalUri: HERE, parse: { maxBytes: 1_000_000 }, documents: given(1, small) }).unresolved.length, 0)
+    assert.throws(
+      () => resolve(refs(8), { retrievalUri: HERE, parse: { maxBytes: 1_000_000 }, documents: given(8, small) }),
+      (e: any) => sized('openapi_work')(e) && at('n0.yaml') !== e.at && /steps to read together/.test(e.message),
+    )
+
+    // In what aliases copy out: each of these texts is read by itself,
+    // under the budget one text has, and twenty of them are not.
+    const copies = 'a: &a [' + 'x,'.repeat(40) + 'x]\n' + 'b: [' + '*a,'.repeat(1500) + '*a]\n'
+    assert.equal(resolve(refs(4), { retrievalUri: HERE, documents: given(4, copies) }).unresolved.length, 0)
+    assert.throws(() => resolve(refs(20), { retrievalUri: HERE, documents: given(20, copies) }), (e: any) => 'openapi_alias_budget' === e.code)
+    // A limit that is no number of bytes is refused as `parse` refuses it.
+    assert.throws(() => resolve(refs(1), { retrievalUri: HERE, parse: { maxBytes: -1 }, documents: given(1, yaml) }), TypeError)
+    // A budget the caller gives is each text's own.
+    assert.equal(
+      resolve(refs(20), { retrievalUri: HERE, parse: { aliasBudget: 1_000_000 }, documents: given(20, copies) }).unresolved.length,
+      0,
+    )
+  })
+
   test('a document that was not given is another document still', () => {
     const r = resolve(entry({ Pet: { $ref: 'missing.yaml#/Pet' }, Here: { $ref: 'shared.yaml' } }), {
       retrievalUri: HERE,
@@ -90,6 +166,10 @@ describe('several documents', () => {
     assert.throws(() => resolve(doc, { retrievalUri: HERE, documents: { 'Pet.yaml': {}, './Pet.yaml': {} } }), /is a document already/)
     assert.throws(() => resolve(doc, { retrievalUri: HERE, documents: { 'openapi.yaml': {} } }), /is a document already/)
     assert.throws(() => resolve(doc, { retrievalUri: HERE, documents: [] as any }), TypeError)
+    // A name with no document is a mistake, where null is a document
+    // with nothing in it.
+    assert.throws(() => resolve(doc, { retrievalUri: HERE, documents: { 'Pet.yaml': undefined } }), /gives no document for it/)
+    assert.equal(resolve(doc, { retrievalUri: HERE, documents: { 'Pet.yaml': null } }).tree.components.schemas.Pet, null)
     assert.throws(() => resolve(doc, { retrievalUri: HERE, documents: { 'Pet.yaml': {} }, refs: 'pointer' }), /refs: 'uri'/)
     assert.throws(() => resolve(doc, { retrievalUri: HERE, documents: { 'Pet.yaml': {} }, compat: 'apidef' }), /refs: 'uri'/)
     // An absolute name needs no retrieval URI.
@@ -367,17 +447,75 @@ describe('several documents, loaded', () => {
     assert.deepEqual([row.found, row.target, row.targetDoc, row.type], [true, '/paths/~1pets/get', at('ops.yaml'), 'operation'])
   })
 
-  test('the documents loaded are held to a count', async () => {
+  test('the documents asked for are held to a count, whether or not the loader has them', async () => {
     const many: Record<string, unknown> = {}
     for (let i = 0; i < 12; i++) many[at(`n${i}.yaml`)] = { N: { $ref: `n${i + 1}.yaml#/N` } }
     const doc = entry({ N: { $ref: 'n0.yaml#/N' } })
     const all = await resolveAll(doc, { retrievalUri: HERE, load: loader(many).load })
     assert.equal(all.documents.length, 12)
-    await assert.rejects(
-      () => resolveAll(doc, { retrievalUri: HERE, load: loader(many).load, maxDocuments: 5 }),
-      (e: any) => e instanceof ResolveError && 'openapi_work' === e.code && at('n5.yaml') === e.at,
-    )
+    const tooMany = (where: string) => (e: any) => e instanceof ResolveError && 'openapi_work' === e.code && at(where) === e.at
+    await assert.rejects(() => resolveAll(doc, { retrievalUri: HERE, load: loader(many).load, maxDocuments: 5 }), tooMany('n5.yaml'))
     await assert.rejects(() => resolveAll(doc, { retrievalUri: HERE } as any), TypeError)
     await assert.rejects(() => resolveAll(doc, { retrievalUri: HERE, load: loader(many).load, maxDocuments: 0 }), TypeError)
+
+    // A document the loader does not have costs an asking all the same,
+    // which over HTTP is a request.
+    const absent = entry(Object.fromEntries(Array.from({ length: 8 }, (_, i) => ['S' + i, { $ref: `gone${i}.yaml` }])))
+    const nothing = loader({})
+    const left = await resolveAll(absent, { retrievalUri: HERE, load: nothing.load })
+    assert.equal(nothing.asked.length, 8)
+    assert.equal(left.unresolved.length, 8)
+    const counted = loader({})
+    await assert.rejects(() => resolveAll(absent, { retrievalUri: HERE, load: counted.load, maxDocuments: 5 }), tooMany('gone5.yaml'))
+    assert.equal(counted.asked.length, 5)
+  })
+
+  test('a loader may answer null for a document it does not have', async () => {
+    const doc = entry({ Pet: { $ref: 'Pet.yaml' }, Gone: { $ref: 'gone.yaml' } })
+    const r = await resolveAll(doc, { retrievalUri: HERE, load: (uri: string) => (uri.endsWith('Pet.yaml') ? { type: 'object' } : null) })
+    assert.deepEqual(plain(r.tree.components.schemas), { Pet: { type: 'object' }, Gone: { $ref: 'gone.yaml' } })
+    assert.deepEqual(r.documents, [at('Pet.yaml')])
+    assert.deepEqual(r.unresolved.map((u) => [u.at, u.why]), [['/components/schemas/Gone', 'external']])
+  })
+
+  test('the rounds of loading are held to a count', async () => {
+    // Each document names the next, so each takes a round to find, and a
+    // round indexes every document before it again.
+    const linked = (n: number) => {
+      const table: Record<string, unknown> = {}
+      for (let i = 0; i < n; i++) table[at(`n${i}.yaml`)] = i + 1 < n ? { N: { $ref: `n${i + 1}.yaml#/N` } } : { N: { type: 'string' } }
+      return table
+    }
+    const doc = entry({ N: { $ref: 'n0.yaml#/N' } })
+    const deep = (e: any) => e instanceof ResolveError && 'openapi_work' === e.code && /rounds of loading/.test(e.message)
+    assert.equal((await resolveAll(doc, { retrievalUri: HERE, load: loader(linked(64)).load })).documents.length, 64)
+    const stopped = loader(linked(65))
+    await assert.rejects(() => resolveAll(doc, { retrievalUri: HERE, load: stopped.load }), (e: any) => deep(e) && at('n64.yaml') === e.at)
+    assert.equal(stopped.asked.length, 64)
+    assert.equal((await resolveAll(doc, { retrievalUri: HERE, load: loader(linked(65)).load, maxRounds: 65 })).documents.length, 65)
+    await assert.rejects(() => resolveAll(doc, { retrievalUri: HERE, load: loader(linked(4)).load, maxRounds: 3 }), deep)
+    await assert.rejects(() => resolveAll(doc, { retrievalUri: HERE, load: loader(linked(4)).load, maxRounds: 0 }), TypeError)
+    // Given with the description, the same documents take no rounds.
+    const given = resolve(doc, { retrievalUri: HERE, documents: linked(65) })
+    assert.deepEqual(plain(given.tree.components.schemas.N), { type: 'string' })
+  })
+
+  test('the texts a loader gives are held together to what one text is', async () => {
+    const doc = entry(Object.fromEntries(Array.from({ length: 3 }, (_, i) => ['S' + i, { $ref: `n${i}.yaml` }])))
+    const text = 'description: ' + 'x'.repeat(386) + '\n'
+    const load = () => text
+    await assert.rejects(
+      () => resolveAll(doc, { retrievalUri: HERE, load, parse: { maxBytes: 1000 } }),
+      (e: any) => e instanceof ResolveError && 'openapi_size' === e.code && at('n2.yaml') === e.at,
+    )
+    assert.equal((await resolveAll(doc, { retrievalUri: HERE, load, parse: { maxBytes: 1200 } })).documents.length, 3)
+    // A text given with the description counts with the ones loaded.
+    await assert.rejects(
+      () => resolveAll(doc, { retrievalUri: HERE, load, parse: { maxBytes: 1200 }, documents: { 'given.yaml': text } }),
+      (e: any) => e instanceof ResolveError && 'openapi_size' === e.code,
+    )
+    // A loader's text may be a schema that is not a map.
+    const never = await resolveAll(entry({ Never: { $ref: 'never.json' } }), { retrievalUri: HERE, load: () => 'false' })
+    assert.equal(never.tree.components.schemas.Never, false)
   })
 })

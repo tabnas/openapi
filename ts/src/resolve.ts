@@ -36,9 +36,71 @@ import { version as readVersion } from './oas-version'
 import { parse } from './openapi'
 import type { ParseOptions } from './openapi'
 import { Loc, buildIndex, hasIds } from './site-index'
+import { HISTORY_OVER, MAX_BYTES, PART, stepsOf, utf8Length } from './text'
+import type { Part } from './text'
+import { ALIAS_FACTOR, ALIAS_FLOOR } from './yaml-alias'
 import type { DocFacts, DocInput, Kind, SiteFacts, Why } from './site-index'
 import { NOTHING, define, isMap, merged, normalizeUri, own, pointer, resolveUri, stepInto, withoutFragment } from './uri'
 import type { Path } from './uri'
+
+// The reader of the other documents of a description that are given as
+// text or bytes. A description names whatever documents its author
+// chose, and each limit `parse` holds one text to has a floor that a set
+// of small texts would have once for each of them: 100,000 steps, and
+// 1,000,000 bytes copied out by aliases. Twenty texts of 50 kB took four
+// seconds to read, and ten thousand would take half an hour. So the
+// texts of one description are held to one limit together, the one a
+// single text has:
+//
+// - `maxBytes` in size, whichever way a text is read. JSON text that
+//   JSON.parse reads has no limit by itself, and has this one.
+// - the steps of that size in work: each text is given what is left.
+// - one alias budget: each text may copy out ten times its own size, and
+//   they share the floor between them. A caller's own `aliasBudget` is
+//   each text's, as given.
+//
+// A tree is not counted: its size was whoever built it to bound.
+function partReader(given: ParseOptions | undefined): (doc: string | Uint8Array, uri: string) => any {
+  const limit = 'number' === typeof given?.maxBytes ? given.maxBytes : null == given?.instance ? MAX_BYTES : HISTORY_OVER
+  // A limit that is no number of bytes is `parse`'s to refuse.
+  if (!(0 <= limit)) return (doc) => parse(doc, { ...given, [PART]: {} } as ParseOptions)
+  const all = stepsOf(limit)
+  const pool = { bytes: limit, steps: all, spare: ALIAS_FLOOR }
+  const shared = undefined === given?.aliasBudget
+  return (doc, uri) => {
+    const size = 'string' === typeof doc ? utf8Length(doc) : doc.length
+    if (pool.bytes < size) {
+      throw new ResolveError(
+        'openapi_size',
+        `resolve: the documents given as text are more than ${limit} bytes together, at ${quoted(uri)}`,
+        uri,
+      )
+    }
+    pool.bytes -= size
+    const part: Part = { steps: pool.steps }
+    const options: any = { ...given, [PART]: part }
+    if (shared) options.aliasBudget = ALIAS_FACTOR * size + pool.spare
+    try {
+      return parse(doc, options)
+    } catch (err: any) {
+      // Stopped for what the texts before it took, not for its own size.
+      if ('openapi_work' === err?.code && pool.steps < all && pool.steps <= (part.taken ?? 0)) {
+        throw new ResolveError(
+          'openapi_work',
+          `resolve: the documents given as text take more than ${all} steps to read together, ` +
+            `the most a limit of ${limit} bytes gives, at ${quoted(uri)}`,
+          uri,
+        )
+      }
+      throw err
+    } finally {
+      pool.steps = Math.max(0, pool.steps - (part.taken ?? 0))
+      if (shared) {
+        pool.spare = Math.max(0, pool.spare - Math.max(0, (part.copied ?? 0) - (ALIAS_FACTOR - 1) * size))
+      }
+    }
+  }
+}
 
 // The base a description is read under when the caller gives no retrieval
 // URI and the document has no `$self`: a fixed URN, as the specification
@@ -77,7 +139,11 @@ type ResolveOptions = {
   // schema, a Path Item, a map of parameters. Not read under
   // `refs: 'pointer'`.
   documents?: Record<string, unknown>
-  // How `parse` reads a document given as text or bytes.
+  // How `parse` reads a document given as text or bytes. Such a document
+  // may be anything at its root, and needs no version. The texts are
+  // held together to what one text is: `maxBytes` in size, the steps of
+  // that size in work, and one alias budget, unless `aliasBudget` gives
+  // each its own.
   parse?: ParseOptions
   // Raise an error, rather than report it, for a reference that names
   // nothing, a malformed fragment, and a `$ref` whose value is not a
@@ -495,6 +561,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     if (pointers) throw new TypeError("resolve: documents are read under refs: 'uri', and refs is 'pointer'")
     if (!isMap(o.documents)) throw new TypeError('resolve: documents must be a map from URI to document')
     const taken = new Set([retrieved, entry])
+    const read = partReader(o.parse)
     for (const name of Object.keys(o.documents)) {
       if (undefined === o.retrievalUri && !ABSOLUTE.test(name)) {
         throw new TypeError(
@@ -507,7 +574,11 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       }
       taken.add(key)
       let doc: any = o.documents[name]
-      if ('string' === typeof doc || doc instanceof Uint8Array) doc = parse(doc, o.parse)
+      // A document that is missing is not one with nothing in it.
+      if (undefined === doc) {
+        throw new TypeError(`resolve: documents names ${quoted(name)} and gives no document for it`)
+      }
+      if ('string' === typeof doc || doc instanceof Uint8Array) doc = read(doc, key)
       const said = readVersion(doc)
       const described = null !== said.field
       const dmv: ModelVersion = !described ? mv : 'unknown' === said.version ? '3.2' : (said.version as ModelVersion)
@@ -1197,14 +1268,18 @@ type Loader = (uri: string) => unknown | Promise<unknown>
 
 type ResolveAllOptions = ResolveOptions & {
   // Reads a document by its URI, which is absolute and in its normal
-  // form: its tree, its text or its bytes, or `undefined` when it has
-  // none, which leaves the references to it as written. It is the only
+  // form: its tree, its text or its bytes, or `undefined` or `null` when
+  // it has none, which leaves the references to it as written. It is the only
   // thing here that reaches outside the process, and what it may reach is
   // its own to bound: see the loaders of `@tabnas/openapi/loaders`.
   load: Loader
-  // The most documents that may be loaded. Default 10,000. Past it
-  // `resolveAll` raises `openapi_work`.
+  // The most documents `load` may be asked for, whether or not it has
+  // them. Default 10,000. Past it `resolveAll` raises `openapi_work`.
   maxDocuments?: number
+  // The most rounds of loading. A round loads what the documents so far
+  // name, so the count is how deep one document names another. Default
+  // 64. Past it `resolveAll` raises `openapi_work`.
+  maxRounds?: number
 }
 
 // An option of `resolve` that only `resolveAll` gives: stop once the
@@ -1216,34 +1291,54 @@ const WANTED = Symbol('wanted')
 // the documents it names and does not have are loaded, and so on until a
 // round names nothing new. A document is asked for once. The description
 // is then resolved as `resolve` resolves it, given those documents.
+//
+// What a description can make this cost is bounded, with no option
+// given. `load` is asked for `maxDocuments` documents at most, counting
+// the ones it does not have, since asking is what a loader's work is.
+// The rounds are `maxRounds` at most: each indexes every document so
+// far, so a chain of documents that each name the next would cost the
+// square of its length. And the texts `load` gives are read together as
+// one text would be: see `partReader`.
 async function resolveAll(raw: any, options: ResolveAllOptions): Promise<ResolveResult> {
-  const { load, maxDocuments = 10_000, ...rest } = options
+  const { load, maxDocuments = 10_000, maxRounds = 64, ...rest } = options
   if ('function' !== typeof load) throw new TypeError('resolveAll: load must be a function, not ' + quoted(load))
-  if (!((Number.isInteger(maxDocuments) && 0 < maxDocuments) || Infinity === maxDocuments)) {
-    throw new TypeError('resolveAll: maxDocuments must be a whole number above 0, not ' + quoted(maxDocuments))
+  for (const [name, n] of [
+    ['maxDocuments', maxDocuments],
+    ['maxRounds', maxRounds],
+  ] as [string, number][]) {
+    if (!((Number.isInteger(n) && 0 < n) || Infinity === n)) {
+      throw new TypeError(`resolveAll: ${name} must be a whole number above 0, not ` + quoted(n))
+    }
   }
   // Each document is read once, here, so that a round does not read the
   // texts of the rounds before it again.
+  const read = partReader(rest.parse)
   const documents: Record<string, unknown> = {}
   for (const [name, doc] of Object.entries(rest.documents ?? {})) {
-    documents[name] = 'string' === typeof doc || doc instanceof Uint8Array ? parse(doc, rest.parse) : doc
+    documents[name] = 'string' === typeof doc || doc instanceof Uint8Array ? read(doc, name) : doc
   }
   const asked = new Set<string>()
-  let loaded = 0
-  for (;;) {
+  for (let round = 0; ; round++) {
     // A round is never strict: a document it lacks is what it is for.
     const found = resolve(raw, { ...rest, documents, strict: false, [WANTED]: true } as any) as unknown as { wanted: string[] }
     const fresh = found.wanted.filter((uri) => !asked.has(uri))
     if (0 === fresh.length) break
+    if (maxRounds <= round) {
+      throw new ResolveError(
+        'openapi_work',
+        `resolveAll: the documents name one another more than ${maxRounds} rounds of loading deep, at ${quoted(fresh[0])}`,
+        fresh[0],
+      )
+    }
     for (const uri of fresh) {
-      asked.add(uri)
-      if (maxDocuments <= loaded) {
+      if (maxDocuments <= asked.size) {
         throw new ResolveError('openapi_work', `resolveAll: more than ${maxDocuments} documents to load, at ${quoted(uri)}`, uri)
       }
+      asked.add(uri)
       const doc = await load(uri)
-      if (undefined === doc) continue
-      loaded++
-      documents[uri] = 'string' === typeof doc || doc instanceof Uint8Array ? parse(doc, rest.parse) : doc
+      // Null is how many a loader says it has nothing, as undefined is.
+      if (null == doc) continue
+      documents[uri] = 'string' === typeof doc || doc instanceof Uint8Array ? read(doc, uri) : doc
     }
   }
   return resolve(raw, { ...rest, documents })

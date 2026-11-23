@@ -624,6 +624,28 @@ r.documents // => [ 'https://example.com/api/schemas/Pet.yaml' ]
 r.unresolved // => []
 ```
 
+A document given as text may be anything at its root, a schema that is
+`true` or a list that a pointer reads into, and needs no version. Only
+a description has to be a map that declares one. A name whose document
+is `undefined` throws a `TypeError`, and `null` is a document with
+nothing in it.
+
+`resolve` holds the texts together to the limits of one text:
+
+- `parse.maxBytes` in size, 128 MiB unless given. JSON text counts,
+  though `parse` reads one JSON text of any size. Past it `resolve`
+  throws a `ResolveError` coded `openapi_size`.
+- The steps of that size in work, 13,421,772 unless `maxBytes` is
+  given. Past them it throws `openapi_work`.
+- One alias budget. Each text's aliases may copy out ten times its
+  size, and the texts share 1,000,000 bytes more between them. Past
+  that `parse` raises `openapi_alias_budget`. With
+  `parse.aliasBudget` given, each text has that budget to itself.
+
+Each error has the URI of the document it stopped at in `at`. A tree
+does not count toward any of the three, and neither does the
+description: whoever built a tree had its size to bound.
+
 `resolve` indexes every document it has before it judges any
 reference, so a reference resolves into whichever document holds what
 it names:
@@ -810,6 +832,7 @@ function resolveAll(raw: any, options: ResolveAllOptions): Promise<ResolveResult
 type ResolveAllOptions = ResolveOptions & {
   load: (uri: string) => unknown | Promise<unknown>
   maxDocuments?: number         // default 10000
+  maxRounds?: number            // default 64
 }
 ```
 
@@ -821,21 +844,40 @@ does, given those documents. Its options and its result are those of
 `resolve`.
 
 `load` takes an absolute URI in its normal form, with no fragment. It
-returns the document's tree, its text or its bytes, or `undefined` for
-a document it does not have, which leaves the references to it as
-written. `resolveAll` asks for a document once, and never for one in
-`documents`. It also loads a document that only a URI of the
-`connections` report names, such as an `operationRef`.
+returns the document, as `documents` takes one. For a document it
+does not have it returns `undefined` or `null`, which leaves the
+references to it as written. `resolveAll` asks for a document once, and
+never for one in `documents`. It also loads a document that only a URI
+of the `connections` report names, such as an `operationRef`.
 
 `load` is the only thing here that reaches outside the process, and it
 is the caller's. What it may read is its own to bound, since a
 description names whatever documents its author chose. A loader that
 throws stops `resolveAll` with that error.
 
-More documents than `maxDocuments` throw a `ResolveError` coded
-`openapi_work`, with the URI that was one too many in `at`. Under
-`strict` the rounds run as they do without it, and `resolveAll` then
-refuses a reference that is still unresolved.
+`resolveAll` bounds what a description can make it do, with no option
+given. Each bound throws a `ResolveError`, with the URI it stopped at
+in `at`:
+
+- `resolveAll` asks `load` for `maxDocuments` documents at most,
+  counting the ones `load` does not have. One more is `openapi_work`.
+- It loads in `maxRounds` rounds at most. A round loads what the
+  documents so far name, so the count is how deep one document names
+  another. The description of DigitalOcean, in 3,622 files, takes 7.
+  Each round indexes every document again, so a long chain of
+  documents would cost the square of its length. One more round is
+  `openapi_work`. Documents given in `documents` take no round.
+- It holds the texts and bytes that `load` gives, with those in
+  `documents`, together to the limits of one text: see
+  [Several documents](#several-documents).
+
+`maxSteps`, `maxDepth` and `onCheck` hold for each round, and for the
+resolving after the rounds. No bound here is on time: an `onCheck` that
+returns `false` after a deadline stops the indexing, and a loader's own
+`signal` stops a request.
+
+Under `strict` the rounds run as they do without it, and `resolveAll`
+then refuses a reference that is still unresolved.
 
 ```js
 const { parse, resolveAll } = require('@tabnas/openapi')
@@ -937,9 +979,9 @@ not, it refuses with a `ResolveError` coded `openapi_load`:
   uses, an IPv4 address inside an IPv6 one included. Whoever answers for a
   listed name could otherwise point it at the machine itself, or at the
   network the machine is on. The loader sends its request to the
-  address it judged, so the name is not resolved a second time.
-  `privateAddresses: true` lifts this, for a host that is meant to be
-  on such a network.
+  addresses it judged, the next where it cannot reach the first, so
+  the name is not resolved a second time. `privateAddresses: true`
+  lifts this, for a host that is meant to be on such a network.
 - A document past `maxBytes`, by the length the server declares or as
   the bytes arrive, and one that takes longer than `timeoutMs`,
   redirects included. `signal` stops a request under way.
@@ -953,6 +995,16 @@ to another.
 
 The loader keeps what it read for as long as it is kept itself, unless
 `cache` is `false`. It asks again for a document that failed.
+
+Its connections are its own. It takes up none that other code of the
+process opened, since such a connection may be to an address the loader
+did not judge. It keeps a connection for the next document from the
+same host. Where the server had closed a kept connection, it asks once
+more on a new one.
+
+`resolveAll` knows a document that a redirect led to by the URI it
+asked for, and reads the document's relative references against that
+URI.
 
 ```js
 const { httpLoader } = require('@tabnas/openapi/dist/loaders')

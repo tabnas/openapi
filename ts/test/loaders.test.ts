@@ -8,7 +8,7 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert'
 import { spawnSync } from 'node:child_process'
-import { createServer } from 'node:http'
+import { createServer, get as httpGet, globalAgent } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -193,6 +193,8 @@ describe('the HTTP loader', () => {
   const servers: Server[] = []
   const origins: string[] = []
   const hosts: string[] = []
+  // The connections each server has had opened to it.
+  const opened: Record<string, number> = { a: 0, b: 0 }
 
   test.before(async () => {
     for (const name of ['a', 'b']) {
@@ -205,6 +207,7 @@ describe('the HTTP loader', () => {
           res.end('nothing here')
         } else route(req, res)
       })
+      server.on('connection', () => opened[name]++)
       await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
       const port = (server.address() as AddressInfo).port
       servers.push(server)
@@ -326,6 +329,72 @@ describe('the HTTP loader', () => {
     }
     await assert.rejects(async () => named([])('http://api.example.com/x'), refused)
     assert.deepEqual(asked, [])
+  })
+
+  test('a named host is asked at the address that was judged, and at the next where the first cannot be reached', async () => {
+    routes['a/api/Pet.yaml'] = give('type: object\n')
+    const port = hosts[0].split(':')[1]
+    // No resolver has this name: only the loader's own judging can have
+    // sent the request to this machine.
+    const named = (addresses: string[]) =>
+      httpLoader({
+        hosts: ['api.example.test:' + port],
+        schemes: ['http'],
+        privateAddresses: true,
+        lookup: async () => addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 })),
+      })
+    const uri = `http://api.example.test:${port}/api/Pet.yaml`
+    assert.equal(text(await named(['127.0.0.1'])(uri)), 'type: object\n')
+    assert.equal(seen['a/api/Pet.yaml'].host, 'api.example.test:' + port)
+    // The server listens on 127.0.0.1 alone, so nothing answers at ::1,
+    // whether or not this machine has that address.
+    assert.equal(text(await named(['::1', '127.0.0.1'])(uri)), 'type: object\n')
+    await assert.rejects(async () => named(['::1'])(uri), (e: any) => refused(e) && /could not be read/.test(e.message))
+  })
+
+  test('its connections are its own, and it keeps them', async () => {
+    routes['a/api/Pet.yaml'] = give('type: object\n')
+    routes['a/api/Owner.yaml'] = give('type: string\n')
+    // Other code of the program asks the same host, through the agent
+    // the process shares, which keeps the connection.
+    await new Promise<void>((done, fail) => {
+      httpGet(origins[0] + '/api/Pet.yaml', { agent: globalAgent }, (res) => {
+        res.resume()
+        res.on('end', () => done())
+      }).on('error', fail)
+    })
+    const before = opened.a
+    const load = local()
+    assert.equal(text(await load(origins[0] + '/api/Pet.yaml')), 'type: object\n')
+    // It did not take that connection up: it opened one.
+    assert.equal(opened.a, before + 1)
+    // And its next document goes out on the one it has.
+    assert.equal(text(await load(origins[0] + '/api/Owner.yaml')), 'type: string\n')
+    assert.equal(opened.a, before + 1)
+  })
+
+  test('a kept connection that the server has closed is asked on once more', async () => {
+    const used = new WeakSet<object>()
+    routes['a/first'] = (req, res) => {
+      used.add(req.socket)
+      res.end('one\n')
+    }
+    // The server drops a connection it has answered on before, without a
+    // word, as one that closes its idle connections does to a request
+    // that crosses the closing.
+    routes['a/second'] = (req, res) => {
+      if (used.has(req.socket)) req.socket.destroy()
+      else res.end('two\n')
+    }
+    const load = local()
+    assert.equal(text(await load(origins[0] + '/first')), 'one\n')
+    assert.equal(text(await load(origins[0] + '/second')), 'two\n')
+    assert.equal(asked.filter((a) => 'a/second' === a).length, 2)
+    // A connection that fails when it is new is not asked on again.
+    routes['a/dropped'] = (req) => void req.socket.destroy()
+    const fresh = local()
+    await assert.rejects(async () => fresh(origins[0] + '/dropped'), (e: any) => refused(e) && /could not be read/.test(e.message))
+    assert.equal(asked.filter((a) => 'a/dropped' === a).length, 1)
   })
 
   test('which addresses are public', () => {
