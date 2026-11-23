@@ -488,12 +488,22 @@ describe('the text', () => {
     assert.equal(code(() => parse(new Uint8Array([0xef, 0xbb, 0xbf, 0x61, 0x3a, 0x20, 0x31, 0x0a]), { maxBytes: 4 })), 'openapi_size')
     for (const not of [-1, NaN, '9', null]) assert.throws(() => parse(yaml, { maxBytes: not as any }), TypeError)
 
-    // Without the option the limit is 16 MiB, and Infinity lifts it.
+    // Without the option the limit is 128 MiB, and Infinity lifts it. A
+    // text past 16 MiB is read by a parser that keeps its last few rules
+    // only, and reads to the same tree.
     const filler = 'x'.repeat(16 * 1024 * 1024)
+    assert.equal(parse('openapi: 3.1.0\na: ' + filler + '\n').a.length, filler.length)
     assert.throws(
-      () => parse('openapi: 3.1.0\na: ' + filler + '\n'),
+      () => parse('openapi: 3.1.0\na: ' + filler.repeat(8) + '\n'),
+      (e: any) => 'openapi_size' === e.code && 128 * 1024 * 1024 === e.details.limit && 128 * 1024 * 1024 + 19 === e.details.size,
+    )
+    // A parser the caller built keeps every rule it runs, so the limit for
+    // one stays where that puts it.
+    assert.throws(
+      () => parse('openapi: 3.1.0\na: ' + filler + '\n', { instance: make() }),
       (e: any) => 'openapi_size' === e.code && 16 * 1024 * 1024 === e.details.limit,
     )
+    assert.equal(parse('openapi: 3.1.0\na: ' + filler + '\n', { instance: make(), maxBytes: 17 * 1024 * 1024 }).a.length, filler.length)
     assert.equal(parse('{"openapi":"3.1.0","a":"' + filler + '"}').a.length, filler.length)
     assert.equal(parse('openapi: 3.1.0\na: ' + 'x'.repeat(70000) + '\n', { maxBytes: Infinity }).a.length, 70000)
   })

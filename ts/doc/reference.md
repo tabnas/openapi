@@ -140,22 +140,41 @@ copy the grammar makes, as it makes it, and refuses the text at the
 alias whose copy passes the budget. That count is from below: one for
 each member, each item, and each scalar copied.
 
-`maxBytes` is the largest text the grammar is given. Reading a
-description takes about a hundred bytes of memory for each of its bytes.
-One just under the default, 16 MiB, took about 1.4 GB where it was
-measured, inside the 2.2 GB heap Node gave a process by default there. A
-process with a smaller heap needs a smaller limit. JSON text that
-`JSON.parse` reads is not limited.
+`maxBytes` is the largest text the grammar is given, 128 MiB by default.
+JSON text that `JSON.parse` reads has no limit.
 
 `maxBytes` bounds the work of the grammar as well as the size of the
 text, because size alone does not say what a text costs. The grammar
-keeps about a kilobyte for each step it takes, until it is done. A
-description takes a step for each ten of its bytes. A text of very many
-small values, such as a list of a million one-letter items, takes one or
-two steps for each byte, and a megabyte and a half of them took all of
-that heap. So the grammar is given a step for each ten bytes of
-`maxBytes`, and a hundred thousand at least, and a text that takes more
-is stopped, as `openapi_work`. The default gives 1,677,721 steps.
+takes a step for each rule it runs. A description takes a step for each
+seven to nine of its bytes. A text of very many small values takes one
+or two steps for each byte: a list of a million one-letter items is such
+a text. So the grammar has a step for each ten bytes of `maxBytes`, and
+a hundred thousand at least, and `parse` stops a text that takes more,
+as `openapi_work`. The default gives 13,421,772 steps. A description meets
+that bound before the limit on its size: by default `parse` reads one of
+up to between 90 and 120 MiB, by how dense it is.
+
+What a text costs in memory depends on which parser reads it. `parse`
+has two. The first keeps every rule it has run until it is done. That
+makes it the faster of the two, and it takes about a hundred bytes of
+memory for each byte of a description: one of 17.9 MiB took 1.8 GB and
+5 seconds, in a heap of 2.2 GB. So it reads a text of up to 16 MiB, and
+has 1,677,721 steps at most, which hold it to about 1.5 GB. The second
+keeps its last three rules only. It reads the same tree in three times
+the time, and takes far less memory: the same 17.9 MiB took 434 MB and
+16 seconds, and a description of 99.6 MiB took 1.2 GB and 80 seconds.
+It reads a text past 16 MiB, and reads again, from the start, a text
+that took more steps than the first parser has.
+
+A text of small values costs time more than memory. The default bound
+stopped 40 MiB of them, in each of four shapes, after 87 to 101 seconds
+and 370 to 717 MB. A process with less time or less memory to give
+needs a smaller `maxBytes`: under 16 MiB it holds the first parser to
+fewer steps as well.
+
+A parser from `make`, given as `instance`, keeps every rule whatever the
+size of the text, and is the only parser to read it. So the limit for
+one is 16 MiB, unless `maxBytes` says otherwise.
 
 Each error carries the figures in `details`: `size` and `budget` for
 `openapi_alias_budget`, `size` and `limit` for `openapi_size`, `steps`

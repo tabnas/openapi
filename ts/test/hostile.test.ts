@@ -197,19 +197,33 @@ describe('hostile: a text of very many small values', () => {
     assert.equal(parse(dense['small maps'](190000), { maxBytes: Infinity }).base.length, 17272)
   })
 
-  test('at the default limit, a text that exhausted memory is refused in a process of its own', () => {
-    // Six megabytes of small items, a third of the size limit. Before the
-    // work was bounded this ended the process. It runs in a child so that
-    // an end of that kind fails the test and not the run.
+  test('at the default limit, a text past the steps of a parser that keeps every rule is read by the other', () => {
+    // A parser that keeps every rule it runs is given 1,677,721 steps,
+    // which is what holds it to the memory a process has: six megabytes
+    // of small items once ended the process. 850 kilobytes of them take a
+    // few steps more than that. The text is stopped there, and read again
+    // by the parser that keeps its last few rules, which has the steps of
+    // the size limit. With a limit given, the steps of that limit are all
+    // a text has, on either parser. Both run in a child, in the heap the
+    // limits were set by, so that a process that ends for want of memory
+    // fails the test and not the run.
     const script = `
       const { parse } = require(${JSON.stringify(join(__dirname, '..', 'dist', 'openapi.js'))})
-      let out
-      try { parse('a: [' + 'x,'.repeat(3000000) + 'x]\\n'); out = 'parsed' } catch (e) { out = e.code + ' ' + JSON.stringify(e.details) }
-      console.log(out)
+      const out = [parse('a: [' + 'x,'.repeat(425000) + 'x]\\n').a.length]
+      try {
+        parse('{"openapi":"3.1.0","a":[' + '1,'.repeat(450000) + '1]}', { strict: true, maxBytes: 17 * 1024 * 1024 })
+        out.push('parsed')
+      } catch (e) {
+        out.push(e.code + ' ' + JSON.stringify(e.details))
+      }
+      console.log(out.join(' | '))
     `
-    const child = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 120 * SECONDS })
+    const child = spawnSync(process.execPath, ['--max-old-space-size=2240', '-e', script], {
+      encoding: 'utf8',
+      timeout: 240 * SECONDS,
+    })
     assert.equal(child.status, 0, child.stderr.split('\n').slice(0, 3).join(' | '))
-    assert.equal(child.stdout.trim(), 'openapi_work {"steps":1677721,"limit":16777216}')
+    assert.equal(child.stdout.trim(), '425001 | openapi_work {"steps":1782579,"limit":17825792}')
   })
 })
 

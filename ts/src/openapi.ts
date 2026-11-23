@@ -75,14 +75,17 @@ const HINTS: Record<string, string> = {
     'inside anchored nodes multiply. Write the repeated part out where ' +
     'it is used, or raise aliasBudget for a text you trust.',
   openapi_size:
-    'Reading YAML takes about a hundred bytes of memory for each byte of ' +
-    'the text. Raise maxBytes where the process has that much. JSON text ' +
-    'that JSON.parse reads has no limit.',
+    'Reading YAML takes memory in step with the text: about a hundred ' +
+    'bytes for each byte of a description on a parser that keeps every ' +
+    'rule it runs, and far less on the one parse turns to past 16 MiB, ' +
+    'about 1.6 GB for 128 MiB. Raise maxBytes where the process has ' +
+    'that much. JSON text that JSON.parse reads has no limit.',
   openapi_work:
-    'The grammar keeps about a kilobyte for each step until it is done, ' +
-    'and a text of very many small values takes a step or two for each ' +
-    'of its bytes, where a description takes one for each ten. Raise ' +
-    'maxBytes where the process has the memory.',
+    'A text of very many small values takes a step or two for each of ' +
+    'its bytes, where a description takes one for each seven to nine, ' +
+    'and the grammar is given one for each ten bytes of maxBytes. Raise ' +
+    'maxBytes where the process has the time and the memory for the ' +
+    'steps the text takes.',
   openapi_encoding:
     'Save the description as UTF-8, or parse it without strict to have ' +
     'each ill-formed sequence read as U+FFFD.',
@@ -519,13 +522,20 @@ type ParseOptions = {
   aliasBudget?: number
 
   // The largest text, in bytes of UTF-8, the grammar is given. Default
-  // 16 MiB: reading YAML takes about a hundred bytes of memory for each
-  // byte of a description. A larger text is refused, as `openapi_size`,
-  // before any of it is built, unless JSON.parse reads it. The limit
-  // also bounds the work the grammar does: a text that takes more steps
-  // than a description of this size takes is stopped, as `openapi_work`,
-  // since a text of very many small values costs ten times what a
-  // description of its size does. Infinity lifts both.
+  // 128 MiB, or 16 MiB for a parser given as `instance`. A text past the
+  // limit is refused, as `openapi_size`, before any of it is built,
+  // unless JSON.parse reads it. The limit also bounds the work the
+  // grammar does: a text that takes more steps than a step for each ten
+  // bytes of the limit is stopped, as `openapi_work`, since a text of
+  // very many small values costs ten times what a description of its
+  // size does. Infinity lifts both.
+  //
+  // Reading YAML takes about a hundred bytes of memory for each byte of
+  // a description while the grammar keeps every rule it has run. So
+  // `parse` reads that way only a text of up to 16 MiB, and only for the
+  // steps a description of 16 MiB may take. A text that is larger, or
+  // takes more steps, is read by a parser that keeps its last few rules
+  // only: the same tree, in far less memory and three times the time.
   maxBytes?: number
 
   // A map this parse fills with what it has to say beside the tree. Its
@@ -542,16 +552,43 @@ type ParseReport = {
   lossy?: Lossy[]
 }
 
-// The largest text the grammar is given unless the parse says otherwise.
-const MAX_BYTES = 16 * 1024 * 1024
+// The largest text the grammar reads keeping every rule it has run until
+// the parse ends. That record is most of what a large text costs in
+// memory: about a hundred bytes for each byte of a description.
+const HISTORY_OVER = 16 * 1024 * 1024
 
-// The work the grammar is given with it: a rule pass for each ten bytes
-// of the size limit, which is what the largest descriptions take (one for
-// each 8 to 11 bytes, measured on GitHub's and Stripe's), and a hundred
-// thousand passes at least, so that a small limit still reads a small
-// text. At the default limit that is 1,677,721 passes, and about 1.6 GB.
+// A text past that is read by a parser that keeps the last few rules
+// only, which is the engine's `rule.history`. It reads to the same tree,
+// in three times the time and far less memory: 434 MB where it took
+// 1,778 MB, for a description of 17.9 MiB.
+const HISTORY_KEPT = 3
+
+// The largest text the grammar is given unless the parse says otherwise.
+// Under that bound a description of this size takes the memory one of
+// `HISTORY_OVER` takes without it, about 1.6 GB, which is what the first
+// limit was set by.
+const MAX_BYTES = 128 * 1024 * 1024
+
+// The work the grammar is given with a size limit: a rule pass for each
+// ten bytes of it, and a hundred thousand passes at least, so that a
+// small limit still reads a small text. The largest descriptions take a
+// pass for each seven to nine bytes (GitHub's 7.9, Stripe's 9.3 and
+// Microsoft Graph's 7.0 and 7.8), so the bound on work comes a little
+// before the limit on size for one. At the default limit it is
+// 13,421,772 passes.
 const BYTES_A_STEP = 10
 const STEPS_FLOOR = 100_000
+
+function stepsOf(bytes: number): number {
+  return Infinity === bytes ? Infinity : Math.max(STEPS_FLOOR, Math.floor(bytes / BYTES_A_STEP))
+}
+
+// The passes a text may take on a parser of `parse`'s own that keeps
+// every rule: those of `HISTORY_OVER`, which are 1,677,721. Each stays in
+// memory until the parse ends, about 900 bytes of it, so this is what
+// holds such a parse to about 1.5 GB. A text that takes more is read
+// again, from its start, by the parser that keeps its last few rules.
+const KEPT_STEPS = stepsOf(HISTORY_OVER)
 
 // A shared parser holds the whole of its last parse until its next one
 // starts: about a hundred times the size of the text. Past this many
@@ -566,7 +603,22 @@ const PLACING = 2_000_000
 // an exponent large enough to pass the largest double.
 const MAY_BE_LOSSY = /[0-9]{16}|[eE][+]?[0-9]{3}/
 
-const shared: { loose?: Tabnas; spec?: Tabnas; strict?: Tabnas } = {}
+const shared: Record<string, Tabnas | undefined> = {}
+
+// The parser `parse` reads with when it is given none: one for each
+// setting of `strict` and `reading`, and a second of each, which keeps
+// its last `HISTORY_KEPT` rules only, for a text past `HISTORY_OVER` and
+// for one that takes more than `KEPT_STEPS`.
+function sharedParser(strict: boolean, reading: Reading, bounded: boolean): Tabnas {
+  const name = (strict ? 'strict' : reading) + (bounded ? ', bounded' : '')
+  let tn = shared[name]
+  if (undefined === tn) {
+    tn = strict ? make({ strict: true }) : make({ reading })
+    if (bounded) tn.options({ rule: { history: HISTORY_KEPT } })
+    shared[name] = tn
+  }
+  return tn
+}
 
 // Parse a description and return its raw tree: the document as written,
 // every `$ref` kept as a reference. The text is a string, or its bytes.
@@ -609,7 +661,21 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
     throw new TypeError('parse: duplicates must be last or merge, not ' + quoted(duplicates))
   }
   const aliasBudget = limitOf(options.aliasBudget, 'aliasBudget')
-  const maxBytes = limitOf(options.maxBytes, 'maxBytes') ?? MAX_BYTES
+  // A text past `HISTORY_OVER` is read by a parser that keeps its last few
+  // rules only. A parser the caller built reads as it was built, so the
+  // limit for one stays where a parser that keeps every rule puts it.
+  const ours = null == options.instance
+  let large = false
+  if (ours && HISTORY_OVER < 3 * text.length) {
+    bytes ??= utf8Length(text)
+    large = HISTORY_OVER < bytes
+  }
+  const maxBytes = limitOf(options.maxBytes, 'maxBytes') ?? (ours ? MAX_BYTES : HISTORY_OVER)
+  // The work the text may take, and what of it a parser of our own that
+  // keeps every rule is given: each of its steps stays in memory, so it
+  // has those of `HISTORY_OVER` at most, whatever the limit.
+  const steps = stepsOf(maxBytes)
+  const kept = ours && !large ? Math.min(steps, KEPT_STEPS) : steps
   const report = options.report
   if (undefined !== report && (null == report || 'object' !== typeof report || Array.isArray(report))) {
     throw new TypeError('parse: report must be a map for the parse to fill, not ' + quoted(report))
@@ -622,20 +688,13 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
       `parse: reading is ${reading}, and the instance reads as ${built}; build it with make({ reading: '${reading}' })`,
     )
   }
-  const tn =
-    options.instance ??
-    (strict
-      ? (shared.strict ??= make({ strict: true }))
-      : 'spec' === reading
-        ? (shared.spec ??= make({ reading: 'spec' }))
-        : (shared.loose ??= make()))
+  const tn = options.instance ?? sharedParser(strict, reading, large)
   if (!tn.internal().plugins.includes(OpenApi)) {
     throw new Error('parse: the instance has no OpenApi plugin; build it with make()')
   }
 
   // Strict JSON refuses a text with nothing in it itself, as `unexpected`.
   const empty = !strict && !hasContent(text)
-  const steps = Infinity === maxBytes ? Infinity : Math.max(STEPS_FLOOR, Math.floor(maxBytes / BYTES_A_STEP))
   const state: ParseState = {
     strict,
     duplicates,
@@ -643,7 +702,7 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
     empty,
     docs: 0,
     placing: PLACING,
-    work: { left: steps, steps, limit: maxBytes },
+    work: { left: kept, steps: kept, limit: maxBytes },
   }
 
   // Bytes that were not what their encoding allows. They were read with
@@ -712,11 +771,35 @@ function parse(source: string | Uint8Array, options: ParseOptions = {}): any {
   // there to spare.
   if (null != state.refuse) refuseAt(tn, state, opening(given))
 
+  const read = (by: Tabnas): any => {
+    try {
+      return by.parse(given, { openapi: state })
+    } finally {
+      if (ours && RELEASE_OVER < text.length) release(by)
+    }
+  }
   let value: any
+  let again = false
   try {
-    value = tn.parse(given, { openapi: state })
-  } finally {
-    if (null == options.instance && RELEASE_OVER < text.length) release(tn)
+    value = read(tn)
+  } catch (err: any) {
+    if (kept === steps || 'openapi_work' !== err?.code) throw err
+    again = true
+  }
+  // The text took more steps than a parser that keeps every rule is
+  // given, and has more to its name. It is read again, from its start and
+  // as if for the first time, by the parser that keeps its last few
+  // rules. That is done here and not where the error was caught, since
+  // the error holds every rule of the reading it ended, and those are
+  // most of what that reading cost.
+  if (again) {
+    if (!(RELEASE_OVER < text.length)) release(tn)
+    state.docs = 0
+    state.placing = PLACING
+    state.work = { left: steps, steps, limit: maxBytes }
+    if (undefined !== state.lossy) state.lossy = []
+    if (undefined !== state.copies) state.copies.made = 0
+    value = read(sharedParser(strict, reading, true))
   }
   // Several documents come back as their list. The root check let them
   // by only because each after the first is empty.

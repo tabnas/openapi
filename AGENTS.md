@@ -271,29 +271,62 @@ in `test/pending/` and its other tests in `ts/test/openapi.test.ts` and
 - **`make` asks the yaml grammar whether it reads the core schema.**
   The option arrived in `@tabnas/yaml` 0.5.33, and a grammar before it
   takes an option it does not know in silence, so `yes` would stay a
-  Boolean with nothing said. The manifests name no version of the yaml
-  package, so the check is in the code: `readsCoreSchema`
-  (`ts/src/core-schema.ts`) parses the text `yes` with the parser
-  `make` built, and `make` throws a `TypeError` unless it is a string.
-  Keep the check for as long as the peer range admits an earlier yaml
-  package.
+  Boolean with nothing said. So the check is in the code:
+  `readsCoreSchema` (`ts/src/core-schema.ts`) parses the text `yes` with
+  the parser `make` built, and `make` throws a `TypeError` unless it is
+  a string. The peer range starts at 0.5.33 since Decision 33, so an
+  install that honours it has no earlier yaml package. Keep the check
+  all the same: a peer range is a request, and an install made with
+  `--force` or `--legacy-peer-deps` does not honour it.
 - **`maxBytes` bounds the work as well as the size, and the work is
   what costs.** The engine keeps about 900 bytes for each rule pass
   until the parse ends: its rule history, which TypeScript does not
-  bound by default. The largest descriptions take a pass for each 8 to
-  11 bytes (GitHub's and Stripe's, 1.4 and 1.5 million passes). A text
-  of small values takes one or two for each byte: a megabyte and a half
-  of `x,` in a flow list took all of a 2.2 GB heap, far under the size
-  limit. So `check` counts its passes and raises `openapi_work` at one
-  for each ten bytes of `maxBytes`, 100,000 at least. The engine's
-  `rule.history` option is the other lever, and is not set: a bound of 3
-  read all 215 fixture rows the same and cut a dense megabyte from
-  1.5 GB to 140 MB, at three to four times the time. It is the plan's
-  T2b item 5, and is measured across the corpus: every YAML document
-  that is read at all reads to the same tree, the largest in under a
-  third of the memory and three times the time, and both Microsoft Graph
-  descriptions are read under it. Turning it on is the plan's Decision
-  34.
+  bound by default. The largest descriptions take a pass for each seven
+  to nine bytes: GitHub's 7.9 and Stripe's 9.3, in 1.4 and 1.5 million
+  passes, and the two of Microsoft Graph 7.0 and 7.8. A text of small
+  values takes one or two for each byte: a megabyte and a half of `x,`
+  in a flow list took all of a 2.2 GB heap, far under the size limit.
+  So `check` counts its passes and raises `openapi_work` at one for
+  each ten bytes of `maxBytes`, 100,000 at least. A description
+  therefore meets the bound on its work before the limit on its size,
+  at seven to nine tenths of it.
+- **The parser that keeps every rule is a first reading, and the
+  bounded one reads what is too much for it**, which is the plan's
+  Decision 34, taken on 22 November 2026. The engine's `rule.history`
+  option is the other lever on memory: with a bound of 3 every YAML
+  document of the corpus that is read at all reads to the same tree, in
+  three times the time and far less memory (E13). So `parse` keeps two
+  shared parsers for each setting of `strict` and `reading`
+  (`sharedParser`). The one that keeps every rule reads a text of up to
+  `HISTORY_OVER`, 16 MiB, and has `KEPT_STEPS` at most: the 1,677,721
+  steps of that size, which hold it to about 1.5 GB. The one bounded at
+  `HISTORY_KEPT` reads a text past that size, and reads again, from its
+  start, a text the first was stopped on. The turn is on work as well
+  as on size because the limit has both faces. On size alone, a dense
+  description of 14 MiB was stopped for its work where one of 17 MiB was
+  read, and GitHub's own takes 83% of the first parser's steps today.
+  - The second reading is started outside the `catch`. The error holds
+    every rule of the reading it ended, and inside the `catch` the
+    second reading ran with all of the first still held.
+  - The default `maxBytes` is 128 MiB, where the bounded parser takes
+    the memory the first limit was set by: read that way with no bound
+    on its work, a description of 129 MiB took 1.6 GB and 103 seconds
+    in a heap of 2.2 GB. One of 17.9 MiB took 1.8 GB with every rule
+    kept and 434 MB bounded.
+  - By default the bound on work comes first. A description of 99.6 MiB
+    is read, in 80 seconds and 1.2 GB. One of 125.5 MiB, with a pass
+    for each 8.5 bytes, is stopped after 98 seconds. Both Microsoft
+    Graph descriptions are read, in 28 and 57 seconds. A dense
+    description of 14.2 MiB is read in 19 seconds, the first reading
+    included, with 1.9 GB at its most.
+  - The worst text for the default is one of small values past 16 MiB:
+    40 MiB of them, in each of four shapes, was stopped after 87 to 101
+    seconds, with 370 to 717 MB.
+  - A parser given as `instance` reads as it was built, and is the only
+    reader of its text, so the default limit for one stays 16 MiB.
+  - `ts/test/history.test.ts` holds the two parsers to each other on
+    every row of `test/spec/` and `test/pending/`, reports and refusals
+    included, and on the petstore with a member past 16 MiB.
 - **A refusal decided from the text** (`openapi_size`,
   `openapi_alias_budget`, `openapi_encoding`) is put in the parse state
   as `refuse`, and `refuseAt` raises it. An error needs a token and a
