@@ -209,7 +209,7 @@ default that a shared row pins changes until porting starts.
 | T0 | gates: the corpus sweep and its ledger, the apidef gate, the fixture homes | done |
 | T1 | apidef's swap, proven locally | done here: `duplicates` on `parse`, `refs` on `resolve`, and the preset equal to apidef's own resolver on every document compared. apidef's side is a branch of apidef, voxgig/apidef#230, which the apidef gate holds to apidef's `main`: the plan's Decision 20, taken on 20 November 2026. [`docs/design/apidef-swap/`](docs/design/apidef-swap/README.md) describes it. It merges after this package's first release |
 | T2 | reading, in this repository | done here: `reading: 'spec'`, bytes as input, the alias budget, the limits on a text's size and on the work it takes, the `lossy` report and `wellFormed`. apidef's side drops its own source checks, as the third commit of its branch. Built on the plan's defaults for Decisions 21 to 25, which the maintainer took as they stood on 20 November 2026 |
-| T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger is 5 rows where it was 190, three of them accepted and two the descriptions refused for their size, and under the base reading it is 235 where it was 254. The rule history is measured, and turning it on is Decision 34 |
+| T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger was 5 rows where it had been 190, three of them accepted and two the descriptions refused for their size, and under the base reading 235 where it had been 254. Decision 34 reads those two: under `reading: 'spec'` the ledger is 3 rows, all accepted and none open, and every one of the corpus's 5,182 descriptions parses |
 | T3 | the site index, and `resolve` on it | all five items built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. Item 3 is the dialects: a schema of 3.1 or 3.2 is read by the dialect it declares, draft-04 to 2020-12, an unknown one as 2020-12 and reported in `dialects`; URIs are compared in their normal form; and the vendored schemas are the latest published, with the model held to the 3.1.2 and 3.2.1 texts. W4 and W5 are repaired. Items 2 to 5 need what tabnas/expr#117 added to the fold, which `expr` 0.6.4 released: with it `resolve` runs on an install from the registry, and the corpus baselines are swept on the released packages. Item 4 is the three reports the audit found missing, each read from the index and none changing the resolved tree: the `implicitMapping` rows of `connections`, `conflict` on a `provenance` row whose reference lands on a type it does not expect, and `urls`, the URLs a description gives with what a relative one is relative to. Item 5 is the fixtures: every probe of the audit has a row under its number, in `test/resolve/probes.tsv` or `test/pending/parse-probes.tsv`, and `ts/test/probes.test.ts` holds the two files to the audit's list. With it, the last leniency of Decision 25 that the object model owed: a 3.0 component is read under any name, as 3.1 and 3.2 read it |
 | T4 to T6 | several documents, beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
@@ -966,7 +966,8 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   the commit, and accept a change that was meant with `--write`, which
   rewrites both files. A row that is not this package's defect is
   listed, with its reason, in `test/corpus/accepted.tsv`; the rows left
-  are the open ones, and the plan's G1 is their reaching none.
+  are the open ones, and the plan's G1 is their reaching none, which
+  the sweep under `reading: 'spec'` has done since 23 November 2026.
   [`tools/corpus/README.md`](tools/corpus/README.md) has the options and
   how to read a change. `--reading spec` sweeps under the
   specification's reading, into a run folder of its own, and is held to
@@ -987,9 +988,9 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   the run proved nothing about it. The candidate is the branch, and
   `--base` names what it is compared with: the commit of apidef's `main`
   that the branch last merged, so that the two differ by the swap alone.
-  Nothing is allowed to fail. At apidef a774fb5 against 00778c4 that is
-  2,588 of 2,589 tests passing, none failing, one skipped as on apidef's
-  `main`, and every definition byte-identical: the 95 it compares by
+  Nothing is allowed to fail. At apidef 2a66bb9 against 25f8d4b that is
+  2,691 of 2,692 tests passing, none failing, one skipped as on apidef's
+  `main`, and every definition byte-identical: the 98 it compares by
   itself, and the twelve of G2 below. When apidef's `main` moves, merge
   it into the branch and run the gate again. `--patch` applies a
   diff to the candidate first, for a change to apidef that is not

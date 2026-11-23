@@ -149,23 +149,22 @@
   "parse": {
     "all": {
       "died": 0,
-      "parsed": 8971,
-      "refused": 15
+      "parsed": 8973,
+      "refused": 13
     },
     "descriptions": {
       "died": 0,
-      "parsed": 5168,
-      "refused": 14
+      "parsed": 5170,
+      "refused": 12
     },
     "diedHow": {},
     "referenceRefuses": 0,
     "refusedByCode": {
       "openapi_root": 1,
-      "openapi_size": 2,
       "unexpected": 1,
       "unterminated_comment": 11
     },
-    "refusedValid": 15
+    "refusedValid": 13
   },
   "resolve": {
     "checks": {
@@ -179,11 +178,11 @@
         "notFound": 1
       },
       "implicitMapping": {
-        "count": 8232,
+        "count": 11063,
         "notFound": 0
       },
       "mapping": {
-        "count": 3863,
+        "count": 7810,
         "notFound": 47
       },
       "operationId": {
@@ -199,7 +198,7 @@
         "notFound": 1
       },
       "tag": {
-        "count": 122422,
+        "count": 151852,
         "notFound": 57840
       },
       "tagParent": {
@@ -207,30 +206,30 @@
         "notFound": 0
       }
     },
-    "cuts": 1924,
+    "cuts": 2123,
     "dataSlots": 53741,
     "documentsByUnresolved": {
       "external": 789,
       "not-found": 1
     },
     "documentsHeldAsWritten": 0,
-    "documentsWithCuts": 601,
+    "documentsWithCuts": 603,
     "documentsWithDataSlots": 886,
     "heldAsWritten": 0,
     "kinds": {
       "pathItem": 13,
-      "reference": 433820,
-      "schema": 705820
+      "reference": 543474,
+      "schema": 753392
     },
     "notRun": 0,
-    "resolved": 5168,
-    "sites": 1139653,
+    "resolved": 5170,
+    "sites": 1296879,
     "skipped": {
       "no-version": 3803
     },
     "status": {
-      "cut": 1924,
-      "resolved": 1108130,
+      "cut": 2123,
+      "resolved": 1265157,
       "unresolved": 29599
     },
     "threwByCode": {},
@@ -242,8 +241,8 @@
   "trees": {
     "byClass": {
       "type:string->boolean:yaml11-bool-word:PLAIN": {
-        "documents": 166,
-        "values": 1013
+        "documents": 168,
+        "values": 1099
       },
       "type:string->null:comment-syntax:PLAIN": {
         "documents": 32,
@@ -275,13 +274,13 @@
         "values": 233
       },
       "yaml11-word": {
-        "documents": 166,
-        "documentsWithNothingElse": 143,
-        "values": 1013
+        "documents": 168,
+        "documentsWithNothingElse": 145,
+        "values": 1099
       }
     },
-    "compared": 8971,
-    "differ": 220
+    "compared": 8973,
+    "differ": 222
   },
   "yamlFeatures": {
     "aliases": 58,

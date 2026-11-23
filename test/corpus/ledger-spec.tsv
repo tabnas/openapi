@@ -1,6 +1,4 @@
 source	path	outcome	detail
 apis-guru	APIs/amazonaws.com/kafka/2018-11-14/openapi.yaml	differs	value:string:BLOCK_LITERAL:|N-=624
 apis-guru	APIs/azure.com/recoveryservicessiterecovery-service/2018-07-10/swagger.yaml	differs	value:string:BLOCK_LITERAL:|N-=2
-apis-guru	APIs/microsoft.com/graph-beta/1.0.1/openapi.yaml	refused	openapi_size
-apis-guru	APIs/microsoft.com/graph/1.0.1/openapi.yaml	refused	openapi_size
 oai-tests-3.3	tests/schema/minimal-objects.yaml	refused	openapi_root
