@@ -1,0 +1,27 @@
+{
+  "source": "OpenAPI 3.2.0, Appendix F, Base URI From Encapsulating Entity",
+  "note": "The parts of a multipart/related archive, each given by the URI of its Content-Location header, which is its base URI. schemas/bar resolved against the OpenAPI document's is the URI of the schema part. The example's own #/components/api/schemas/Foo names nothing in it, and is kept as the specification writes it.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": {
+    "https://example.com/api/schemas/bar": "bar.json"
+  },
+  "tree": {
+    "openapi": "3.2.0",
+    "info": { "title": "Example API", "version": 1, "externalDocs": { "url": "docs.html" } },
+    "components": {
+      "requestBodies": {
+        "Foo": { "content": { "application/json": { "schema": { "$ref": "#/components/api/schemas/Foo" } } } }
+      },
+      "schemas": { "Foo": { "properties": { "bar": { "type": "string" } } } }
+    }
+  },
+  "unresolved": [
+    { "at": "/components/requestBodies/Foo/content/application~1json/schema", "ref": "#/components/api/schemas/Foo", "why": "not-found" }
+  ],
+  "cuts": [],
+  "sites": [
+    ["", "/components/requestBodies/Foo/content/application~1json/schema", "", "/components/api/schemas/Foo", "unresolved"],
+    ["", "/components/schemas/Foo/properties/bar", "https://example.com/api/schemas/bar", "", "resolved"]
+  ]
+}

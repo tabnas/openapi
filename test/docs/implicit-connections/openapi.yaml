@@ -1,0 +1,13 @@
+openapi: 3.2.0
+info:
+  title: Entry
+  version: "1"
+components:
+  securitySchemes:
+    MySecurity:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+paths:
+  /foo:
+    $ref: 'other#/components/pathItems/Foo'

@@ -50,6 +50,9 @@ type Connection = {
   name: string
   found: boolean
   target: string | null
+  // The document `target` is in, by the URI it was given under, where
+  // that is not the description.
+  targetDoc?: string
   // Why a URI found nothing: as the resolver's unresolved reasons.
   why?: string
   // The object-model type at a located target: operationRef must reach
@@ -266,14 +269,24 @@ function connectionsOf(
   const byUri = (name: string, base: string) => {
     const where = index.locate(name, base)
     if (null == where.target) {
-      return { found: false, target: null, why: (where.why ?? 'not-found') as string | undefined, type: null, node: undefined }
+      return {
+        found: false,
+        target: null,
+        doc: undefined,
+        why: (where.why ?? 'not-found') as string | undefined,
+        type: null,
+        node: undefined,
+      }
     }
-    const land = index.landingAt(where.target)
+    // It may name a location in another document of the set, which is
+    // typed by the model of that document's own version.
+    const land = index.landingAt(where.target, where.doc)
     return {
       found: land.found,
       target: pointer(where.target),
+      doc: undefined === where.doc || where.doc === index.docs[0] ? undefined : where.doc.key,
       why: land.found ? undefined : 'not-found',
-      type: land.found ? slot(mv, index.stateAt(land)).type : null,
+      type: land.found ? slot((land.doc ?? index.docs[0]).mv, index.stateAt(land)).type : null,
       node: land.found ? land.node : undefined,
     }
   }
@@ -387,6 +400,7 @@ function connectionsOf(
       const u = byUri(use.name, use.base)
       row.found = u.found
       row.target = u.target
+      if (undefined !== u.doc) row.targetDoc = u.doc
       if (null != u.why) row.why = u.why
       if ('operationRef' === use.kind) row.type = u.type
       if ('dynamicRef' === use.kind) {
@@ -408,6 +422,7 @@ function connectionsOf(
         const u = byUri(use.name, use.base)
         row.found = u.found
         row.target = u.target
+      if (undefined !== u.doc) row.targetDoc = u.doc
         row.via = 'uri'
         row.type = u.type
         if (null != u.why) row.why = u.why
@@ -441,6 +456,7 @@ function connectionsOf(
         const u = byUri(use.name, use.base)
         row.found = u.found
         row.target = u.target
+      if (undefined !== u.doc) row.targetDoc = u.doc
         row.via = 'uri'
         if (null != u.why) row.why = u.why
       }
