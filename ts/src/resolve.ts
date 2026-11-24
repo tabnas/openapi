@@ -29,6 +29,8 @@ import type { FoldOptions, Op, Positions, Site } from '@tabnas/expr'
 
 import { connectionsOf, reuseOf } from './connections'
 import type { Connection, UrlUse } from './connections'
+import { ignoredRows, operationViews, operationsOf } from './operations'
+import type { Ignored, OperationView } from './operations'
 import { dialectOf } from './dialect'
 import type { DialectUse } from './dialect'
 import type { ModelVersion } from './model'
@@ -206,6 +208,10 @@ type ResolveOptions = {
   // the object model reads an extension as data: Stripe's
   // x-expansionResources, say.
   extensions?: string[]
+  // Give `operations`: each operation with what applies to it, its Path
+  // Item's parameters, and the servers and security it has from above,
+  // among them.
+  operations?: boolean
   // A named set of the options above. 'apidef' resolves as @voxgig/apidef
   // does: { siblings: 'merge', xref: true, sharing: 'site', cycles: 'keep',
   // slots: 'all', targets: 'object', refs: 'pointer' }. Options given
@@ -296,6 +302,15 @@ type ResolveResult = {
   // document order, each with its absolute form where it has one. None is
   // loaded.
   urls: UrlUse[]
+  // What the specification says to ignore: a header parameter named
+  // `Accept`, `Content-Type` or `Authorization`, and a header named
+  // `Content-Type` of a response or of an encoding. Each is on every
+  // route that reaches it. Empty for 2.0, which has no such rule.
+  ignored: Ignored[]
+  // With the option `operations`: every operation that a route through
+  // `paths`, `webhooks` and callbacks reaches, with its parameters after
+  // its Path Item's are inherited, and its servers and security.
+  operations?: OperationView[]
 }
 
 class ResolveError extends Error {
@@ -415,6 +430,7 @@ function settle(options: ResolveOptions): Settled {
     refs: 'uri',
     xref: false,
     extensions: [],
+    operations: false,
     ...preset,
     ...given,
   } as Settled
@@ -441,6 +457,9 @@ function settle(options: ResolveOptions): Settled {
   }
   if (undefined !== o.onCheck && 'function' !== typeof o.onCheck) {
     throw new TypeError('resolve: onCheck must be a function, not ' + quoted(o.onCheck))
+  }
+  if ('boolean' !== typeof o.operations) {
+    throw new TypeError('resolve: operations must be true or false, not ' + quoted(o.operations))
   }
   return o
 }
@@ -1193,10 +1212,22 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   if (asApidef && o.xref) orderAsWalked(tree)
 
   const named = connectionsOf(raw, mv, index, hasIds(mv), counting ? tick : undefined)
+  const reused = reuseOf(raw, mv, index, refuse, counting ? tick : undefined)
+  // The operations, each with what applies to it, read on the document
+  // as written. What a row gives as a value is read off the finished
+  // tree, below.
+  const reached = operationsOf(raw, mv, index, {
+    merge: 'merge' === o.siblings,
+    maxDepth: limit,
+    declared: named.declared,
+    refuse,
+    tick: counting ? tick : undefined,
+  })
   const connections = [
     ...named.rows,
     ...mergeRows.sort((a, b) => a[0] - b[0]).map((r) => r[1]),
-    ...reuseOf(raw, mv, index, refuse, counting ? tick : undefined),
+    ...reused,
+    ...reached.rows,
   ]
 
   if ('copy' === o.sharing || 'inline-once' === o.sharing) {
@@ -1249,7 +1280,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     for (const use of index.dialects()) dialects.push(use)
   }
 
-  return {
+  const result: ResolveResult = {
     tree,
     version: detected,
     documents: others.map((doc) => doc.key),
@@ -1260,8 +1291,10 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     dataSlots: index.dataSlots,
     dialects,
     urls: named.urls,
+    ignored: ignoredRows(reached),
   }
-
+  if (o.operations) result.operations = operationViews(reached, tree)
+  return result
 }
 
 // What `resolveAll` takes beside the options of `resolve`.

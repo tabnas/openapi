@@ -1,0 +1,50 @@
+input	expected	kind
+# A template, read by readTemplate under the kind in the third column:
+# a path, a server's URL, or `runtime`, where what is between braces is
+# a runtime expression. expected is what it gives, or
+# ERROR:openapi_expression. Only the braces are held to the grammar.
+#
+# Paths. The specification's grammar is wider than RFC 6570: any
+# character but a brace between braces, a literal joined to an
+# expression, and several expressions in one segment.
+/pets	{"template":"/pets","kind":"path","parts":[{"literal":"/pets"}]}	path
+/	{"template":"/","kind":"path","parts":[{"literal":"/"}]}	path
+/pets/{petId}	{"template":"/pets/{petId}","kind":"path","parts":[{"literal":"/pets/"},{"name":"petId"}]}	path
+/pets/{petId}/photos/{photoId}	{"template":"/pets/{petId}/photos/{photoId}","kind":"path","parts":[{"literal":"/pets/"},{"name":"petId"},{"literal":"/photos/"},{"name":"photoId"}]}	path
+/customers/{id}.json	{"template":"/customers/{id}.json","kind":"path","parts":[{"literal":"/customers/"},{"name":"id"},{"literal":".json"}]}	path
+/schedules/{id}:cancel	{"template":"/schedules/{id}:cancel","kind":"path","parts":[{"literal":"/schedules/"},{"name":"id"},{"literal":":cancel"}]}	path
+/a/{x}{y}	{"template":"/a/{x}{y}","kind":"path","parts":[{"literal":"/a/"},{"name":"x"},{"name":"y"}]}	path
+/a/{user-id}	{"template":"/a/{user-id}","kind":"path","parts":[{"literal":"/a/"},{"name":"user-id"}]}	path
+/a/{user id}	{"template":"/a/{user id}","kind":"path","parts":[{"literal":"/a/"},{"name":"user id"}]}	path
+/a/{a/b}	{"template":"/a/{a/b}","kind":"path","parts":[{"literal":"/a/"},{"name":"a/b"}]}	path
+/a/{+path}	{"template":"/a/{+path}","kind":"path","parts":[{"literal":"/a/"},{"name":"+path"}]}	path
+/a/{id}/b/{id}	{"template":"/a/{id}/b/{id}","kind":"path","parts":[{"literal":"/a/"},{"name":"id"},{"literal":"/b/"},{"name":"id"}]}	path
+{id}	{"template":"{id}","kind":"path","parts":[{"name":"id"}]}	path
+	{"template":"","kind":"path","parts":[]}	path
+# A server's URL.
+https://{region}.example.com:{port}/{basePath}	{"template":"https://{region}.example.com:{port}/{basePath}","kind":"server","parts":[{"literal":"https://"},{"name":"region"},{"literal":".example.com:"},{"name":"port"},{"literal":"/"},{"name":"basePath"}]}	server
+https://example.com/v1	{"template":"https://example.com/v1","kind":"server","parts":[{"literal":"https://example.com/v1"}]}	server
+/	{"template":"/","kind":"server","parts":[{"literal":"/"}]}	server
+{scheme}://{host}	{"template":"{scheme}://{host}","kind":"server","parts":[{"name":"scheme"},{"literal":"://"},{"name":"host"}]}	server
+# A runtime template: a callback's key, or a Link's value. One bare
+# expression is its one part. Text that is no expression and has no
+# braces is a literal.
+$request.body#/url	{"template":"$request.body#/url","kind":"runtime","parts":[{"name":"$request.body#/url","expression":{"expression":"$request.body#/url","source":"request","kind":"body","pointer":"/url","tokens":["url"]}}]}	runtime
+{$request.query.queryUrl}	{"template":"{$request.query.queryUrl}","kind":"runtime","parts":[{"name":"$request.query.queryUrl","expression":{"expression":"$request.query.queryUrl","source":"request","kind":"query","name":"queryUrl"}}]}	runtime
+http://notificationServer.com?transactionId={$request.body#/id}&email={$request.body#/email}	{"template":"http://notificationServer.com?transactionId={$request.body#/id}&email={$request.body#/email}","kind":"runtime","parts":[{"literal":"http://notificationServer.com?transactionId="},{"name":"$request.body#/id","expression":{"expression":"$request.body#/id","source":"request","kind":"body","pointer":"/id","tokens":["id"]}},{"literal":"&email="},{"name":"$request.body#/email","expression":{"expression":"$request.body#/email","source":"request","kind":"body","pointer":"/email","tokens":["email"]}}]}	runtime
+{$url}/done	{"template":"{$url}/done","kind":"runtime","parts":[{"name":"$url","expression":{"expression":"$url","source":"url"}},{"literal":"/done"}]}	runtime
+$request.query.{x}	{"template":"$request.query.{x}","kind":"runtime","parts":[{"name":"$request.query.{x}","expression":{"expression":"$request.query.{x}","source":"request","kind":"query","name":"{x}"}}]}	runtime
+https://example.com/hook	{"template":"https://example.com/hook","kind":"runtime","parts":[{"literal":"https://example.com/hook"}]}	runtime
+$5.00	{"template":"$5.00","kind":"runtime","parts":[{"literal":"$5.00"}]}	runtime
+# Braces that are no template's.
+/a/{id	ERROR:openapi_expression	path
+/a/id}	ERROR:openapi_expression	path
+/a/{}	ERROR:openapi_expression	path
+/a/{b{c}}	ERROR:openapi_expression	path
+/a/{b}}	ERROR:openapi_expression	path
+https://{region.example.com	ERROR:openapi_expression	server
+https://{}.example.com	ERROR:openapi_expression	server
+# Under `runtime`, what is between braces is an expression.
+http://example.com/{id}	ERROR:openapi_expression	runtime
+{$request.header.}	ERROR:openapi_expression	runtime
+{$request.body#/a	ERROR:openapi_expression	runtime

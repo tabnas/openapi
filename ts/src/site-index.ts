@@ -1036,6 +1036,6 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
   }
 }
 
-export { Loc, buildIndex, hasIds, EXTRA_FACTOR }
+export { Loc, buildIndex, hasIds, pathOf, EXTRA_FACTOR }
 
 export type { DocFacts, DocInput, IndexConfig, Kind, Known, Landing, Located, Region, SiteFacts, SiteIndex, Why }
