@@ -978,8 +978,8 @@ value is `undefined` and the rest of the entry stands. That is so for a
 reference that closes a cycle, and under `sharing: 'inline-once'` for
 each use of a target after the first.
 
-A webhook's operations and a callback's are read as any other, with
-`servers` and `security` from above in the same way. The specification
+The operations of a webhook and of a callback are read as any other,
+with `servers` and `security` inherited in the same way. The specification
 does not say whether the root's apply to a request that the API itself
 sends, so `from` says where each came from. A callback that leads back
 to a Path Item it is already in ends there. A `$ref` where an
@@ -1003,7 +1003,7 @@ specification says to ignore, on each route that reaches it:
 
 - A header parameter named `Accept`, `Content-Type` or `Authorization`,
   whatever its case, for which `what` is `parameter`. The request body,
-  the responses and the security schemes describe those. Such a
+  the responses, and the security schemes describe those. Such a
   parameter is in no operation's `parameters`. Its row says how its list
   is reached, with the path where that is under `paths`, the method
   where the list is an operation's own, and its place in the list.

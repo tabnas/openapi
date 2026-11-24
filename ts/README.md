@@ -9,16 +9,20 @@ kept as a reference, after checking that it is one description with a
 map at its root. `resolve` builds a new tree with the references resolved,
 within the document and into any other document given with it, and
 `resolveAll` loads the documents a description names, with a loader
-you give it.
+you give it. `resolve` also reports what a description names without a
+reference, and gives each operation with the parameters, servers, and
+security that apply to it. `readExpression`, `readTemplate`, and
+`evaluateExpression` read the runtime expressions and the templates
+that a description holds in its strings.
 
 ## Install
 
 ```bash
-npm install @tabnas/openapi @tabnas/parser @tabnas/jsonic @tabnas/yaml @tabnas/json
+npm install @tabnas/openapi @tabnas/parser @tabnas/jsonic @tabnas/yaml @tabnas/json @tabnas/expr
 ```
 
-`@tabnas/parser`, `@tabnas/jsonic`, `@tabnas/yaml` and `@tabnas/json` are
-peer dependencies. Node.js 24 or later.
+`@tabnas/parser`, `@tabnas/jsonic`, `@tabnas/yaml`, `@tabnas/json`, and
+`@tabnas/expr` are peer dependencies. Node.js 24 or later.
 
 ## One example
 
@@ -41,7 +45,7 @@ requires a known version.
 - [How-to guide](doc/guide.md): files and bytes, strict JSON, the
   specification's reading, versions, your own parser, the limits on
   what is read, resolving and writing out a description, the names it
-  uses, error codes.
+  uses, its operations, runtime expressions, error codes.
 - [Reference](doc/reference.md): every export, the tree, the errors.
 - [Concepts](doc/concepts.md): why one parser, why the raw tree comes
   first, the two readings, and what resolution makes of references,

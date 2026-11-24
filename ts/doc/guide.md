@@ -613,7 +613,7 @@ and a callback give.
 ## Find the headers the specification says to ignore
 
 From 3.0 a header parameter named `Accept`, `Content-Type` or
-`Authorization` is to be ignored: the request body, the responses and
+`Authorization` is to be ignored: the request body, the responses, and
 the security schemes describe those. `ignored` lists each one, and no
 operation of the view has it among its parameters:
 
@@ -643,7 +643,7 @@ The report is given with or without `operations`. It also lists a
 header named `Content-Type` among the headers of a response or of an
 encoding, which the specification says to ignore too.
 
-## Check the paths, the servers and the links of a description
+## Check the paths, the servers, and the links of a description
 
 A path and a server's URL are templates, with names between braces. A
 name of a path is a path parameter, and a name of a server's URL is one
@@ -719,9 +719,9 @@ evaluateExpression('$response.header.Location', exchange) // => 'https://example
 evaluateExpression('$request.query.missing', exchange) // => undefined
 ```
 
-A callback's key is a runtime expression, alone or between braces in a
-URL. Read it as a template of kind `'runtime'`, and evaluate that for
-the URL to call:
+A callback's key is a runtime expression. It may stand alone, or
+between braces in a URL. Read it as a template of kind `'runtime'`, and
+evaluate that for the URL to call:
 
 ```js
 const { readTemplate, evaluateExpression } = require('@tabnas/openapi')

@@ -8,13 +8,14 @@ You need Node.js 24 or later.
 
 ## Install the package
 
-Install it with the parser and the three grammars it composes:
+Install it with the parser, the three grammars it composes, and the
+package its resolver is built on:
 
 ```bash
-npm install @tabnas/openapi @tabnas/parser @tabnas/jsonic @tabnas/yaml @tabnas/json
+npm install @tabnas/openapi @tabnas/parser @tabnas/jsonic @tabnas/yaml @tabnas/json @tabnas/expr
 ```
 
-The last four are peer dependencies, so your project decides their
+The last five are peer dependencies, so your project decides their
 versions.
 
 ## Read YAML

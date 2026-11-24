@@ -742,6 +742,13 @@ text for the texts of the set, which is Decision 36. It merged on
    rewritten to components or `$defs`, names kept apart, `$id`
    resources kept. JSON out.
 
+Begun on the maintainer's word of 24 November 2026, and section 11 has
+the record. Items 1 and 2 are built. The view is the option
+`operations` of `resolve`, with the `ignored` report beside it, and
+the apidef branch drops `dropIgnoredHeaders`. The readers are
+`readExpression`, `readTemplate` and `evaluateExpression`, and their
+static checks are six kinds of row in `connections`.
+
 ### T6: finish, then publish (S to M)
 
 1. The four documentation pages cover everything above, and the prose
@@ -893,6 +900,82 @@ what the code does.
   the bounds over a set of documents stand as built. T4 merged the same
   day, as tabnas/openapi#12, and T5 was begun on the maintainer's word,
   to the scope Decision 32 gives it.
+- **The operation view is read on the document as written, and its
+  values off the tree** (item 1). The first design walked the resolved
+  tree, where a reference is already what it names. It was put aside
+  for one reason: a row of `connections` would then depend on the
+  shape asked for, since under `sharing: 'inline-once'` the tree has
+  most references as written. So `operationsOf` walks the routes as
+  `reuseOf` does, on the site index, a reference standing for its
+  landing, and reads the facts there: which parameters apply, and which
+  object gave the servers and the security. Each value is then read
+  off the finished tree at the row's route, so it is the tree's own
+  object, and is undefined where the tree keeps a reference on the way
+  as written.
+- **What the view takes as the specification's reading**, where the
+  text leaves room:
+  - A header parameter's name is compared without regard to case, when
+    an operation's parameter stands in the place of its Path Item's.
+    The specification says a parameter is one by its name and
+    location, and notes that header names are case-insensitive.
+  - A `servers` list with nothing in it is no list, at any of the
+    three levels, as the text has it for the root's. An operation's
+    empty `security` is its own, as the text says, and so are the
+    three lists of 2.0, an empty one of which clears the root's.
+  - The operations of a webhook and of a callback inherit servers and
+    security as any other. The text does not say whether the root's
+    apply to a request that the API sends, so the view says where each
+    came from.
+  - The Path Item's parameters that are left come first, then the
+    operation's own. The text gives no order.
+- **The `ignored` report is always given**, since a walk of the routes
+  is made for `connections` either way. Beside the header parameters
+  the plan names, it lists a header named `Content-Type` among the
+  headers of a response and of an Encoding Object, which the
+  specification says to ignore in the same words. The rule is in 3.0
+  and later, and the report is empty for 2.0.
+- **The readers are lexical** (item 2), as the earlier plan's Phase 4
+  has them. One thing is read more widely than that plan said: the
+  words of the grammar match without regard to case, as the literals
+  of an ABNF grammar do, so `$URL` is `$url`. `evaluateExpression`
+  also takes a template of runtime expressions, which is what a
+  callback's key is, and gives the URL.
+- **Six kinds of row in `connections`.** Read where a template is
+  written: `serverVariable`, `template` for one that is not well made,
+  and `pathClash` for paths that are one template under other names,
+  which is the last sentence of item 1. Read for each operation, on
+  its route: `pathParameter`, `expression` and `linkParameter`. A
+  constant in a Link is no expression, and has no row. A header that a
+  parameter may not describe has no declaration, so an expression that
+  names one is held to none.
+- **A reference that could not be followed is said.** Read file by
+  file, the corpus's Azure descriptions have their common parameters
+  in other documents. The first build said of 12,287 path expressions,
+  in 374 descriptions, that the operation has no such parameter, which
+  was untrue of nearly all of them. Where an operation has a parameter
+  by a reference that is left as written, its view now has `partial`,
+  and a name not found among its parameters has `why` set to
+  `unresolved`. A `$ref` where the object model puts an operation is a
+  data slot, and no operation is read there.
+- **On the corpus**, 5,238 descriptions read with `duplicates: 'merge'`
+  and no limit on size, the nine over 10 MB left out:
+  - 139,134 operations: 138,915 under `paths`, 112 webhooks and 107
+    callbacks. They have 709,217 parameters, 273,914 of them from the
+    Path Item.
+  - Servers come from the root for 84,082 operations, from the Path
+    Item for 1,482 and from the operation for 289, and 1,209 have the
+    default. Security comes from the root for 71,007 and from the
+    operation for 28,800, and 39,327 have none.
+  - 2,388 header parameters are ignored, in 95 descriptions, and 44
+    response headers in 32. No encoding has one.
+  - **The preset's `ignored` report is what apidef's own
+    `dropIgnoredHeaders` drops**, on every one of the 5,238: the same
+    list, and the same tree once each is applied.
+  - The view's routes are those of `operationIdReuse`, on every one.
+  - No description has a path parameter that its path does not name.
+  - The longest walk takes 2.8% of its allowance
+    (`digitalocean.com/2.0`), and resolving the whole corpus takes 52
+    seconds in all, with the view asked for.
 
 **Since acceptance**, as T4 was begun:
 

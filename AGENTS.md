@@ -212,7 +212,8 @@ default that a shared row pins changes until porting starts.
 | T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger was 5 rows where it had been 190, three of them accepted and two the descriptions refused for their size, and under the base reading 235 where it had been 254. Decision 34 reads those two: under `reading: 'spec'` the ledger is 3 rows, all accepted and none open, and every one of the corpus's 5,182 descriptions parses |
 | T3 | the site index, and `resolve` on it | all five items built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. Item 3 is the dialects: a schema of 3.1 or 3.2 is read by the dialect it declares, draft-04 to 2020-12, an unknown one as 2020-12 and reported in `dialects`; URIs are compared in their normal form; and the vendored schemas are the latest published, with the model held to the 3.1.2 and 3.2.1 texts. W4 and W5 are repaired. Items 2 to 5 need what tabnas/expr#117 added to the fold, which `expr` 0.6.4 released: with it `resolve` runs on an install from the registry, and the corpus baselines are swept on the released packages. Item 4 is the three reports the audit found missing, each read from the index and none changing the resolved tree: the `implicitMapping` rows of `connections`, `conflict` on a `provenance` row whose reference lands on a type it does not expect, and `urls`, the URLs a description gives with what a relative one is relative to. Item 5 is the fixtures: every probe of the audit has a row under its number, in `test/resolve/probes.tsv` or `test/pending/parse-probes.tsv`, and `ts/test/probes.test.ts` holds the two files to the audit's list. With it, the last leniency of Decision 25 that the object model owed: a 3.0 component is read under any name, as 3.1 and 3.2 read it |
 | T4 | several documents | done, on the maintainer's word of 23 November 2026, with the bounds of Decision 36 as the maintainer took them on 24 November: the index over a set of documents and `resolve` on it, given the documents in a table (items 1 and 2); a document with no version typed by the references into it (item 3); `resolveAll`, which loads what a description names in rounds, with the two loaders of Decision 31, one for files under a directory and one for HTTP from listed hosts (item 4); the `connections` report across documents (item 5); and the specification's five examples as the first cases of `test/docs/` (item 6). Each description of the Azure sample, Redocly's starter and DigitalOcean's source under `slots: 'all'` resolves from its own file with nothing left unresolved, which `tools/corpus/documents.cjs` measures |
-| T5, T6 | beyond references, then finish and publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
+| T5 | beyond references | begun on the maintainer's word of 24 November 2026, to the scope of Decision 32. Items 1 and 2 are built: the operation as the specification reads it, as the option `operations` of `resolve`, with the `ignored` report; and `readExpression`, `readTemplate` and `evaluateExpression`, with what a template or an expression names checked in `connections`. On the corpus the `ignored` report equals apidef's own `dropIgnoredHeaders` on every description, 5,238 of them, and apidef's branch drops that function. Item 3, bundling, is next |
+| T6 | finish, then publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
 `ts/test/debug-model.test.ts` and `rs/tests/debug_model_test.rs` hold
@@ -722,11 +723,72 @@ refused. `test/docs/` holds the cases of several documents, with
 `ts/test/documents-spec.test.ts` as the runner, and
 `ts/test/documents.test.ts` what JSON cannot carry.
 
+**The operation as the specification reads it** (T5). An Operation
+Object does not hold all that applies to its operation, and
+`ts/src/operations.ts` reads the rest: `operationsOf` walks every route
+to an operation, through `paths`, `webhooks` and the callbacks of
+operations, and says for each its parameters after its Path Item's are
+inherited, and which object gave it its servers, its security, and in
+2.0 its `consumes`, `produces` and `schemes`. `resolve` gives that as
+`operations`, under the option of that name, and always gives
+`ignored`, which is read off the same walk.
+
+- **The walk is on the document as written**, as `reuseOf` is: a
+  reference on the way stands for its landing (`stand`), a Path Item's
+  fields beside its `$ref` are read with what it names, and under
+  `siblings: 'merge'` so are the members beside any reference
+  (`beside`). So the facts do not depend on the shape asked for. It
+  was the other way round in the first design, which walked the
+  resolved tree: under `sharing: 'inline-once'` that tree has most
+  references as written, and a row of `connections` would then depend
+  on the shape.
+- **A value is read off the finished tree**, at the row's route
+  (`operationViews`), after `unshare`. A route is a path in the
+  resolved tree wherever every reference on it resolved there, so the
+  value is the tree's own object. Where the tree keeps a reference on
+  the way as written, the value is undefined and the facts stand.
+- **A reference that could not be followed is said, not guessed at**
+  (`Seen.left`). A `$ref` where the model puts an operation is a data
+  slot, and no operation is read there. A parameter behind such a
+  reference makes its operation `partial`, and a name not found among
+  that operation's parameters has `why: 'unresolved'`. This came from
+  the corpus: read file by file, Azure's descriptions have their
+  common parameters in other documents, and 12,287 path expressions
+  were said to have no parameter, which was untrue of nearly all.
+- **The walk is bounded as `reuseOf` is**, by `index.allowance`, and
+  runs after it, so the message of that bound is the one a description
+  meets first. Callbacks nest to `maxDepth` at most. On the corpus the
+  longest walk takes 2.8% of its allowance.
+- **It names the states of the object model it steps from**
+  (`pathItem`, `operation`, `parameter`, `responses`, and from 3.0
+  `callback`, `mediaType` and `encoding`), which
+  `ts/test/operations.test.ts` holds the model of every version to. Which members of a Path Item are
+  operations is the model's to say, by the version of the document the
+  Path Item is in.
+
+**Templates and runtime expressions** (T5) are read by
+`ts/src/expression.ts`: `readExpression`, `readTemplate` and
+`evaluateExpression`. The readers are lexical, as the specification's
+ABNF is: an operator grammar reads the skeleton and splits the names,
+which is why `@tabnas/expr` is not used for them (the earlier plan's
+Decision 7). What they name is checked in two places. Where a template
+is written, `connectionsOf` reads a server's URL (`serverOf`) and the
+paths of a Paths Object (`pathsOf`). What depends on the operation is
+read on the routes, in `operationsOf`: a path's expressions against the
+operation's path parameters, a runtime expression of a Link or of a
+callback's key against the parameters of the operation it belongs to,
+and a Link's parameter names against the operation the Link names
+(`targetOf`, which reads an operation that no route reaches as it is
+written). `test/expression/` pins the readers, with
+`ts/test/expression-spec.test.ts` as the runner.
+
 `test/resolve/*.tsv` pins the resolver, with
 `ts/test/resolve-spec.test.ts` as the runner (optional `select`,
-`connections`, `provenance`, `dialects` and `urls` columns); identity, cyclic graphs, the
+`connections`, `provenance`, `dialects`, `urls`, `operations` and
+`ignored` columns); identity, cyclic graphs, the
 byte budget and the step bound, which JSON cannot carry, are in
-`ts/test/resolve.test.ts`.
+`ts/test/resolve.test.ts`, and the same for the view in
+`ts/test/operations.test.ts`.
 
 `compat: 'apidef'` is held to apidef's own resolver by
 `tools/apidef-preset.cjs`, which runs both on one raw tree and compares
@@ -820,12 +882,12 @@ keeps cycles.
 
 | Path | What it is |
 |---|---|
-| [`ts/`](ts/) | **Canonical** TypeScript implementation, the `@tabnas/openapi` package. Source in `src/openapi.ts`: `parse(text, options)`, `version(tree)`, the `OpenApi` plugin, `make(options)`, `VERSION`; with `aliasedSize(text)` from `src/yaml-alias.ts`, `wellFormed(tree)` from `src/well-formed.ts`, and what `parse` does to a text before the grammar in `src/text.ts`. `resolve(raw, options)` and `resolveAll(raw, options)` are in `src/resolve.ts`, on the site index of `src/site-index.ts`, and the loaders `resolveAll` can be given are in `src/loaders.ts`, a module the main one does not load. Tests in `test/`, compiled to `dist-test/`. |
+| [`ts/`](ts/) | **Canonical** TypeScript implementation, the `@tabnas/openapi` package. Source in `src/openapi.ts`: `parse(text, options)`, `version(tree)`, the `OpenApi` plugin, `make(options)`, `VERSION`; with `aliasedSize(text)` from `src/yaml-alias.ts`, `wellFormed(tree)` from `src/well-formed.ts`, and what `parse` does to a text before the grammar in `src/text.ts`. `resolve(raw, options)` and `resolveAll(raw, options)` are in `src/resolve.ts`, on the site index of `src/site-index.ts`, and the loaders `resolveAll` can be given are in `src/loaders.ts`, a module the main one does not load. The operation view is `src/operations.ts`, and `readExpression`, `readTemplate` and `evaluateExpression` are in `src/expression.ts`. Tests in `test/`, compiled to `dist-test/`. |
 | [`go/`](go/) | Go port, module `github.com/tabnas/openapi/go`, package `tabnasopenapi`. Source in `openapi.go`: `Parse(ParseOptions)`, `Fast`, `Version`, `OpenApi`, `Defaults`, `Make(MakeOptions)`, `VERSION`. `example_test.go` runs the examples the Go docs show. |
 | [`rs/`](rs/) | Rust port, crate `tabnas-openapi`, library `tabnas_openapi`: `parse(&ParseOptions)`, `Fast`, `version`, `openapi` / `plugin()`, `make` / `make_with(&MakeOptions)`, `OpenApiOptions`, `VERSION`, `OpenApiError`. `rs/AGENTS.md` has the crate's own notes, including how raw mode works around the engine's Rust API. The README's examples run as doctests. |
 | [`test/spec/`](test/spec/) | Shared `.tsv` fixtures. All three runners discover and run every file, so a row added here covers TypeScript, Go and Rust together. See [`test/AGENTS.md`](test/AGENTS.md). |
 | [`test/petstore/`](test/petstore/) | One OpenAPI 3.1 description in YAML and the same in JSON. Every runtime's suite reads both and holds them to `JSON.parse` of the JSON form. |
-| [`test/resolve/`](test/resolve/), [`test/model/`](test/model/), [`test/pending/`](test/pending/), [`test/docs/`](test/docs/) | Fixtures only the TypeScript suite runs: the resolver's, the object model's, parse fixtures for what only the TypeScript `parse` gives yet, and descriptions in several documents, a folder each. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
+| [`test/resolve/`](test/resolve/), [`test/model/`](test/model/), [`test/pending/`](test/pending/), [`test/docs/`](test/docs/), [`test/expression/`](test/expression/) | Fixtures only the TypeScript suite runs: the resolver's, the object model's, parse fixtures for what only the TypeScript `parse` gives yet, descriptions in several documents, a folder each, and the readers of runtime expressions and templates. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
 | [`test/corpus/`](test/corpus/) | `documents.json`, written by `tools/corpus/documents.cjs`: what resolving each description in several documents from its own file comes to. And the corpus sweep's record over real documents: `ledger.tsv`, one row per way a document fails, and `baseline.json`, the headline figures, both written by the sweep and never by hand; `ledger-spec.tsv` and `baseline-spec.json`, the same under `reading: 'spec'`; and `accepted.tsv`, written by hand, the ledger rows that are not this package's defect, each with its reason. |
 | [`docs/design/`](docs/design/) | The design notes, the plan, the prototypes, and [`apidef-swap/`](docs/design/apidef-swap/README.md): what apidef's side of T1 and T2 changes, and where it lives. Working documents, outside the prose gate. |
 | [`ts/doc/`](ts/doc/), [`go/doc/`](go/doc/) | Per-runtime Diátaxis docs: `tutorial.md`, `guide.md`, `reference.md`, `concepts.md`. Gated, with the READMEs, by [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). |
@@ -1343,6 +1405,12 @@ outside its lists, at the first request and at every redirect; for a
 host at an address that is not public; for a document past its size or
 its time; for credentials in a URI; and for an answer that is neither
 success, a redirect, 404 nor 410.
+
+`readExpression` and `readTemplate` raise an `ExpressionError`, with
+the one code `openapi_expression`, the text read and the offset where
+reading stopped. `test/expression/` pins it as `ERROR:<code>` rows.
+`resolve` raises nothing for a template or an expression it cannot
+read: it says so in a row of `connections`.
 
 Each of the first four of `parse` is pinned by `ERROR:<code>` rows in
 `test/spec/raw-errors.tsv` and `raw-versions.tsv`, which also pin the

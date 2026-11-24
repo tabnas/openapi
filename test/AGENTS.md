@@ -42,6 +42,23 @@ every row to that resolver. Under `cycles: 'keep'`, which the preset
 sets, the report arrays are in document order. They run in
 `ts/test/resolve-spec.test.ts`.
 
+Two more columns are optional there: `operations`, one line for each
+operation of the view that the row's options ask for, and `ignored`,
+one `what at name` line for each thing the specification says to
+ignore. The runner's own comment has the format of each. Every value a
+view gives is held to the resolved tree at its place, whatever the row
+pins. `operations.tsv` holds the view and the `ignored` report, and
+`templates.tsv` the rows of `connections` that read a template or a
+runtime expression, which say the name after the place.
+
+`expression/` holds the fixtures of the readers of runtime expressions
+and templates, a file for each function: `expression-read.tsv` for
+`readExpression`, `template-read.tsv` for `readTemplate`, with the kind
+in a third column, and `expression-eval.tsv` for `evaluateExpression`,
+with the exchange as JSON and `UNDEFINED` for no value. They run in
+`ts/test/expression-spec.test.ts`, which fails when a file there has no
+runner.
+
 `model/` holds the object model's fixtures, `classify.tsv`: a version, an
 RFC 6901 pointer and the state the classifier must reach. They run in
 `ts/test/model.test.ts`, outside `spec/` because they test the model, not
@@ -102,6 +119,7 @@ section 5 of
 | what `resolve` gives | `resolve/` | `ts/test/resolve-spec.test.ts` |
 | the object model | `model/` | `ts/test/model.test.ts` |
 | a description in several files | `docs/<case>/` | `ts/test/documents-spec.test.ts` |
+| what `readExpression`, `readTemplate` or `evaluateExpression` gives | `expression/` | `ts/test/expression-spec.test.ts` |
 
 A case of `docs/` is a folder: the documents as files, and `case.json`.
 That file names the `entry` document and the `retrievalUri` it was
