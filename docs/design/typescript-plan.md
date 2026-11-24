@@ -722,7 +722,8 @@ sample, Redocly's starter and DigitalOcean's source under
 which `tools/corpus/documents.cjs` measures; a reference outside the
 HTTP loader's list is refused with `openapi_load`; and the walk stops
 at `maxDocuments`, `maxRounds` and `maxSteps`, and at the limits of one
-text for the texts of the set, which is Decision 36.
+text for the texts of the set, which is Decision 36. It merged on
+24 November 2026, as tabnas/openapi#12.
 
 ### T5: beyond references (M each, to the scope of Decision 32)
 
@@ -811,8 +812,8 @@ Numbered from 16, after the earlier plan's fifteen.
 | 32 | What "handle" covers beyond references | the operation view, the embedded languages and bundling to JSON are in; writing YAML back with its layout is out. **Taken, 23 November 2026** | T5 |
 | 33 | Peer ranges of this package, as a standing rule | each floor at the first release that has what the package calls: `@tabnas/expr` 0.5.20 for `fold`, and so on. **Taken, 23 November 2026: a standing rule, set now and not at the release, and moved whenever the package comes to call something newer** | T6 |
 | 34 | The engine's rule history on this package's parser. Bounded at 3 it reads every YAML document of the corpus that is read at all to the same tree, in under half the memory, under a third for the largest, and three times the time (section 11) | bounded for a text past the present limit of 16 MiB, and the limit raised to what the bound then allows, measured as T2 measured the present one; unbounded below it, where nothing changes. That reads both Microsoft Graph descriptions, the last two the sweep refuses. The other courses are a bound for every text, or none. **Taken, 22 November 2026: bounded past 16 MiB, and the limit raised.** Built with the turn on work as well as on size, and the limit at 128 MiB (section 11) | T2b item 5 |
-| 35 | The rate of the bound on work. The grammar is given a step for each ten bytes of `maxBytes`, set when descriptions were thought to take one for each eight to eleven. Measured, they take one for each seven to nine, so a description meets the bound on its work at seven to nine tenths of the limit on its size (section 11) | ten, as it is: the limit is a guard, and a caller with a denser description raises `maxBytes`. The other course is seven, which makes the size limit the one a description meets, and gives every `maxBytes` a caller sets 43% more steps | T6 |
-| 36 | What a description in several documents may cost with no option given. A description names its documents, so each limit on one text is met once for every document: a floor of 100,000 steps, and of 1,000,000 bytes that aliases copy out. Twenty documents of 50 kB of small values took four seconds to read, and a chain of 800 documents that each name the next took 2.6 seconds to find, the square of its length (section 11) | as built: the texts of a description's other documents are held together to the limits of one text, `parse.maxBytes` in size, its steps in work and one alias budget; `load` is asked for 10,000 documents at most, counting the ones it does not have; and the documents are found in 64 rounds at most, where the corpus's deepest description takes 7. The other courses are the limits of each document alone, which leave a set unbounded, or an index carried from round to round, which would lift the bound on rounds and is the larger work | T4 |
+| 35 | The rate of the bound on work. The grammar is given a step for each ten bytes of `maxBytes`, set when descriptions were thought to take one for each eight to eleven. Measured, they take one for each seven to nine, so a description meets the bound on its work at seven to nine tenths of the limit on its size (section 11) | ten, as it is: the limit is a guard, and a caller with a denser description raises `maxBytes`. The other course is seven, which makes the size limit the one a description meets, and gives every `maxBytes` a caller sets 43% more steps. **Taken, 24 November 2026: ten, as it is** | T6 |
+| 36 | What a description in several documents may cost with no option given. A description names its documents, so each limit on one text is met once for every document: a floor of 100,000 steps, and of 1,000,000 bytes that aliases copy out. Twenty documents of 50 kB of small values took four seconds to read, and a chain of 800 documents that each name the next took 2.6 seconds to find, the square of its length (section 11) | as built: the texts of a description's other documents are held together to the limits of one text, `parse.maxBytes` in size, its steps in work and one alias budget; `load` is asked for 10,000 documents at most, counting the ones it does not have; and the documents are found in 64 rounds at most, where the corpus's deepest description takes 7. The other courses are the limits of each document alone, which leave a set unbounded, or an index carried from round to round, which would lift the bound on rounds and is the larger work. **Taken, 24 November 2026: as built** | T4 |
 
 ## 7. Work in other repositories
 
@@ -883,6 +884,15 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T5 was begun:
+
+- **Decisions 35 and 36 are taken, and T4 is on `main`.** On
+  24 November 2026 the maintainer took both as the plan had them. The
+  bound on work stays at a step for each ten bytes of `maxBytes`, and
+  the bounds over a set of documents stand as built. T4 merged the same
+  day, as tabnas/openapi#12, and T5 was begun on the maintainer's word,
+  to the scope Decision 32 gives it.
 
 **Since acceptance**, as T4 was begun:
 
