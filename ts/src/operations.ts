@@ -215,7 +215,6 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
   const rows: [number, Connection][] = []
   if (!isMap(raw)) return { operations, ignored, rows: [] }
   const home = index.docs[0]
-  const threeX = '2.0' !== mv
 
   let visits = 0
   const visit = (route: Path) => {
@@ -231,7 +230,9 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
 
   // What a value stands for: itself, or what its reference lands on, and
   // so on. A reference that lands nowhere is as it is written, and so is
-  // one that names it.
+  // one that names it. Each reference followed is a visit, as the value
+  // is: many values may lead into one long chain of references, and the
+  // walk is held to its bound by what it does, not by what it is asked.
   const stand = (value: any, loc: Loc | undefined, route: Path): Seen => {
     visit(route)
     let node = value
@@ -241,6 +242,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     while (undefined !== at && undefined !== at.site) {
       const land: Landing = index.landing(at.site)
       if (!land.found || true === followed?.has(at)) return { node: value, loc, left: true }
+      if (undefined !== followed) visit(route)
       ;(followed ??= new Set()).add(at)
       if (('pathItem' === at.site.kind || merge) && isMap(node)) {
         for (const k of Object.keys(node)) {
@@ -291,7 +293,10 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
   let ord = 0
   const say = (row: Connection) => rows.push([ord++, row])
 
-  const isIgnored = (p: Param): boolean => threeX && 'header' === p.in && IGNORED_HEADERS.has(p.name.toLowerCase())
+  // The rule is in 3.0 and later, and is that of the version of the
+  // document the parameter's holder is in.
+  const isIgnored = (p: Param, v: ModelVersion): boolean =>
+    '2.0' !== v && 'header' === p.in && IGNORED_HEADERS.has(p.name.toLowerCase())
 
   // The parameters a list holds that have a name and a location. One
   // that has not, a reference that names nothing among them, is no
@@ -304,12 +309,15 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     for (let i = 0; i < list.value.length; i++) {
       const at = [...route, 'parameters', i]
       const entry = stand(list.value[i], undefined === list.loc ? undefined : index.child(list.loc, i), at)
-      const name = member(entry, 'name')?.value
-      const where = member(entry, 'in')?.value
-      if ('string' !== typeof name || 'string' !== typeof where) {
-        if (entry.left) open = true
+      // A reference that could not be followed may be any parameter. What
+      // is written beside it is not the parameter it names.
+      if (entry.left) {
+        open = true
         continue
       }
+      const name = member(entry, 'name')?.value
+      const where = member(entry, 'in')?.value
+      if ('string' !== typeof name || 'string' !== typeof where) continue
       const p: Param = {
         name,
         in: where,
@@ -382,7 +390,8 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
   }
 
   const encodingOf = (enc: Seen | undefined, route: Path, v: ModelVersion, depth: number) => {
-    if (undefined === enc || !isMap(enc.node) || 64 < depth) return
+    if (undefined === enc || !isMap(enc.node)) return
+    if (maxDepth <= depth) refuse('openapi_depth', 'encodings nested deeper than ' + maxDepth, pointer(route))
     contentType(enc, route, 'encodingHeader')
     encodingsIn(enc, route, 'encoding', v, depth + 1)
   }
@@ -473,11 +482,12 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     // followed, is no operation that can be read.
     if (undefined === op || !isMap(op.node) || op.left) return
     const v = versionOf(op)
+    const threeX = '2.0' !== v
     const { list: all, open: mineOpen } = paramsOf(op, route, 'operation')
-    const mine = all.filter((p) => !isIgnored(p))
+    const mine = all.filter((p) => !isIgnored(p, v))
     const open = item.open || mineOpen
     for (const p of all) {
-      if (!isIgnored(p)) continue
+      if (!isIgnored(p, v)) continue
       const row: IgnoredFacts = { route: p.route, what: 'parameter', name: p.name, kind: item.kind, method, index: p.index }
       if ('path' === item.kind) row.path = item.key
       if (additional) row.additional = true
@@ -620,7 +630,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     const v = versionOf(item)
     const { list: all, open } = paramsOf(item, route, 'pathItem')
     for (const p of all) {
-      if (!isIgnored(p)) continue
+      if (!isIgnored(p, v)) continue
       const row: IgnoredFacts = { route: p.route, what: 'parameter', name: p.name, kind: ctx.kind, index: p.index }
       if ('path' === ctx.kind) row.path = ctx.key
       ignored.push(row)
@@ -637,7 +647,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
       route,
       kind: ctx.kind,
       key: ctx.key,
-      params: all.filter((p) => !isIgnored(p)),
+      params: all.filter((p) => !isIgnored(p, v)),
       open,
       servers: member(item, 'servers'),
       template,
@@ -646,7 +656,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     }
     if (undefined !== ctx.name) facts.name = ctx.name
     if (undefined !== ctx.of) facts.of = ctx.of
-    if (threeX && has(v, 'parameter', 'content')) for (const p of facts.params) contentOf(p.seen, p.route, v)
+    if (has(v, 'parameter', 'content')) for (const p of facts.params) contentOf(p.seen, p.route, v)
     onPath.add(item.node)
     try {
       for (const name of namesIn(item)) {
@@ -697,12 +707,17 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     let holder = loc.parent
     if (undefined !== holder && 'pathItem' !== slot(v, holder.state).type) holder = holder.parent
     const isItem = undefined !== holder && 'pathItem' === slot(v, holder.state).type
-    const above = isItem ? paramsOf({ node: holder!.raw, loc: holder }, pathOf(holder!), 'pathItem', doc) : { list: [], open: false }
-    const mine = paramsOf({ node: loc.raw, loc }, pathOf(loc), 'operation', doc)
+    // Each is read as a route reads it: a Path Item that is a reference
+    // has the fields of the one it names, with its own laid over.
+    const item = isItem ? stand(holder!.raw, holder, pathOf(holder!)) : undefined
+    const op = stand(loc.raw, loc, pathOf(loc))
+    if (op.left) return { params: [], open: true }
+    const above = undefined === item ? { list: [], open: false } : paramsOf(item, pathOf(holder!), 'pathItem', doc)
+    const mine = paramsOf(op, pathOf(loc), 'operation', doc)
     return {
       params: inherit(
-        above.list.filter((p) => !isIgnored(p)),
-        mine.list.filter((p) => !isIgnored(p)),
+        above.list.filter((p) => !isIgnored(p, v)),
+        mine.list.filter((p) => !isIgnored(p, v)),
       ),
       open: above.open || mine.open,
     }

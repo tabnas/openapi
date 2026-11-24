@@ -956,8 +956,9 @@ operation. Each says what applies:
   order, and then the operation's own. A header's name is compared
   without regard to case, as HTTP has it, and any other name exactly.
   An entry with no name or no location is left out. So is a reference
-  that names nothing, which `unresolved` lists, and the operation then
-  has `partial`: its list lacks a parameter.
+  that names nothing, which `unresolved` lists, whatever is written
+  beside it, and the operation then has `partial`: its list lacks a
+  parameter.
 - **`servers`.** The operation's own list, else its Path Item's, else
   the root's. A list with nothing in it is no list, as the specification
   has it for the root's. With no list at all, `from` is `default` and
@@ -994,10 +995,18 @@ entries are the same under any `sharing` and `cycles`. Under
 `siblings: 'merge'` the members beside a reference are read with what it
 names, their own winning, as the tree has them. With
 [several documents](#several-documents), a Path Item in another
-document is on the route of the path that names it. A value that two
-routes reach is walked once for each, so the walk is held to the bound
-that the `connections` report's is held to, and past it `resolve`
-raises `openapi_work`.
+document is on the route of the path that names it, and each operation
+is read by the version of the document it is in. So the rule on
+ignored headers holds for an operation of 3.0 or later, and a 2.0
+operation has `consumes`, `produces`, and `schemes` where a later one
+has `servers`. The lists that the root gives are the description's own.
+
+A value that two routes reach is walked once for each, and a reference
+is followed once for each value that leads to it. So the walk is held
+to the bound that the `connections` report's is held to, and past it
+`resolve` raises `openapi_work`. Callbacks and encodings that nest
+deeper than `maxDepth`, which a reference can lead them to, are
+`openapi_depth`.
 
 `ignored` is given with or without the option. It lists what the
 specification says to ignore, on each route that reaches it:

@@ -970,13 +970,17 @@ what the code does.
   data slot, and no operation is read there.
 - **On the corpus**, 5,238 descriptions read with `duplicates: 'merge'`
   and no limit on size, the nine over 10 MB left out:
-  - 139,134 operations: 138,915 under `paths`, 112 webhooks and 107
+  - 138,219 operations: 138,000 under `paths`, 112 webhooks and 107
     callbacks. They have 709,217 parameters, 273,914 of them from the
     Path Item.
-  - Servers come from the root for 84,082 operations, from the Path
+  - Servers come from the root for 83,167 operations, from the Path
     Item for 1,482 and from the operation for 289, and 1,209 have the
-    default. Security comes from the root for 71,007 and from the
+    default. Security comes from the root for 70,092 and from the
     operation for 28,800, and 39,327 have none.
+  - These figures were first written 915 operations higher, from a run
+    made before the last change of the item: the 915 are DigitalOcean's
+    source, read as one file, where each operation is a `$ref` in data
+    that is not read. The run was made again after the review below.
   - 2,388 header parameters are ignored, in 95 descriptions, and 44
     response headers in 32. No encoding has one.
   - **The preset's `ignored` report is what apidef's own
@@ -985,8 +989,34 @@ what the code does.
   - The view's routes are those of `operationIdReuse`, on every one.
   - No description has a path parameter that its path does not name.
   - The longest walk takes 2.8% of its allowance
-    (`digitalocean.com/2.0`), and resolving the whole corpus takes 52
+    (`digitalocean.com/2.0`), and resolving the whole corpus takes 51
     seconds in all, with the view asked for.
+- **Five things a review of the view found**, on tabnas/openapi#13,
+  each shown by a probe and repaired with a test:
+  - A reference followed was not a visit. Many parameters that each
+    lead into one long chain of references cost the list's length
+    times the chain's, and the walk's bound counted the list alone. A
+    chain of 900 that 6,000 entries lead into was 5.4 million steps
+    for 67,000 counted. Each reference followed is now a visit, and
+    that document is refused.
+  - A parameter reference that could not be followed, with `name` and
+    `in` written beside it, was taken for the parameter those name. A
+    Reference Object's other members are not what it names, so it is
+    now the unknown parameter that any other such reference is.
+  - An operation that no route reaches, which a Link names, was read
+    without its Path Item's own reference, so a parameter of the Path
+    Item that one names was not found.
+  - The rules that depend on the version were those of the
+    description for every document. A 2.0 operation named from a 3.1
+    description had its `Authorization` header left out and was given
+    servers, and a 3.1 operation named from a 2.0 description had no
+    callbacks read. Each operation is now read by the version of the
+    document it is in. The lists that the root gives are still the
+    description's own.
+  - Encodings nested deeper than 64 were left out of the `ignored`
+    report with nothing said. They are read as deep as they nest, and
+    one that a reference in data leads back to itself is refused at
+    `maxDepth`.
 - **A bundle is written on the site index, and nothing in it is
   resolved** (item 3). `bundle` copies the description, and at each
   reference asks the index where it lands. A target in another

@@ -751,14 +751,23 @@ inherited, and which object gave it its servers, its security, and in
   (`Seen.left`). A `$ref` where the model puts an operation is a data
   slot, and no operation is read there. A parameter behind such a
   reference makes its operation `partial`, and a name not found among
-  that operation's parameters has `why: 'unresolved'`. This came from
+  that operation's parameters has `why: 'unresolved'`. What is written
+  beside such a reference is not read as the parameter. This came from
   the corpus: read file by file, Azure's descriptions have their
   common parameters in other documents, and 12,287 path expressions
   were said to have no parameter, which was untrue of nearly all.
 - **The walk is bounded as `reuseOf` is**, by `index.allowance`, and
   runs after it, so the message of that bound is the one a description
-  meets first. Callbacks nest to `maxDepth` at most. On the corpus the
-  longest walk takes 2.8% of its allowance.
+  meets first. A visit is a value read or a reference followed:
+  `stand` counts each hop, since a list of values that each lead into
+  one long chain of references costs the product of the two. Callbacks
+  and encodings nest to `maxDepth` at most. On the corpus the longest
+  walk takes 2.8% of its allowance.
+- **A rule that depends on the version is read by the document's.**
+  `versionOf` gives the version of the document a value is written
+  in. Which headers are ignored, whether an operation has servers or
+  the three lists of 2.0, and whether it has callbacks all follow
+  that, and never the description's own version.
 - **It names the states of the object model it steps from**
   (`pathItem`, `operation`, `parameter`, `responses`, and from 3.0
   `callback`, `mediaType` and `encoding`), which

@@ -184,6 +184,144 @@ describe('operations', () => {
   })
 })
 
+describe('operations, references that the view reads through', () => {
+  test('a reference that was not followed is no declaration, whatever is written beside it', () => {
+    // A Reference Object's other members are not the parameter it names.
+    const raw = parse(
+      JSON.stringify({
+        openapi: '3.0.3',
+        info: { title: 't', version: '1' },
+        paths: { '/a/{id}': { get: { parameters: [{ $ref: 'other.json#/p', name: 'id', in: 'path' }], responses: ok } } },
+      }),
+    )
+    const out = resolve(raw, { operations: true, retrievalUri: 'https://example.com/api/openapi.json' })
+    assert.equal(out.operations![0].partial, true)
+    assert.deepStrictEqual(out.operations![0].parameters, [])
+    assert.deepStrictEqual(C(out.connections.filter((c) => 'pathParameter' === c.kind)), [
+      { kind: 'pathParameter', at: '/paths/~1a~1{id}/get', name: 'id', found: false, target: null, why: 'unresolved' },
+    ])
+  })
+
+  test('an operation that no route reaches has what its Path Item names, as a routed one has', () => {
+    const raw = description({
+      paths: {
+        '/a': {
+          get: {
+            responses: {
+              200: { description: 'ok', links: { next: { operationRef: '#/components/pathItems/Spare/get', parameters: { q: 1, own: 1, none: 1 } } } },
+            },
+          },
+        },
+      },
+      components: {
+        pathItems: {
+          Base: { parameters: [{ name: 'q', in: 'query' }] },
+          Spare: { $ref: '#/components/pathItems/Base', get: { parameters: [{ name: 'own', in: 'query' }], responses: ok } },
+        },
+      },
+    })
+    const rows = resolve(raw).connections.filter((c) => 'linkParameter' === c.kind)
+    assert.deepStrictEqual(
+      rows.map((c) => [c.name, c.found, c.target]),
+      [
+        ['q', true, '/components/pathItems/Spare/parameters/0'],
+        ['own', true, '/components/pathItems/Spare/get/parameters/0'],
+        ['none', false, null],
+      ],
+    )
+  })
+
+  test('an operation is read by the version of the document it is in', () => {
+    const info = { title: 't', version: '1' }
+    const HOME = 'https://example.com/api/openapi.json'
+    // A 2.0 operation under a 3.1 description: 2.0 has no rule to ignore
+    // a header, and has consumes where 3.1 has servers.
+    const old = {
+      swagger: '2.0',
+      info,
+      paths: { '/a': { get: { consumes: ['text/plain'], parameters: [{ name: 'Authorization', in: 'header', type: 'string' }], responses: ok } } },
+    }
+    const newer = resolve(description({ paths: { '/a': { $ref: 'old.json#/paths/~1a' } } }), {
+      operations: true,
+      retrievalUri: HOME,
+      documents: { 'old.json': old },
+    })
+    assert.deepStrictEqual(newer.ignored, [])
+    const [op] = newer.operations!
+    assert.deepStrictEqual(op.parameters.map((p) => p.name), ['Authorization'])
+    assert.equal(op.servers, undefined)
+    assert.deepStrictEqual([op.consumes!.from, op.consumes!.at], ['operation', '/paths/~1a/get/consumes'])
+    assert.equal(op.produces!.from, 'none')
+
+    // And a 3.1 operation under a 2.0 description: its header is ignored,
+    // its response's is listed, and its callback is an operation.
+    const modern = {
+      openapi: '3.1.0',
+      info,
+      paths: {
+        '/a': {
+          get: {
+            parameters: [{ name: 'Authorization', in: 'header' }],
+            responses: { 200: { description: 'ok', headers: { 'Content-Type': {} } } },
+            callbacks: { done: { '{$url}': { post: { responses: ok } } } },
+          },
+        },
+      },
+    }
+    const older = resolve(parse(JSON.stringify({ swagger: '2.0', info, paths: { '/a': { $ref: 'new.json#/paths/~1a' } } })), {
+      operations: true,
+      retrievalUri: HOME,
+      documents: { 'new.json': modern },
+    })
+    assert.deepStrictEqual(
+      older.ignored.map((i) => [i.what, i.name]),
+      [
+        ['parameter', 'Authorization'],
+        ['responseHeader', 'Content-Type'],
+      ],
+    )
+    assert.deepStrictEqual(
+      older.operations!.map((o) => [o.at, o.kind, o.parameters.length, o.servers!.from, o.consumes]),
+      [
+        ['/paths/~1a/get', 'path', 0, 'default', undefined],
+        ['/paths/~1a/get/callbacks/done/{$url}/post', 'callback', 0, 'default', undefined],
+      ],
+    )
+  })
+
+  test('encodings are read as deep as they nest, and one that comes back to itself is refused', () => {
+    let enc: any = { headers: { 'Content-Type': {} } }
+    for (let i = 0; i < 200; i++) enc = { itemEncoding: enc }
+    const deep = parse(
+      JSON.stringify({
+        openapi: '3.2.0',
+        info: { title: 't', version: '1' },
+        paths: { '/a': { post: { requestBody: { content: { 'multipart/mixed': { itemEncoding: enc } } }, responses: ok } } },
+      }),
+    )
+    const found = resolve(deep).ignored
+    assert.equal(found.length, 1)
+    assert.equal(found[0].what, 'encodingHeader')
+    assert.ok(found[0].at.endsWith('/itemEncoding/headers/Content-Type'))
+
+    // Under `slots: 'all'` a reference in data is followed, and one may
+    // lead an encoding back to itself.
+    const at = '/paths/~1a/post/requestBody/content/multipart~1mixed/itemEncoding'
+    const loop = parse(
+      JSON.stringify({
+        openapi: '3.2.0',
+        info: { title: 't', version: '1' },
+        paths: { '/a': { post: { requestBody: { content: { 'multipart/mixed': { itemEncoding: { itemEncoding: { $ref: '#' + at } } } } }, responses: ok } } },
+      }),
+    )
+    assert.deepStrictEqual(resolve(loop).ignored, [])
+    assert.throws(
+      () => resolve(loop, { slots: 'all', maxDepth: 40 }),
+      (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code && /^resolve: encodings nested deeper than 40 at /.test(e.message),
+    )
+  })
+})
+
 describe('operations, the bounds of the walk', () => {
   // Callbacks that branch to one shared Path Item double the routes at
   // every level.
@@ -239,6 +377,31 @@ describe('operations, the bounds of the walk', () => {
         'openapi_work' === e.code &&
         /reading the operations of this document takes more than 16 times the work of reading it once/.test(e.message) &&
         e.at.startsWith('/paths/~1start/post/callbacks/'),
+    )
+  })
+
+  test('each reference followed is a visit, so a chain that many values lead into is counted', () => {
+    // A chain of references, and a list of parameters that each lead
+    // into its start: the hops are the list's length times the chain's.
+    const chain = (length: number, entries: number) => {
+      const parameters: Record<string, unknown> = {}
+      for (let i = 0; i < length; i++) {
+        parameters['A' + i] = i + 1 < length ? { $ref: '#/components/parameters/A' + (i + 1) } : { name: 'q', in: 'query' }
+      }
+      const list = Array.from({ length: entries }, () => ({ $ref: '#/components/parameters/A0' }))
+      return { openapi: '3.1.0', paths: { '/a': { get: { parameters: list, responses: {} } } }, components: { parameters } }
+    }
+    let steps = 0
+    const found = walk(chain(20, 30), { tick: () => void steps++ })
+    assert.equal(found.operations[0].parameters.length, 30)
+    assert.ok(20 * 30 <= steps, steps + ' steps')
+    // Through `resolve`, with no option given, the allowance holds it.
+    assert.throws(
+      () => resolve(parse(JSON.stringify(chain(900, 6000)))),
+      (e: any) =>
+        e instanceof ResolveError &&
+        'openapi_work' === e.code &&
+        /reading the operations of this document takes more than 16 times the work of reading it once/.test(e.message),
     )
   })
 
