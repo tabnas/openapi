@@ -78,7 +78,10 @@ type Connection = {
   // `fragment` in a server's URL. For a `pathParameter` not found, which
   // side is missing: `no-parameter` for an expression of the path, and
   // `no-expression` for a path parameter. For an `expression`,
-  // `malformed` where a callback's key is no runtime expression.
+  // `malformed` where a callback's key is no runtime expression. For a
+  // name of a parameter that is not found, `unresolved` where the
+  // operation has a parameter by a reference that is left as written,
+  // which may be the one.
   why?: string
   // The object-model type at a located target: operationRef must reach
   // an `operation`, a security requirement URI a `securityScheme`.

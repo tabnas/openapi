@@ -101,6 +101,9 @@ type OperationView = {
   // then the operation's own. One the specification says to ignore is in
   // neither, and in the `ignored` report.
   parameters: ParameterView[]
+  // One of the parameters is a reference that is left as written, so the
+  // list lacks it.
+  partial?: true
   // Not in 2.0, which has no servers.
   servers?: Inherited
   security: Inherited
@@ -138,8 +141,14 @@ type Member = { value: any; loc: Loc | undefined }
 
 // A value on a route: what the value as written stands for once every
 // reference is followed, its location, and the members a reference on
-// the way had of its own.
-type Seen = { node: any; loc: Loc | undefined; beside?: Record<string, Member> }
+// the way had of its own. `left` is a reference that could not be
+// followed: one that names nothing here, or a `$ref` where the object
+// model puts none.
+type Seen = { node: any; loc: Loc | undefined; beside?: Record<string, Member>; left?: true }
+
+// The parameters of a list, and whether one of its entries is a
+// reference that could not be followed, and so may be any parameter.
+type Params = { list: Param[]; open: boolean }
 
 type Param = {
   name: string
@@ -158,6 +167,10 @@ type Param = {
 
 type Lot = { from: From; route: Path | null }
 
+// What applies to an operation: its parameters, and whether one of them
+// is behind a reference that could not be followed.
+type Applies = { params: Param[]; open: boolean }
+
 type OperationFacts = {
   route: Path
   kind: 'path' | 'webhook' | 'callback'
@@ -167,6 +180,7 @@ type OperationFacts = {
   of?: Path
   method: string
   additional: boolean
+  partial: boolean
   operationId?: string
   parameters: Param[]
   servers?: Lot
@@ -226,7 +240,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     let followed: Set<Loc> | undefined
     while (undefined !== at && undefined !== at.site) {
       const land: Landing = index.landing(at.site)
-      if (!land.found || true === followed?.has(at)) return { node: value, loc }
+      if (!land.found || true === followed?.has(at)) return { node: value, loc, left: true }
       ;(followed ??= new Set()).add(at)
       if (('pathItem' === at.site.kind || merge) && isMap(node)) {
         for (const k of Object.keys(node)) {
@@ -238,7 +252,11 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
       node = land.node
       at = land.loc
     }
-    return undefined === beside ? { node, loc: at } : { node, loc: at, beside }
+    const seen: Seen = undefined === beside ? { node, loc: at } : { node, loc: at, beside }
+    // A `$ref` map that the object model reads as data, which nothing
+    // followed.
+    if (undefined !== at && at.slot) seen.left = true
+    return seen
   }
 
   const member = (s: Seen, name: string | number): Member | undefined => {
@@ -278,16 +296,20 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
   // The parameters a list holds that have a name and a location. One
   // that has not, a reference that names nothing among them, is no
   // parameter this can place.
-  const paramsOf = (holder: Seen, route: Path, from: 'operation' | 'pathItem', doc?: string): Param[] => {
+  const paramsOf = (holder: Seen, route: Path, from: 'operation' | 'pathItem', doc?: string): Params => {
     const list = member(holder, 'parameters')
-    if (undefined === list || !Array.isArray(list.value)) return []
     const out: Param[] = []
+    let open = false
+    if (undefined === list || !Array.isArray(list.value)) return { list: out, open }
     for (let i = 0; i < list.value.length; i++) {
       const at = [...route, 'parameters', i]
       const entry = stand(list.value[i], undefined === list.loc ? undefined : index.child(list.loc, i), at)
       const name = member(entry, 'name')?.value
       const where = member(entry, 'in')?.value
-      if ('string' !== typeof name || 'string' !== typeof where) continue
+      if ('string' !== typeof name || 'string' !== typeof where) {
+        if (entry.left) open = true
+        continue
+      }
       const p: Param = {
         name,
         in: where,
@@ -300,7 +322,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
       if (undefined !== doc) p.doc = doc
       out.push(p)
     }
-    return out
+    return { list: out, open }
   }
 
   // The Path Item's parameters that the operation does not override,
@@ -334,17 +356,20 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
   // parameters of the operation it belongs to, which must declare it. A
   // header the specification says a parameter may not describe has no
   // declaration to be held to.
-  const checkExpression = (e: Expression, route: Path, params: Param[]) => {
+  const checkExpression = (e: Expression, route: Path, applies: Applies) => {
     if ('request' !== e.source || undefined === e.kind || 'body' === e.kind) return
     if ('header' === e.kind && IGNORED_HEADERS.has(e.name!.toLowerCase())) return
-    const hit = params.find((p) => p.in === e.kind && sameName(p, e.name!))
-    say({
+    const hit = applies.params.find((p) => p.in === e.kind && sameName(p, e.name!))
+    const row: Connection = {
       kind: 'expression',
       at: pointer(route),
       name: e.expression,
       found: undefined !== hit,
       target: undefined === hit ? null : pointer(hit.route),
-    })
+    }
+    // It may be the parameter that a reference left as written names.
+    if (undefined === hit && applies.open) row.why = 'unresolved'
+    say(row)
   }
 
   // A header named Content-Type among the headers of a response or of an
@@ -390,10 +415,10 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
 
   // The operations met, each by its location as written, with what
   // applies to it there: a Link is held to the operation it names.
-  const byLoc = new Map<Loc, Param[]>()
+  const byLoc = new Map<Loc, Applies>()
   const pending: { link: Seen; route: Path; keys: string[]; ord: number }[] = []
 
-  const linkOf = (link: Seen | undefined, route: Path, params: Param[]) => {
+  const linkOf = (link: Seen | undefined, route: Path, params: Applies) => {
     if (undefined === link || !isMap(link.node)) return
     const given = get(link, 'parameters', route)
     const keys = undefined !== given && isMap(given.node) ? namesIn(given) : []
@@ -416,6 +441,9 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     name?: string
     of?: Path
     params: Param[]
+    // Whether one of its parameters is a reference that could not be
+    // followed.
+    open: boolean
     servers: Member | undefined
     // The names of the path's template expressions, or null where it is
     // no path or its braces are not a template's.
@@ -441,10 +469,13 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
   const onPath = new Set<any>()
 
   const operationOf = (op: Seen | undefined, route: Path, method: string, additional: boolean, item: ItemFacts) => {
-    if (undefined === op || !isMap(op.node)) return
+    // A reference where an operation is expected, which could not be
+    // followed, is no operation that can be read.
+    if (undefined === op || !isMap(op.node) || op.left) return
     const v = versionOf(op)
-    const all = paramsOf(op, route, 'operation')
+    const { list: all, open: mineOpen } = paramsOf(op, route, 'operation')
     const mine = all.filter((p) => !isIgnored(p))
+    const open = item.open || mineOpen
     for (const p of all) {
       if (!isIgnored(p)) continue
       const row: IgnoredFacts = { route: p.route, what: 'parameter', name: p.name, kind: item.kind, method, index: p.index }
@@ -453,13 +484,15 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
       ignored.push(row)
     }
     const params = inherit(item.params, mine)
-    if (undefined !== op.loc && !byLoc.has(op.loc)) byLoc.set(op.loc, params)
+    const applies: Applies = { params, open }
+    if (undefined !== op.loc && !byLoc.has(op.loc)) byLoc.set(op.loc, applies)
 
     const facts: OperationFacts = {
       route,
       kind: item.kind,
       method,
       additional,
+      partial: open,
       parameters: params,
       security: pick(
         [
@@ -516,7 +549,8 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
           found: undefined !== hit,
           target: undefined === hit ? null : pointer(hit.route),
         }
-        if (undefined === hit) row.why = 'no-parameter'
+        // It may be the parameter that a reference left as written names.
+        if (undefined === hit) row.why = open ? 'unresolved' : 'no-parameter'
         say(row)
       }
       for (const p of params) {
@@ -543,7 +577,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
       contentType(response, at, 'responseHeader')
       contentOf(response, at, v)
       const links = get(response, 'links', at)
-      for (const name of namesIn(links)) linkOf(get(links, name, [...at, 'links']), [...at, 'links', name], params)
+      for (const name of namesIn(links)) linkOf(get(links, name, [...at, 'links']), [...at, 'links', name], applies)
     }
 
     if (!has(v, 'operation', 'callbacks')) return
@@ -558,7 +592,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
         // URL, of the request this operation describes.
         try {
           for (const part of readTemplate(key, 'runtime').parts) {
-            if ('name' in part && undefined !== part.expression) checkExpression(part.expression, at, params)
+            if ('name' in part && undefined !== part.expression) checkExpression(part.expression, at, applies)
           }
         } catch (err) {
           if (!(err instanceof ExpressionError)) throw err
@@ -584,7 +618,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     if (undefined === item || !isMap(item.node) || onPath.has(item.node)) return
     if (maxDepth <= ctx.depth) refuse('openapi_depth', 'callbacks nested deeper than ' + maxDepth, pointer(route))
     const v = versionOf(item)
-    const all = paramsOf(item, route, 'pathItem')
+    const { list: all, open } = paramsOf(item, route, 'pathItem')
     for (const p of all) {
       if (!isIgnored(p)) continue
       const row: IgnoredFacts = { route: p.route, what: 'parameter', name: p.name, kind: ctx.kind, index: p.index }
@@ -604,6 +638,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
       kind: ctx.kind,
       key: ctx.key,
       params: all.filter((p) => !isIgnored(p)),
+      open,
       servers: member(item, 'servers'),
       template,
       stray: new Set(),
@@ -654,7 +689,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
   // An operation no route reaches, as it is written: one in a Path Item
   // of `components` that nothing uses, or in the paths of another
   // document.
-  const written = (loc: Loc): Param[] => {
+  const written = (loc: Loc): Applies => {
     const v = loc.doc.mv
     const doc = loc.doc === home ? undefined : loc.doc.key
     // The Path Item is the operation's parent, or for a member of
@@ -662,16 +697,19 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
     let holder = loc.parent
     if (undefined !== holder && 'pathItem' !== slot(v, holder.state).type) holder = holder.parent
     const isItem = undefined !== holder && 'pathItem' === slot(v, holder.state).type
-    const above = isItem ? paramsOf({ node: holder!.raw, loc: holder }, pathOf(holder!), 'pathItem', doc) : []
+    const above = isItem ? paramsOf({ node: holder!.raw, loc: holder }, pathOf(holder!), 'pathItem', doc) : { list: [], open: false }
     const mine = paramsOf({ node: loc.raw, loc }, pathOf(loc), 'operation', doc)
-    return inherit(
-      above.filter((p) => !isIgnored(p)),
-      mine.filter((p) => !isIgnored(p)),
-    )
+    return {
+      params: inherit(
+        above.list.filter((p) => !isIgnored(p)),
+        mine.list.filter((p) => !isIgnored(p)),
+      ),
+      open: above.open || mine.open,
+    }
   }
 
   // The operation a Link names, by `operationId` or by `operationRef`.
-  const targetOf = (link: Seen): Param[] | undefined => {
+  const targetOf = (link: Seen): Applies | undefined => {
     let loc: Loc | undefined
     const id = member(link, 'operationId')?.value
     if ('string' === typeof id) loc = declared.get(id)?.[0]?.loc
@@ -686,17 +724,18 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
       loc = land.loc
     }
     if (undefined === loc) return undefined
-    let params = byLoc.get(loc)
-    if (undefined === params) byLoc.set(loc, (params = written(loc)))
-    return params
+    let applies = byLoc.get(loc)
+    if (undefined === applies) byLoc.set(loc, (applies = written(loc)))
+    return applies
   }
 
   // A Link's parameter names are held to the parameters of the operation
   // the Link names. A name may say the location first, as `path.id`, and
   // is read that way where the operation has such a parameter.
   for (const { link, route, keys, ord: first } of pending) {
-    const target = targetOf(link)
-    if (undefined === target) continue
+    const named = targetOf(link)
+    if (undefined === named) continue
+    const target = named.params
     keys.forEach((key, i) => {
       const dot = key.indexOf('.')
       const where = 0 < dot ? key.slice(0, dot) : ''
@@ -715,6 +754,7 @@ function operationsOf(raw: any, mv: ModelVersion, index: SiteIndex, cfg: Config)
         target: undefined === hit ? null : pointer(hit.route),
       }
       if (undefined !== hit?.doc) row.targetDoc = hit.doc
+      if (undefined === hit && named.open) row.why = 'unresolved'
       if (ambiguous) row.ambiguous = true
       rows.push([first + i, row])
     })
@@ -752,6 +792,7 @@ function operationViews(found: Found, tree: any): OperationView[] {
     if (undefined !== f.expression) view.expression = f.expression
     if (undefined !== f.of) view.of = pointer(f.of)
     if (f.additional) view.additional = true
+    if (f.partial) view.partial = true
     if (undefined !== f.operationId) view.operationId = f.operationId
     view.operation = valueAt(tree, f.route)
     view.parameters = f.parameters.map((p) => ({

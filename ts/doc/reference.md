@@ -8,7 +8,9 @@ behind them.
 
 ```ts
 import { parse, resolve, resolveAll, version, make, aliasedSize, wellFormed, OpenApi, ResolveError, VERSION } from '@tabnas/openapi'
+import { readExpression, readTemplate, evaluateExpression, ExpressionError } from '@tabnas/openapi'
 import type { Connection, Lossy, ParseOptions, ParseReport, Reading, ResolveOptions, ResolveResult, VersionInfo } from '@tabnas/openapi'
+import type { Exchange, Expression, Ignored, OperationView, Template } from '@tabnas/openapi'
 ```
 
 ### `parse(text, options?)`
@@ -310,6 +312,7 @@ type ResolveOptions = {
   refs?: 'uri' | 'pointer'                            // default 'uri'
   xref?: boolean                                      // default false
   extensions?: string[]                               // default []
+  operations?: boolean                                // default false
   compat?: 'apidef'
 }
 
@@ -324,6 +327,8 @@ type ResolveResult = {
   dataSlots: number             // $ref maps read as data
   dialects: DialectUse[]        // the schema dialects it declares
   urls: UrlUse[]                // the URLs it gives for things outside it
+  ignored: Ignored[]            // what the specification says to ignore
+  operations?: OperationView[]  // with `operations`: each operation, and what applies to it
 }
 
 type DialectUse = {
@@ -766,6 +771,12 @@ through `$ref`. Nothing in it is put into the tree.
 | `recursiveRef` | a 2019-09 schema with `$recursiveRef` | its initial target, by URI | `anchor`, when that target has `$recursiveAnchor: true` |
 | `pathItemMerge` | a Path Item with `$ref` | the Path Item it names | `fields`: the fields both have, where the specification leaves the merge undefined |
 | `operationIdReuse` | the first route | one `operationId` that more than one route through `paths`, `webhooks` and callbacks reaches | `routes` |
+| `serverVariable` | a Server Object's `url` | the variable of that `name` among its `variables` | |
+| `template` | a path, or a Server Object's `url` | nothing: it is not well made | `why` |
+| `pathClash` | the first of the paths | the paths that are one template under other names | `routes` |
+| `pathParameter` | an operation, for a template expression of its path | the path parameter of that `name` | `why`, where it is not found |
+| `expression` | a Link's value, or a callback's key | the parameter that its runtime expression names | `why` |
+| `linkParameter` | a name in a Link's `parameters` | the parameter of that name in the operation the Link names | `ambiguous` |
 
 A discriminator has an implicit mapping beside its `mapping`: a value
 of its property names the schema component of that name. Its
@@ -778,8 +789,57 @@ implicit row. In 2.0 the discriminator is the name of the property,
 and the name of the schema itself is a value too, with `from` set to
 `self`.
 
+A path and a server's URL are templates: text with names between
+braces. [`readTemplate`](#readtemplatetext-kind) reads them, and three
+kinds of row say what it finds where a template is written:
+
+- A `serverVariable` row for each variable of a server's URL, found
+  where the Server Object declares it.
+- A `template` row for a template that is not well made, with the
+  reason in `why`. `malformed` is braces that are no template's, and
+  `name` is the text. `repeated` is a name the template has twice, which
+  is `name`. `no-slash` is a path that does not start with `/`, which
+  the object model reads as no Path Item. `query` and `fragment` are a
+  server's URL that has one outside its braces.
+- A `pathClash` row for paths that differ only in the names between
+  their braces, as `/pets/{petId}` and `/pets/{name}` do. The
+  specification calls such paths identical. `name` is the template with
+  each name left out, and `routes` lists the paths.
+
+Three more kinds are read for each operation, on its route:
+
+- A `pathParameter` row for each template expression of an operation's
+  path. It is found where the operation has a path parameter of that
+  name, its own or its Path Item's, and `why` is `no-parameter` where it
+  has none. A path parameter that no expression of the path names has a
+  row too, at the parameter, with `why` set to `no-expression`. A path
+  whose braces are no template's is held to no parameters, and a Path
+  Item with no operations to none either.
+- An `expression` row for each runtime expression that names a
+  parameter of the request: `$request.path.id`, `$request.query.id` or
+  `$request.header.id`. A Link's `parameters` values and `requestBody`
+  hold them, and a callback's key is one. The specification has such a
+  parameter declared by the operation that the Link or the callback
+  belongs to, and the row is found where it is. An expression of the
+  body, of the response, of the URL or of the method has no row, and
+  neither has a constant. A header that a parameter may not describe,
+  `Accept` say, has none either. A callback's key whose braces hold no
+  expression has a row with `why` set to `malformed`.
+- A `linkParameter` row for each name in a Link's `parameters`, held to
+  the parameters of the operation the Link names. A name may say the
+  location first, as `path.id` does, and is read that way where the
+  operation has such a parameter. A name that its parameters have in
+  more than one location is found, with `ambiguous`. A Link that names
+  no operation has no such rows.
+
+A name of one of these three kinds may be that of a parameter the
+operation has by a reference that is left as written: one into a
+document that was not given, say. Where the operation has such a
+parameter, a name that is not found has `why` set to `unresolved`.
+
 The rows come in document order, then the `pathItemMerge` rows in walk
-order, then the `operationIdReuse` rows. A name inside example data is
+order, then the `operationIdReuse` rows, then the rows read for each
+operation, in the order of the routes. A name inside example data is
 data, and has no row. A name in a map that only a reference types has
 one. A target is looked for as a reference's is: on the document as
 written, and through a `$ref` where a step is missing, so a target
@@ -832,6 +892,127 @@ such a URI. A `urn:` is none either.
 
 A value that is no string has no row, and neither has one in an example
 or an extension.
+
+#### Operations
+
+```ts
+type OperationView = {
+  at: string                    // where the resolved tree has the operation
+  kind: 'path' | 'webhook' | 'callback'
+  path?: string                 // for path: the path, as written
+  name?: string                 // for webhook and callback: its name
+  expression?: string           // for callback: the key it is under
+  of?: string                   // for callback: the `at` of the operation that has it
+  method: string                // GET, or a member of additionalOperations as written
+  additional?: true             // the method is a member of additionalOperations
+  operationId?: string
+  operation: any                // the Operation Object, as the tree has it at `at`
+  parameters: ParameterView[]
+  partial?: true                // a parameter is a reference left as written
+  servers?: Inherited           // not in 2.0
+  security: Inherited
+  consumes?: Inherited          // in 2.0 alone
+  produces?: Inherited
+  schemes?: Inherited
+}
+
+type ParameterView = {
+  name: string
+  in: string
+  at: string                    // where the resolved tree has it
+  from: 'operation' | 'pathItem'
+  parameter: any                // the Parameter Object, as the tree has it there
+}
+
+type Inherited = {
+  from: 'operation' | 'pathItem' | 'root' | 'default' | 'none'
+  at: string | null             // where the resolved tree has the list
+  value: any[]                  // the list, as the tree has it there
+}
+
+type Ignored = {
+  at: string                    // where the resolved tree has it
+  what: 'parameter' | 'responseHeader' | 'encodingHeader'
+  name: string                  // as written
+  kind?: 'path' | 'webhook' | 'callback'  // for a parameter: how its list is reached
+  path?: string                 // the path, under `paths`
+  method?: string               // the method, for an operation's own list
+  additional?: true             // the method is a member of additionalOperations
+  index?: number                // its place in the list
+}
+```
+
+An Operation Object does not hold everything that applies to its
+operation. Its Path Item and the root give it more, and the
+specification says how. With `operations: true` the result has
+`operations`, one entry for each operation that a route reaches:
+through `paths`, through `webhooks`, and through the callbacks of an
+operation. Each says what applies:
+
+- **`parameters`.** An operation has its Path Item's parameters, and
+  one of its own stands in the place of a Path Item's of the same name
+  and location. The list has the Path Item's that are left, in their
+  order, and then the operation's own. A header's name is compared
+  without regard to case, as HTTP has it, and any other name exactly.
+  An entry with no name or no location is left out. So is a reference
+  that names nothing, which `unresolved` lists, and the operation then
+  has `partial`: its list lacks a parameter.
+- **`servers`.** The operation's own list, else its Path Item's, else
+  the root's. A list with nothing in it is no list, as the specification
+  has it for the root's. With no list at all, `from` is `default` and
+  `value` is the one server the specification gives such an API, with a
+  `url` of `/`.
+- **`security`.** The operation's own list, else the root's. An
+  operation's list with nothing in it is its own all the same, which is
+  how an operation removes the root's. With neither, `from` is `none`.
+- **`consumes`, `produces` and `schemes`**, in 2.0, which has no
+  servers. Each is the operation's own, an empty one too, else the
+  root's.
+
+Each `at` is a route from the root of the resolved tree, and each value
+is the object that the tree has there. A parameter's `at` is in the
+operation's list or in its Path Item's. Where a path's Path Item is
+given by `$ref`, the route is the path's own, and the tree has the Path
+Item there. Where the tree keeps a reference on the way as written, the
+value is `undefined` and the rest of the entry stands. That is so for a
+reference that closes a cycle, and under `sharing: 'inline-once'` for
+each use of a target after the first.
+
+A webhook's operations and a callback's are read as any other, with
+`servers` and `security` from above in the same way. The specification
+does not say whether the root's apply to a request that the API itself
+sends, so `from` says where each came from. A callback that leads back
+to a Path Item it is already in ends there. A `$ref` where an
+operation is expected is no reference the object model has, so no
+operation is read there. Under `slots: 'all'` it is one, and the
+operation is the one it names.
+
+The routes are walked on the document as written, as the
+`connections` report's are, and what applies is read there. So the
+entries are the same under any `sharing` and `cycles`. Under
+`siblings: 'merge'` the members beside a reference are read with what it
+names, their own winning, as the tree has them. With
+[several documents](#several-documents), a Path Item in another
+document is on the route of the path that names it. A value that two
+routes reach is walked once for each, so the walk is held to the bound
+that the `connections` report's is held to, and past it `resolve`
+raises `openapi_work`.
+
+`ignored` is given with or without the option. It lists what the
+specification says to ignore, on each route that reaches it:
+
+- A header parameter named `Accept`, `Content-Type` or `Authorization`,
+  whatever its case, for which `what` is `parameter`. The request body,
+  the responses and the security schemes describe those. Such a
+  parameter is in no operation's `parameters`. Its row says how its list
+  is reached, with the path where that is under `paths`, the method
+  where the list is an operation's own, and its place in the list.
+- A header named `Content-Type` among the headers of a response, or of
+  an Encoding Object, for which `what` is `responseHeader` or
+  `encodingHeader`.
+
+The rule is in 3.0 and later. For 2.0 the report is empty, and a header
+parameter of such a name is a parameter.
 
 ### `resolveAll(raw, options)`
 
@@ -1027,6 +1208,123 @@ load('file:///etc/passwd') // => undefined
 // const { tree } = await resolveAll(raw, { retrievalUri: 'https://api.example.com/openapi.yaml', load })
 ```
 
+### `readExpression(text)`
+
+```ts
+function readExpression(text: string): Expression
+
+type Expression = {
+  expression: string            // as written
+  source: 'url' | 'method' | 'statusCode' | 'request' | 'response'
+  kind?: 'header' | 'query' | 'path' | 'body'   // for request and response
+  name?: string                 // for header, query and path, as written
+  pointer?: string              // for body: the JSON Pointer after `#`, as written
+  tokens?: string[]             // and its tokens, with `~1` and `~0` read
+}
+```
+
+Reads a runtime expression: `$url`, `$method`, `$statusCode`, or
+`$request.` or `$response.` and then `header.` with a name, `query.`
+with a name, `path.` with a name, or `body` with an optional `#` and a
+JSON Pointer. It throws an `ExpressionError` for any other text.
+
+The grammar is the specification's ABNF, read as it is written:
+
+- What follows `query.` or `path.` is the name, to the end of the text,
+  whatever characters it has, and it may be empty. So
+  `$request.query.a.b` names the parameter `a.b`.
+- A header's name is a token of RFC 9110, one character at least. A
+  token may hold `.` and `#`.
+- The pointer is not a URI fragment, so it is not percent-decoded:
+  `$request.body#/a%2Fb` has the token `a%2Fb`. A `~` in it is followed
+  by `0` or `1`.
+- The words of the grammar match without regard to case, as the
+  literals of an ABNF grammar do, so `$URL` is `$url`. A name keeps the
+  case it is written in.
+
+The whole text is the expression. One between braces in a larger text
+is a template's, which `readTemplate` reads.
+
+### `readTemplate(text, kind?)`
+
+```ts
+function readTemplate(text: string, kind?: 'path' | 'server' | 'runtime'): Template
+
+type Template = {
+  template: string              // as written
+  kind: 'path' | 'server' | 'runtime'
+  parts: TemplatePart[]
+}
+
+type TemplatePart = { literal: string } | { name: string, expression?: Expression }
+```
+
+Reads a template into its parts: the text to keep, and the names
+between braces. `kind` says what a name is, and is `'path'` unless
+given:
+
+- `'path'`: a path, whose names are template expressions that path
+  parameters give values to.
+- `'server'`: a Server Object's `url`, whose names are server
+  variables.
+- `'runtime'`: a callback's key or a Link's value, where what is between
+  braces is a runtime expression. Each such part has `expression`, as
+  `readExpression` gives it. A text that is one bare expression, as
+  `$request.body#/url` is, has that as its one part. A text with no
+  braces that is no expression is one literal.
+
+A name is any characters but a brace, and a segment may hold several
+names with text between them, as the specification's grammars have it.
+Only the braces are held to the grammar. It throws an `ExpressionError`
+for a brace that is not closed, a brace inside braces, a closing brace
+with none open, braces with nothing between them, and under `'runtime'`
+braces that hold no runtime expression. The characters of the literal
+parts are not judged, and neither is a name that a template has twice:
+the `connections` report of `resolve` says that.
+
+### `evaluateExpression(expr, exchange)`
+
+```ts
+function evaluateExpression(expr: string | Expression | Template, exchange: Exchange): unknown
+
+type Exchange = {
+  request?: HttpMessage & { url?: string, method?: string }
+  response?: HttpMessage & { statusCode?: number | string }
+}
+
+type HttpMessage = {
+  headers?: Record<string, unknown> | Iterable<readonly [string, unknown]>
+  query?: Record<string, unknown>
+  path?: Record<string, unknown>
+  body?: unknown                // the body, parsed
+}
+```
+
+Gives the value a runtime expression names in one exchange: a request
+and its response. Nothing in a description has such a value until there
+is a request, so `resolve` gives none, and the caller that has the
+request asks here.
+
+- `$url` and `$method` are the request's `url` and `method`, and
+  `$statusCode` the response's `statusCode`.
+- A header is looked up without regard to case. `headers` is a map
+  from name to value, or anything that gives pairs of name and value: a
+  `Map`, a list of pairs, or the `Headers` of the Fetch API.
+- A query parameter and a path parameter are looked up by name, with
+  its case, in `query` and `path`.
+- A pointer is read into `body`, an index of a list as its digits with
+  no leading zero.
+
+The value keeps the type it has in the exchange. Where the exchange has
+no such value the result is `undefined`, as the specification has it
+for an expression that fails to evaluate.
+
+Text is read with `readExpression` first, and throws as that does. A
+template of kind `'runtime'` gives its text with each expression's
+value in its place, and `undefined` where one of them has none. One
+that is a single bare expression keeps the type of its value. A value
+that is a map or a list is written as JSON in such a text.
+
 ### `version(tree)`
 
 ```ts
@@ -1174,7 +1472,10 @@ table under `parse`. The engine's are these:
 
 `openapi_stream` is placed at the start of the second document,
 `openapi_duplicate_key` at the repeated name, and the others at the start
-of the document. `openapi_root` says what the root is in
+of the document. `readExpression` and `readTemplate` throw an
+`ExpressionError`, whose `code` is `openapi_expression`. It has the
+`text` that was read and the `offset` in it where reading stopped.
+`openapi_root` says what the root is in
 `details.kind`: `'empty'` for a text of white space and comments alone,
 or `'null'`, `'a list'`, `'a string'`, `'a number'` or `'a Boolean'`. A
 member name a message quotes is JSON-quoted and cut short. The default parser is lenient: it reads some text that the strict

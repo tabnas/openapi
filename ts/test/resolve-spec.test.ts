@@ -19,7 +19,7 @@
 // operation of the view, which the row's options ask for:
 // `at METHOD path`, or `kind:name` in the path's place for a webhook or
 // a callback, then `on expression of at` for a callback, `additional`,
-// `id=`, `params=` with `in:name@at` for each parameter, and `servers=`,
+// `partial`, `id=`, `params=` with `in:name@at` for each parameter, and `servers=`,
 // `security=`, `consumes=`, `produces=` and `schemes=` as `from@at`; and
 // `ignored`, one `what at name` line for each thing the specification
 // says to ignore, then its kind, `path=`, `method=`, `index=` and
@@ -84,6 +84,7 @@ function reached(op: any): string {
   let out = `${op.at} ${op.method} ${'path' === op.kind ? op.path : op.kind + ':' + op.name}`
   if (undefined !== op.expression) out += ` on ${op.expression} of ${op.of}`
   if (op.additional) out += ' additional'
+  if (op.partial) out += ' partial'
   if (undefined !== op.operationId) out += ' id=' + op.operationId
   out += ' params=' + (op.parameters.map((p: any) => `${p.in}:${p.name}@${p.at}`).join(',') || '-')
   for (const k of ['servers', 'security', 'consumes', 'produces', 'schemes']) {
