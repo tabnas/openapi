@@ -388,6 +388,92 @@ try {
 code // => 'openapi_budget'
 ```
 
+## Resolve a description that is several files
+
+Give `resolve` the other documents in `documents`, each under the URI
+you retrieved it from, with the description's own in `retrievalUri`. A
+relative name stands against that. A document can be its text, its
+bytes, or a tree from `parse`:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+info: { title: Pets, version: "1" }
+paths:
+  /pets:
+    $ref: "paths/pets.yaml"
+`)
+const out = resolve(raw, {
+  retrievalUri: 'https://example.com/api/openapi.yaml',
+  documents: {
+    'paths/pets.yaml': 'get:\n  responses:\n    "200": {$ref: "../responses.yaml#/Ok"}\n',
+    'responses.yaml': 'Ok: {description: ok}\n',
+  },
+})
+out.tree.paths['/pets'].get.responses['200'] // => { description: 'ok' }
+out.unresolved // => []
+out.provenance.map((p) => [p.doc ?? 'the description', p.at]) // => [ [ 'the description', '/paths/~1pets' ], [ 'https://example.com/api/paths/pets.yaml', '/get/responses/200' ] ]
+```
+
+A document that was not given stays a reference, reported with
+`why: 'external'`. To have the documents found and read for you, use
+`resolveAll` with a loader. `fileLoader` reads files under one
+directory and refuses anything outside it:
+
+```js
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { pathToFileURL } = require('node:url')
+const { parse, resolveAll } = require('@tabnas/openapi')
+const { fileLoader } = require('@tabnas/openapi/dist/loaders')
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-'))
+fs.writeFileSync(path.join(dir, 'openapi.yaml'), 'openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Pet: {$ref: "Pet.yaml"}\n')
+fs.writeFileSync(path.join(dir, 'Pet.yaml'), 'type: object\n')
+
+const entry = path.join(dir, 'openapi.yaml')
+const result = resolveAll(parse(fs.readFileSync(entry)), {
+  retrievalUri: pathToFileURL(entry).href,
+  load: fileLoader({ root: dir }),
+})
+result instanceof Promise // => true
+// (await result).tree.components.schemas.Pet is { type: 'object' }
+```
+
+Write the description's `retrievalUri` from the same path as `root`, as
+the example does. `fileLoader` knows its directory by the path you give
+it and by that directory's real path. It refuses a document named
+through any other route to the directory, such as a second link,
+without looking for it.
+
+`httpLoader` reads over HTTP from the hosts you list, and from no
+others.
+It checks the list again at every redirect, and refuses a host that
+turns out to be at a private address:
+
+```js
+const { httpLoader } = require('@tabnas/openapi/dist/loaders')
+
+const load = httpLoader({ hosts: ['api.example.com'] })
+typeof load // => 'function'
+// const { tree } = await resolveAll(raw, { retrievalUri: 'https://api.example.com/openapi.yaml', load })
+```
+
+A loader is yours to write, too: any function from a URI to a
+document, given as `resolve` takes one. A description names whatever documents
+its author chose, so decide what yours may read before it reads.
+
+`resolveAll` bounds what a description can ask of it. It asks for
+10,000 documents at most, in 64 rounds at most, and holds the texts it
+loads together to the size and the work that `parse` allows one text.
+Raise `maxDocuments`, `maxRounds`, or `parse.maxBytes` for a
+description you trust that needs more. It sets no deadline: give the
+loader a `signal`, and return `false` from `onCheck` when your time is
+up.
+
 ## Check what the names in a description reach
 
 Tags, `operationId` values, security requirements, and discriminator
@@ -571,11 +657,14 @@ The budget is the larger of 1,000,000 bytes and ten times the text.
 Pass `aliasBudget` to set your own.
 
 A large text is refused the same way, as `openapi_size`. Reading YAML
-takes about a hundred bytes of memory for each byte of a description, so
-`parse` gives the grammar at most 16 MiB unless `maxBytes` says
-otherwise. JSON text that `JSON.parse` reads is not limited. A text of
-very many small values costs far more than its size suggests, and is
-stopped by the work it takes, as `openapi_work`, under the same limit.
+takes memory and time in step with the text, so `parse` gives the
+grammar at most 128 MiB unless `maxBytes` says otherwise. JSON text that
+`JSON.parse` reads is not limited. A text of very many small values
+costs far more than its size suggests, and is stopped by the work it
+takes, as `openapi_work`, under the same limit. A description of
+60 MiB takes about a minute to read, and the
+[reference](reference.md#aliasbudget-and-maxbytes) has what each size
+costs.
 
 ```js
 const { parse } = require('@tabnas/openapi')

@@ -81,7 +81,7 @@ function dialectOf(uri: string): { dialect: Dialect; known: boolean } {
 // schema's `$schema`; `dialect` is its value as written; `as` is the
 // dialect whose rules it is read by; and `known` is false for one this
 // package does not know, which is read as 2020-12.
-type DialectUse = { at: string; dialect: string; as: DialectName; known: boolean }
+type DialectUse = { at: string; dialect: string; as: DialectName; known: boolean; doc?: string }
 
 export { DIALECTS, dialectOf }
 

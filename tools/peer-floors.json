@@ -1,0 +1,31 @@
+{
+  "note": "The floor of each @tabnas peer range in ts/package.json, as tools/peer-floors.cjs measured it: the oldest release on which this package's suite passes with every other peer at its latest, the release under it, and how that one fails. ts/test/peer-floors.test.ts holds the manifest to this file. The plan's Decision 33.",
+  "measured": "2026-11-24",
+  "floors": {
+    "expr": {
+      "floor": "0.6.4",
+      "under": "0.6.3",
+      "fails": "build: TS2353: Object literal may only specify known properties, and 'budget' does not exist in type 'FoldOptions'."
+    },
+    "json": {
+      "floor": "0.3.2",
+      "under": "0.2.0",
+      "fails": "install: code ERESOLVE | ERESOLVE unable to resolve dependency tree"
+    },
+    "jsonic": {
+      "floor": "0.3.1",
+      "under": "0.2.0",
+      "fails": "install: code ERESOLVE | ERESOLVE unable to resolve dependency tree"
+    },
+    "parser": {
+      "floor": "0.12.20",
+      "under": "0.12.19",
+      "fails": "suite: 1 of 958 tests fail: at the default limit, a text past the steps of a parser t..."
+    },
+    "yaml": {
+      "floor": "0.5.33",
+      "under": "0.5.32",
+      "fails": "suite: 65 of 958 tests fail: the specification's reading adds no token, rule or alternate; ts/doc/guide.md block #8 (line 123); and 63 more"
+    }
+  }
+}

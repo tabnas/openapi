@@ -6,8 +6,10 @@ descriptions, in YAML or in JSON, with one parser for both.
 
 `parse` returns the raw tree: the document as written, with every `$ref`
 kept as a reference, after checking that it is one description with a
-map at its root. `resolve` builds a new tree with the references within
-the document resolved; it does not load other documents yet.
+map at its root. `resolve` builds a new tree with the references resolved,
+within the document and into any other document given with it, and
+`resolveAll` loads the documents a description names, with a loader
+you give it.
 
 ## Install
 

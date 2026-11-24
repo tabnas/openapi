@@ -15,6 +15,7 @@
 
 import { after, describe, test } from 'node:test'
 import assert from 'node:assert'
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -403,3 +404,49 @@ for (const reading of ['base', 'spec']) {
     })
   })
 }
+
+// tools/corpus/documents.cjs resolves each description of a source from
+// its own file, with `resolveAll` and the file loader. It is run here on
+// a source of two small files, in the place of a real one.
+describe('corpus tool: descriptions in several documents', () => {
+  const ROOT = join(__dirname, '..', '..')
+  const corpus = mkdtempSync(join(tmpdir(), 'openapi-documents-'))
+  const source = join(corpus, 'redocly-starter')
+  mkdirSync(join(source, 'schemas'), { recursive: true })
+  writeFileSync(
+    join(source, 'openapi.yaml'),
+    'openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Pet: {$ref: "schemas/Pet.yaml"}\n',
+  )
+  writeFileSync(join(source, 'schemas', 'Pet.yaml'), 'type: object\n')
+  after(() => rmSync(corpus, { recursive: true, force: true }))
+
+  const run = () =>
+    spawnSync(process.execPath, [join(ROOT, 'tools', 'corpus', 'documents.cjs'), '--only', 'redocly-starter'], {
+      encoding: 'utf8',
+      env: { ...process.env, CORPUS_DIR: corpus },
+    })
+
+  test('it counts what a description loads and resolves, and says which figures moved', () => {
+    const out = run()
+    assert.match(
+      out.stdout,
+      /redocly-starter: 1 descriptions, 1 in several documents; 1 documents loaded, 1 at most for one; 1 sites: 1 resolved, 0 cut; left as written: none; 0 threw, 0 on disk and not read/,
+    )
+    // These are not the figures of the real source, which the record has.
+    assert.match(out.stdout, /documents: redocly-starter: documentsLoaded moved: 39 -> 1/)
+    assert.equal(out.status, 1)
+  })
+
+  test('a description that reaches outside its source fails the run', () => {
+    writeFileSync(join(corpus, 'outside.yaml'), 'type: string\n')
+    writeFileSync(
+      join(source, 'reaching.yaml'),
+      'openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Out: {$ref: "../outside.yaml"}\n',
+    )
+    const out = run()
+    assert.match(out.stdout, /redocly-starter\/reaching\.yaml: threw openapi_load/)
+    assert.match(out.stdout, /1 threw/)
+    assert.equal(out.status, 1)
+    rmSync(join(source, 'reaching.yaml'))
+  })
+})

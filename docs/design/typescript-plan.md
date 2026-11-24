@@ -599,8 +599,9 @@ the grammar: under `reading: 'spec'` the only trees that differ are the
 two the reference parser reads wrongly, and the only descriptions
 refused are the two this package refuses for their size. Item 3 is
 repaired in the grammar, and apidef keeps `normalizePathKeys` until both
-of its implementations can drop it. Item 5 is measured, and what is left
-of it is Decision 34.
+of its implementations can drop it. Item 5 is measured, and Decision 34
+turns the bound on for what the first parser cannot hold: section 11
+has its record.
 
 ### T3: the site index, and `resolve` on it (L)
 
@@ -654,8 +655,8 @@ the index is `ts/src/site-index.ts`, with `resolve` and the
 to. With that release `resolve` runs on an install from the registry,
 and the corpus baselines are swept on the released packages.
 
-Item 3 is built, on the defaults of Decisions 29 and 30, and section 11
-has its record. The rules of each dialect are in `ts/src/dialect.ts`,
+Item 3 is built as Decisions 29 and 30 have it, which the maintainer
+took as built on 21 November, and section 11 has its record. The rules of each dialect are in `ts/src/dialect.ts`,
 the members that hold schemas in each are in `model/applicators.json`,
 and the index reads both. It asks nothing more of `expr`.
 
@@ -708,6 +709,20 @@ Azure sample and Redocly's starter resolve from their roots with nothing
 left as written that exists on disk, and DigitalOcean's source does
 under `slots: 'all'`; a reference outside the allow-list is refused
 with `openapi_load`; the walk stops at its budgets.
+
+Built, on the maintainer's word of 23 November 2026, and section 11
+has the record. The index is over a set of documents, `resolve` takes
+them in a table, `resolveAll` loads what a description names through a
+loader the caller gives, the two loaders of Decision 31 are in a
+module of their own, the `connections` report covers every document,
+and the specification's examples are the first cases of `test/docs/`.
+The acceptance holds: the specification's examples resolve; the Azure
+sample, Redocly's starter and DigitalOcean's source under
+`slots: 'all'` resolve from their roots with nothing left as written,
+which `tools/corpus/documents.cjs` measures; a reference outside the
+HTTP loader's list is refused with `openapi_load`; and the walk stops
+at `maxDocuments`, `maxRounds` and `maxSteps`, and at the limits of one
+text for the texts of the set, which is Decision 36.
 
 ### T5: beyond references (M each, to the scope of Decision 32)
 
@@ -790,12 +805,14 @@ Numbered from 16, after the earlier plan's fifteen.
 | 26 | Which changes to ask of `@tabnas/yaml`, `@tabnas/expr` and the engine, and in what order. Those repositories' own rules govern how each lands | the rows of section 7, in that order, each its own instruction. **Taken, 20 November 2026** | T2b, T3 |
 | 27 | A pointer that passes through a reference | lenient: the document first, then through the reference, reported in the row; `strict` raises it. E8 recommended the strict reading. E12 counted: no reference of the corpus needs the lenient step, so the two cost the same there, and six references pass a site at all, each landing on an empty stub beside the `$ref` (section 11). **Taken, 20 November 2026: lenient** | T3 |
 | 28 | A target the object model does not type | the rounds of section 3; a conflict reported. E12 ran them: they end, with one answer however the members are ordered, but for two references of one round that give one target different types, which the order of the document decides. Taking the sites of a round in the order of their pointers decides it one way (section 11). **Taken, 20 November 2026: the rounds, with a conflict reported and the reference resolved all the same** | T3 |
-| 29 | Schema dialects. This replaces the earlier Decision 13 | draft-04, 06, 07 and 2019-09 read; an unknown dialect read as 2020-12 and reported | T3 |
-| 30 | The texts the object model follows | 3.1.2 and 3.2.1, the latest published, with the vendored schemas refreshed to match | T3 |
-| 31 | Loaders | a confined file loader and an allow-listed HTTP loader, both opt-in; nothing loads by default | T4 |
-| 32 | What "handle" covers beyond references | the operation view, the embedded languages and bundling to JSON are in; writing YAML back with its layout is out | T5 |
-| 33 | Peer ranges of this package, as a standing rule | each floor at the first release that has what the package calls: `@tabnas/expr` 0.5.20 for `fold`, and so on | T6 |
-| 34 | The engine's rule history on this package's parser. Bounded at 3 it reads every YAML document of the corpus that is read at all to the same tree, in under half the memory, under a third for the largest, and three times the time (section 11) | bounded for a text past the present limit of 16 MiB, and the limit raised to what the bound then allows, measured as T2 measured the present one; unbounded below it, where nothing changes. That reads both Microsoft Graph descriptions, the last two the sweep refuses. The other courses are a bound for every text, or none | T2b item 5 |
+| 29 | Schema dialects. This replaces the earlier Decision 13 | draft-04, 06, 07 and 2019-09 read; an unknown dialect read as 2020-12 and reported. **Taken, 21 November 2026** | T3 |
+| 30 | The texts the object model follows | 3.1.2 and 3.2.1, the latest published, with the vendored schemas refreshed to match. **Taken, 21 November 2026** | T3 |
+| 31 | Loaders | a confined file loader and an allow-listed HTTP loader, both opt-in; nothing loads by default. **Taken, 23 November 2026** | T4 |
+| 32 | What "handle" covers beyond references | the operation view, the embedded languages and bundling to JSON are in; writing YAML back with its layout is out. **Taken, 23 November 2026** | T5 |
+| 33 | Peer ranges of this package, as a standing rule | each floor at the first release that has what the package calls: `@tabnas/expr` 0.5.20 for `fold`, and so on. **Taken, 23 November 2026: a standing rule, set now and not at the release, and moved whenever the package comes to call something newer** | T6 |
+| 34 | The engine's rule history on this package's parser. Bounded at 3 it reads every YAML document of the corpus that is read at all to the same tree, in under half the memory, under a third for the largest, and three times the time (section 11) | bounded for a text past the present limit of 16 MiB, and the limit raised to what the bound then allows, measured as T2 measured the present one; unbounded below it, where nothing changes. That reads both Microsoft Graph descriptions, the last two the sweep refuses. The other courses are a bound for every text, or none. **Taken, 22 November 2026: bounded past 16 MiB, and the limit raised.** Built with the turn on work as well as on size, and the limit at 128 MiB (section 11) | T2b item 5 |
+| 35 | The rate of the bound on work. The grammar is given a step for each ten bytes of `maxBytes`, set when descriptions were thought to take one for each eight to eleven. Measured, they take one for each seven to nine, so a description meets the bound on its work at seven to nine tenths of the limit on its size (section 11) | ten, as it is: the limit is a guard, and a caller with a denser description raises `maxBytes`. The other course is seven, which makes the size limit the one a description meets, and gives every `maxBytes` a caller sets 43% more steps | T6 |
+| 36 | What a description in several documents may cost with no option given. A description names its documents, so each limit on one text is met once for every document: a floor of 100,000 steps, and of 1,000,000 bytes that aliases copy out. Twenty documents of 50 kB of small values took four seconds to read, and a chain of 800 documents that each name the next took 2.6 seconds to find, the square of its length (section 11) | as built: the texts of a description's other documents are held together to the limits of one text, `parse.maxBytes` in size, its steps in work and one alias budget; `load` is asked for 10,000 documents at most, counting the ones it does not have; and the documents are found in 64 rounds at most, where the corpus's deepest description takes 7. The other courses are the limits of each document alone, which leave a set unbounded, or an index carried from round to round, which would lift the bound on rounds and is the larger work | T4 |
 
 ## 7. Work in other repositories
 
@@ -813,7 +830,7 @@ All of T0, T1, T2, T4 and T5 is in this repository. What is not:
 | yaml | CR-only line breaks; JSON text after a blank first line; a recursive alias; tab indentation refused | T2b | S each |
 | yaml | W11: a token's row and column, counted as its offset is | T2b; every error's place | S |
 | yaml | W12: a plain scalar that starts as a number and runs on to the next line | T2b | S |
-| yaml, parser | memory per byte of YAML. Measured: the lever is this package's own setting, Decision 34, and nothing is asked of either repository. The bound's cost in time is the engine's to lower, if it is wanted | T2b | S here, after Decision 34 |
+| yaml, parser | memory per byte of YAML. Measured: the lever is this package's own setting, Decision 34, which is built, and nothing is asked of either repository. The bound's cost in time is the engine's to lower, if it is wanted | T2b | done here |
 | apidef | the change of T1, which grows as T2 and T5 land. It is the branch `claude/jolly-maxwell-jhjgus` of apidef, voxgig/apidef#230, as Decision 20 has it, and [`apidef-swap/`](apidef-swap/README.md) describes it | G2 | M |
 | aontu | at the release: pins that let `@tabnas/expr` 0.5.20 reach apidef, or apidef overrides them | T6 | S |
 | admin | at the release: the workflows and the descriptor restamped | T6 | S |
@@ -866,6 +883,373 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T4 was begun:
+
+- **One index, many roots.** The site index was built over one
+  document, and is now built over a set: the description, and each
+  document given with it, by the URI it was retrieved from. A location
+  knows its document, and each document is read by the object model of
+  its own version. The identifiers, the sites, the landings and the
+  typing rounds are those of the set, so a reference is looked for
+  among the identifiers schemas declare, in every document, and then
+  among the documents, each by its own URI and the one it was given
+  under. With one document the index says what it said: the suites
+  that hold it to itself and to `resolve` pass unchanged, and the index
+  carried forward equals the one worked out from nothing across
+  documents as within one.
+- **`expr` needed nothing.** Its fold already folds several documents:
+  a key for the main one, a `load` for the others, a location read in
+  another document, and one stack, one budget and one sharing across
+  them. What `resolve` had to learn was to give each document's own
+  root its own start, since the fold gives every root the one starting
+  bag.
+- **`resolve` takes the documents in a table**, `documents`, as trees,
+  text or bytes, with `parse` for how a text is read. A document whose
+  root declares a version is a description of that version, with a
+  `$self` and a default dialect of its own. A fragment document, with
+  no version, is data of which nothing is known until a reference
+  lands in it, which is section 3's typing by reference carried across
+  documents. It is read by the description's version, and a schema in
+  it by that version's own dialect, as the specification has it for a
+  schema document that names none.
+- **Cycles across documents.** Under `cycles: 'cut'` the fold finds
+  them, on its one stack. Under `cycles: 'keep'` the fold follows no
+  reference, so the tree of another document is never built by the
+  walk: each is folded, whole, the first time a site lands in it, and
+  the finished trees are then walked together.
+- **`resolveAll` is `resolve` in rounds.** The set so far is indexed,
+  the documents it names and does not have are asked of the caller's
+  `load`, and so on until a round names nothing new. A document is
+  asked for once. The URIs the `connections` report locates are found
+  too, since a document may be named by an `operationRef` alone. It
+  asks for 10,000 documents at most unless told otherwise.
+- **The file loader** (Decision 31) reads under one directory. It
+  refuses a path out of it as the path is written, before anything is
+  looked for, and again once every link is followed. It is the one
+  module that needs Node: it takes Node's types by a reference of its
+  own, the main module does not load it, and a test holds both.
+- **The specification's examples resolve.** `test/docs/` has the five
+  of OpenAPI 3.2.0's appendices as it writes them: a base URI within
+  the content, from the retrieval URI, relative `$self` and `$id`, the
+  parts of a `multipart/related` archive, and the two documents of the
+  implicit connection example. The archive example's own
+  `#/components/api/schemas/Foo` names nothing in it, and is reported
+  so.
+- **On the corpus, each description resolved from its own file** with
+  `resolveAll` and the file loader, confined to its source. Of the 885
+  Azure descriptions, 585 are in several documents: 1,409 documents
+  are loaded, seven at most for one, and of 118,246 references 117,850
+  resolve, 396 are cut as cycles and none is left as written. The sweep
+  counted 29,155 of those as references into other documents. Redocly's
+  starter resolves from its root, 39 documents and 110 references.
+  DigitalOcean's source does under `slots: 'all'`: 3,622 documents and
+  14,456 references, 14 of them cut and none unresolved, in five
+  seconds. The two descriptions of the OpenAPI Initiative's examples
+  that are in several files resolve too. No reference is left naming a
+  document that is on disk. `tools/corpus/documents.cjs` is that run,
+  in half a minute, and `test/corpus/documents.json` its record.
+- **What a row says.** A site's rows carry `doc` where the site is in
+  another document, `targetDoc` where its target is in another than
+  its own, and `landingDoc` where a pointer read through a reference
+  ended in a third. The result lists the documents read. The members
+  beside a reference follow the rule of the version of the document
+  the reference is in.
+- **The HTTP loader** (Decision 31) reads from the hosts the caller
+  lists, over `https` unless told otherwise. It judges every hop of a
+  redirect as it judges the first URI, five hops at most, so a listed
+  host cannot hand it on. It refuses a host at an address that is not
+  public, an IPv4 address inside an IPv6 one included, and then sends
+  its request to the addresses it judged, so that the name is not
+  resolved again in between. It has a byte cap, a timeout, a cancel
+  signal and a cache, and headers are given by origin and go to that
+  origin alone. A document's format is read from its content, by
+  `parse`, under the alias budget.
+- **The `connections` report covers every document** (item 5), each
+  walked by the model of its own version. A security scheme, a tag and
+  a mapping value by name are the description's, whichever document
+  uses the name, and an `operationId` is looked for among the
+  operations of every document, as the specification recommends. Its
+  own example of implicit connections pins the first: the requirement
+  in the referenced document names the entry document's scheme.
+- **A set of documents is held to what one text is** (Decision 36).
+  T4 was reviewed against its own rule, that a description names
+  whatever documents its author chose, and three bounds did not hold
+  over a set. Each limit `parse` holds a text to has a floor, 100,000
+  steps and 1,000,000 bytes copied out by aliases, and a set had each
+  floor once for every document: twenty documents of 50 kB of small
+  values took four seconds to read, so ten thousand would take half an
+  hour, and twenty of 4.6 kB that copy an anchor out 1,500 times added
+  44 MB to the heap, so ten thousand would take 22 GB. The texts of
+  one description are now read against one limit: `parse.maxBytes`
+  together in size, JSON text included; the steps of that size
+  together in work; and ten times its own size for each in what
+  aliases copy out, with one floor between them. Three hundred of the
+  first documents are stopped after 26 seconds, at the 13,421,772
+  steps one text of 128 MiB is given, and of the second after a
+  seventh of a second. A tree is not counted. The largest set of the
+  corpus, DigitalOcean's, is 3.6 MiB of text.
+- **`maxDocuments` counts what is asked for, and the rounds are
+  counted** (Decision 36). A document the loader does not have costs
+  an asking, which over HTTP is a request, so it counts. And each
+  round builds the index of every document so far from nothing, so a
+  chain of documents that each name the next cost the square of its
+  length: 800 took 2.6 seconds, and 10,000 would take about 400. The
+  rounds are 64 at most unless `maxRounds` says otherwise. Of the
+  corpus's 589 descriptions in several documents, Azure's take one to
+  three rounds, Redocly's starter four and DigitalOcean's seven. An
+  index carried from one round to the next would lift the bound. It is
+  not built: it has to name exactly the documents a build from nothing
+  names, since a document asked for that the description does not name
+  is a request its author chose.
+- **A document that is not the description may be anything at its
+  root.** A schema may be `true` or `false`, and the specification
+  lets a document be a schema. `parse` held such a text to a
+  description's root and, under `strict`, to its version, so a schema
+  document that is a Boolean was refused with `openapi_root` where the
+  same document given as a tree resolved. A text given in `documents`
+  or by a loader is now read as a part: any root, and no version. A
+  name in `documents` with no document is a `TypeError`, where it was
+  read as a document that is not there, and a loader that answers
+  `null` has no document. An error `parse` raises for such a text now
+  names the document, as the file the engine shows: DigitalOcean's
+  description is 3,622 files, and an error with no file in it said
+  which line and not which file.
+- **The HTTP loader's connections are its own, and it tries every
+  address it judged.** It handed Node the first judged address alone,
+  so a host with an IPv6 address first was out of reach from a machine
+  with no route for one. It now hands over all of them, and Node tries
+  the next. It also went through the agent the process shares, which
+  finds a kept connection by its host's name: a request could go out
+  on a connection that other code had opened, to an address the loader
+  never judged. It has agents of its own now, and asks once more for a
+  document whose kept connection the server had closed.
+- **The file loader's test on macOS and Windows.** The suite failed
+  on both, in the test alone. The temporary folder is behind a link on
+  macOS and is written with a short name on Windows, so a document
+  named by the folder's path was under neither the path the loader was
+  given nor the directory's real one, and the loader refused it, as it
+  is meant to: it looks for nothing that is outside as written, since
+  a `file:` URI with a host is a network path on Windows. The test
+  names its folder by its real path, two tests pin the rule on every
+  platform, and the reference states it.
+- **The peer floors tool measured its own last answer, and one floor
+  had moved.** The review of this change found two faults in
+  `tools/peer-floors.cjs`, and both were right. A trial ran the whole
+  suite, the test that holds the installed peers to the recorded floors
+  included, so a release under a recorded floor failed whether or not
+  the package works with it, and a peer with no record failed at its
+  latest release. A trial now leaves that one test out. And a trial ran
+  silent for longer than 30 seconds: it now says the trial, the step
+  and how far the run is every 20 seconds, and a failed trial names the
+  tests that failed. Measured again with the repaired tool, in 36
+  trials and 18 minutes, four floors are where they were and one is
+  not: `@tabnas/parser` starts at 0.12.20, where the record had
+  0.12.16. On 0.12.17 to 0.12.19 one test fails, the one that holds
+  Decision 34's second reading to a 2.2 GB heap: a rule takes more
+  memory before 0.12.20, and that reading runs out of it. The floors
+  had been measured before Decision 34 was built, and were not measured
+  again with it. The range and the record follow the measurement,
+  which is the standing rule, and the five pass together at their
+  floors.
+- **Verified, on the last commit that changes the build.** The suite
+  passes, 966 tests and the 11 of the prose gate, here and on Linux,
+  macOS and Windows in continuous integration. Both corpus sweeps
+  leave their ledgers and baselines as committed: 235 rows under the
+  base reading, and 3 under `reading: 'spec'`, every one accepted and
+  none open. The run of descriptions in several documents gives the
+  figures recorded. The apidef gate passes at voxgig/apidef 2a66bb9
+  against 25f8d4b: 2,691 of 2,692 tests, one skipped as on apidef's
+  `main`, and 110 of 110 definitions byte-identical. The preset
+  comparison finds no difference in 15,177 documents, nor in the nine
+  of the corpus over 10 MB. The gates were run three times in all: on
+  T4 as first built, where each passed; beside a trial of the peer
+  floors tool, where the machine ran out of memory and one worker of
+  the preset comparison was killed, so that run was put aside; and
+  alone on the final build, which is the run recorded here. The gates
+  are run by themselves, and the guide now says so.
+- **What T4 leaves as it is.** Under `refs: 'pointer'` no other
+  document is read, and `documents` is refused there. The implicit
+  mapping of a discriminator is worked out for the description's own
+  schemas. The result holds the description's resolved tree, and no
+  tree for another document: a caller who wants one resolves that
+  document as the entry.
+
+**Since acceptance**, on the maintainer's rulings of 21 to 23 November:
+
+- **Every decision of section 6 is taken, and every choice T3 was built
+  on is ruled.** The maintainer was asked each as a question, with the
+  course built or proposed as the first answer, and took that answer
+  each time.
+
+  | Ruling | Taken | What stands |
+  |---|---|---|
+  | Decisions 29 and 30 | 21 November | as built: a schema is read by the dialect it declares, an unknown one as 2020-12 and reported, and the model follows the 3.1.2 and 3.2.1 texts |
+  | OpenAPI's `discriminator`, `xml`, `externalDocs` and `example` in a schema that declares an older dialect | 21 November | as built: read in every dialect |
+  | An `$id` that names the resource it is already in | 21 November | as built: it names nothing new, and the resource keeps the root it has |
+  | A relative URL where no retrieval URI is given | 21 November | as built: `urls` gives it no absolute form, and a `provenance` row for a reference into another document keeps its `urn:` URI |
+  | Which fields are URLs with a base, in 3.0 and 2.0 | 22 November | as built: 3.0 follows its recommendation for four fields, and a URL of 2.0 has no base |
+  | What the implicit mapping of a discriminator lists | 22 November | as built: the schemas the description lets a value name, and a schema's own name in 2.0 alone |
+  | A bound on the walk of routes with no option given | 22 November | added in this change, at the allowance the index keeps |
+  | Decision 34 | 22 November | the rule history bounded for a text past 16 MiB, and the limit raised to 128 MiB, in this change |
+  | Decision 33 | 23 November | a standing rule, set in this change and not left to the release |
+  | Decision 31 | 23 November | a confined file loader and an allow-listed HTTP loader, each opt-in, for item 4 of T4 |
+  | Decision 32 | 23 November | the operation view, the embedded languages and bundling to JSON, for T5 |
+  | The agent guide's link | 23 November | `CLAUDE.md` is a link to `AGENTS.md`, set in this change |
+  | T4 | 23 November | to start, from the merge of T3's acceptance |
+
+- **The walk of routes is bounded with no option given.** Item 2 left
+  this open: a value that two routes reach is walked once for each, so
+  callbacks that branch to one shared Path Item double the routes at
+  every level, and thirty levels would not end. `reuseOf` now holds its
+  visits to `index.allowance`, the bound the index keeps for its own
+  later rounds: sixteen times the work of reading the document once,
+  and 100,000 besides. Past it `resolve` raises `openapi_work`, with the
+  place the walk had reached. Thirty levels are refused in a few
+  milliseconds, under the defaults and under the preset alike.
+- **No description comes near that bound.** The walk was counted on
+  each of the 5,168 descriptions the base reading resolved. The longest
+  takes 7.5% of its allowance, 22,101 visits where 293,312 are allowed
+  (`digitalocean.com/2.0`), and none takes more than 2.2 times the work
+  of the first reading.
+- **The peer ranges have floors** (Decision 33). Each was measured,
+  not reasoned: the oldest release on which this package's suite passes
+  with every other peer at its latest. `@tabnas/expr` starts at 0.6.4,
+  since 0.6.3 has no step budget and this source does not build on it.
+  `@tabnas/yaml` starts at 0.5.33, since 0.5.32 fails 62 tests, and
+  `@tabnas/parser` at 0.12.16, since 0.12.15 fails 281. `@tabnas/jsonic`
+  starts at 0.3.1 and `@tabnas/json` at 0.3.2, since the 0.2.0 of each
+  cannot be installed beside the others. The five pass together at
+  their floors. Measured again on 24 November, once Decision 34 and T4
+  were built, `@tabnas/parser` starts at 0.12.20: see the record of T4
+  above. Section 6 gave `expr` 0.5.20 as its example, for
+  `fold`; the package has since come to call the step budget, and the
+  floor follows the code, which is the rule.
+- **No range has a ceiling.** Every `@tabnas` peer range in the fleet is
+  open above, so that an install resolves the latest release of each
+  peer and the fleet stays tested against current versions. A floor
+  keeps that. `tools/peer-floors.cjs` measures the floors in a worktree
+  of its own, `tools/peer-floors.json` records them, and
+  `ts/test/peer-floors.test.ts` holds the manifest to the record, the
+  installed peers to the floors, and refuses a caret.
+- **`CLAUDE.md` is a link to `AGENTS.md`.** The file held a pointer to
+  the guide and the guide's two core principles, word for word, so
+  nothing is lost. The instructions this guide copies for agents ask
+  for a link named `CLAUDE.MD`. That name would differ from the file's
+  only in case, which macOS and Windows do not tell apart, so the
+  existing name is the link, as `tabnas/parser` has it. `AGENTS.md`
+  gains the two sections of those instructions it lacked. `tabnas/expr`
+  has the same change.
+- **The rule history is bounded for what the first parser cannot hold**
+  (Decision 34). `parse` keeps two parsers for each setting of `strict`
+  and `reading`. The one that keeps every rule reads a text of up to
+  16 MiB, for the 1,677,721 steps of that size at most, as it did. The
+  one that keeps its last three rules reads a text past 16 MiB, and
+  reads again, from its start, a text the first was stopped on. The
+  default `maxBytes` is 128 MiB. A parser a caller gives reads as it
+  was built, so the default limit for one stays 16 MiB.
+- **128 MiB is where the bounded parser takes the memory the first
+  limit was set by.** Measured in a heap of 2.2 GB, under
+  `reading: 'spec'`, on descriptions made of GitHub's with its paths
+  repeated, each read with no bound on its work:
+
+  | Description | Every rule kept | The last three kept |
+  |---|---|---|
+  | 17.9 MiB | 4.8 s, 1,778 MB | 15.8 s, 434 MB |
+  | 32.8 MiB | not measured | 27.5 s, 553 MB |
+  | 66.2 MiB | not measured | 54.0 s, 892 MB |
+  | 99.6 MiB | not measured | 78.9 s, 1,243 MB |
+  | 129.2 MiB | not measured | 103.4 s, 1,587 MB |
+
+  That is about 250 MB, and 10.3 MB for each MiB. Three times the time
+  is E13's figure, and it holds.
+- **Both Microsoft Graph descriptions are read**, which were the last
+  two a sweep refused for their size. Through `parse` with no option
+  but the reading, the one of 24.6 MiB took 28.5 seconds and 461 MB,
+  and the one of 55.7 MiB took 57.1 seconds and 689 MB.
+  In the sweep, under the specification's reading, each reads to the
+  tree the reference parser reads. Under the base reading each differs
+  from it by its `yes` and `no` words alone, 86 values. The two hold
+  157,226 references: 157,027 resolve, 199 are cut as cycles, and none
+  is left unresolved.
+- **The turn is on work as well as on size.** As first built it was on
+  size alone, which is what the ruling's sentence says. Measured, that
+  left a gap. A description takes a step for each seven to nine bytes,
+  so a dense one of 12 to 16 MiB takes more than the first parser's
+  steps: one of 14.2 MiB was stopped for its work, where one of
+  17.9 MiB was read. GitHub's own description, 10.5 MiB, takes 83% of
+  those steps today. The limit has always had both faces, size and
+  work, so the turn has both: a text the first parser is stopped on is
+  read again by the second. The same 14.2 MiB is then read in 19
+  seconds, the first reading included, with 1.9 GB at its most, which
+  is the first reading's own cost.
+- **What that changes under 16 MiB.** Every text that parsed parses as
+  it did, by the same parser, at the same cost. A text that was stopped
+  for its work at 1,677,721 steps is now read by the second parser, or
+  stopped at the steps of the limit, which are 13,421,772 by default.
+  That is a text of very many small values, and it now costs time
+  where it cost memory. A caller who wants the earlier bound gives
+  `maxBytes: 16 * 1024 * 1024`: the steps of a given limit are all a
+  text has, on either parser.
+- **The worst text for the default is one of small values.** 40 MiB of
+  them, in each of the four shapes of the hostile suite, was stopped at
+  the default bound after 87 to 101 seconds, with 370 to 717 MB. A
+  description as dense as GitHub's meets the same bound first too: one
+  of 99.6 MiB was read, in 80 seconds and 1.2 GB, and one of 125.5 MiB
+  was stopped after 98 seconds, at 1.5 GB.
+- **Descriptions take a step for each seven to nine bytes**, where T2
+  wrote eight to eleven. Counted as `check` counts: GitHub's takes one
+  for each 7.9 bytes and Stripe's one for each 9.3, in 1,394,727 and
+  1,484,073 steps, and the two of Microsoft Graph one for each 7.0 and
+  7.8, in 3,713,145 and 7,527,838. The rate of the bound is unchanged,
+  a step for each ten bytes of `maxBytes`, so by default a description
+  meets it at 89 to 119 MiB, by how dense it is. Whether the rate
+  should follow the measurement is Decision 35.
+- **The error held the reading it ended.** The second reading was first
+  started where the first one's error was caught. That error holds its
+  rule and its context, and through them every rule of the reading, so
+  the second reading ran with all of the first still held: 1,361 MB of
+  heap in use when it ended, where 144 MB is in use with the second
+  reading started after the `catch`.
+- **The two parsers are held to each other.** `ts/test/history.test.ts`
+  reads every row of `test/spec/` and `test/pending/` through the
+  grammar with each, 234 rows, and holds them to one outcome: the same
+  tree and the same `lossy` report for 159, the same refusal, message
+  included, for 75. It reads the petstore with a member past 16 MiB
+  through `parse` itself, as YAML under each reading and as JSON by
+  each grammar. The hostile suite reads 850 KB of small items, which
+  the first parser is stopped on, and holds a limit of 17 MiB to its
+  1,782,579 steps on both parsers, in a child with a heap of 2.2 GB.
+- **Under the specification's reading the corpus is read whole.** It
+  was swept on this build under both readings, and each sweep compared
+  with the one of the released packages, document for document: 8,986
+  of 8,986 are there, and the records of two differ, the two Microsoft
+  Graph descriptions. Under `reading: 'spec'` the ledger is 3 rows where
+  it was 5, every one accepted and none open. All 5,182 descriptions
+  parse. Of the 8,986 documents, one is refused, a list of test objects
+  that is no description, and two trees differ from the reference
+  parser's, the two that parser reads wrongly. That is G1 for this
+  reading. Under the base reading the ledger stays at 235 rows: the two
+  that were refused for their size now differ by YAML 1.1's words, as
+  166 other documents do by design.
+- **The baselines move by those two descriptions.** 1,302,785 sites
+  where there were 1,145,559 under `reading: 'spec'`, 2,123 cuts where
+  there were 1,924, and the connections of the two: 29,430 tags, 3,947
+  mappings and 2,831 implicit mappings more.
+- **The gates, on the build of this change.** The suite passes, 897
+  tests and the 11 of the prose gate. The apidef gate passes at apidef
+  2a66bb9, which is its branch with apidef 8.33.2 merged, against
+  25f8d4b: 2,691 of 2,692 tests, one skipped as on apidef's `main`, and
+  110 of 110 definitions byte-identical. The preset
+  comparison finds no difference: in 167 shapes, 6,000 generated
+  documents under seed 1, 8,964 documents of the corpus with the 13 that
+  `parse` refuses unread, and all 46 rows, and then in the nine
+  documents over 10 MB, which now have the two Microsoft Graph
+  descriptions among them. The prose
+  counts are re-measured, 353 alerts where there were 357, since the
+  pages on the limits are rewritten. `node tools/peer-floors.cjs` was
+  run to make the record of the floors, and the suite holds the
+  manifest to it.
 
 **Since acceptance**, once `expr` 0.6.4 was released:
 

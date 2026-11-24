@@ -1,0 +1,63 @@
+{
+  "note": "What tools/corpus/documents.cjs counts: each description of these corpus sources resolved from its own file with resolveAll and the file loader, confined to the source. Written by that tool, never by hand.",
+  "sources": {
+    "azure": {
+      "options": {},
+      "files": 935,
+      "descriptions": 885,
+      "inSeveralDocuments": 585,
+      "documentsLoaded": 1409,
+      "mostDocumentsForOne": 7,
+      "sites": 118246,
+      "resolved": 117850,
+      "cut": 396,
+      "unresolved": {},
+      "threw": 0,
+      "externalOnDisk": 0
+    },
+    "redocly-starter": {
+      "options": {},
+      "files": 43,
+      "descriptions": 1,
+      "inSeveralDocuments": 1,
+      "documentsLoaded": 39,
+      "mostDocumentsForOne": 39,
+      "sites": 110,
+      "resolved": 110,
+      "cut": 0,
+      "unresolved": {},
+      "threw": 0,
+      "externalOnDisk": 0
+    },
+    "oai-learn": {
+      "options": {},
+      "files": 53,
+      "descriptions": 38,
+      "inSeveralDocuments": 2,
+      "documentsLoaded": 8,
+      "mostDocumentsForOne": 4,
+      "sites": 201,
+      "resolved": 201,
+      "cut": 0,
+      "unresolved": {},
+      "threw": 0,
+      "externalOnDisk": 0
+    },
+    "digitalocean": {
+      "options": {
+        "slots": "all"
+      },
+      "files": 3676,
+      "descriptions": 1,
+      "inSeveralDocuments": 1,
+      "documentsLoaded": 3622,
+      "mostDocumentsForOne": 3622,
+      "sites": 14456,
+      "resolved": 14442,
+      "cut": 14,
+      "unresolved": {},
+      "threw": 0,
+      "externalOnDisk": 0
+    }
+  }
+}

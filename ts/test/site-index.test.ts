@@ -10,7 +10,7 @@ import assert from 'node:assert'
 import { join } from 'node:path'
 
 import { buildIndex } from '../dist/site-index'
-import type { IndexConfig, Loc, SiteIndex } from '../dist/site-index'
+import type { DocFacts, DocInput, IndexConfig, Loc, SiteIndex } from '../dist/site-index'
 import { pointer } from '../dist/uri'
 
 const { generate } = require(join(__dirname, '..', '..', 'tools', 'apidef-preset', 'generate.cjs'))
@@ -52,16 +52,21 @@ const pathOf = (loc: Loc): (string | number)[] => {
   return path.reverse()
 }
 
+// A place as the tests write it: its pointer, after its document's key
+// where that is not the description.
+const placed = (index: SiteIndex, doc: DocFacts | undefined, at: string): string =>
+  undefined === doc || doc === index.docs[0] ? at : doc.key + ' ' + at
+
 // Everything the index says, in a form that does not depend on the order
-// it was found in: every location's facts, every site's, and the count of
-// data slots.
+// it was found in: every location's facts in every document, every
+// site's, and the count of data slots.
 function answer(index: SiteIndex): string {
   const locs: any[] = []
-  const stack: Loc[] = [index.root]
+  const stack: Loc[] = index.docs.map((doc) => doc.root)
   while (0 < stack.length) {
     const loc = stack.pop()!
     locs.push([
-      pointer(pathOf(loc)),
+      placed(index, loc.doc, pointer(pathOf(loc))),
       loc.state,
       loc.known,
       loc.base,
@@ -71,12 +76,12 @@ function answer(index: SiteIndex): string {
       loc.dynamic,
       loc.slot,
       loc.ids ?? null,
-      undefined === loc.region ? null : [loc.region.state, loc.region.by.at, loc.region.round],
+      undefined === loc.region ? null : [loc.region.state, placed(index, loc.region.by.loc.doc, loc.region.by.at), loc.region.round],
     ])
     for (const kid of loc.kids ?? []) stack.push(kid)
   }
   const sites = index.sites.map((r) => [
-    r.at,
+    placed(index, r.loc.doc, r.at),
     r.kind,
     r.type,
     r.state,
@@ -85,10 +90,16 @@ function answer(index: SiteIndex): string {
     r.dialect,
     r.alone,
     r.why ?? null,
-    undefined === r.target ? null : pointer(r.target),
+    undefined === r.target ? null : placed(index, r.targetDoc, pointer(r.target)),
     r.uri ?? null,
     r.fragment ?? null,
-    undefined === r.landing ? null : r.landing.found ? pointer(r.landing.path!) : true === r.landing.loop ? 'loop' : 'nowhere',
+    undefined === r.landing
+      ? null
+      : r.landing.found
+        ? placed(index, r.landing.doc, pointer(r.landing.path!))
+        : true === r.landing.loop
+          ? 'loop'
+          : 'nowhere',
     r.landing?.through ?? null,
   ])
   const byAt = (a: any[], b: any[]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
@@ -104,10 +115,13 @@ function answer(index: SiteIndex): string {
 // The regions a reference typed, as `at state by round`.
 function regions(index: SiteIndex): string[] {
   const out: string[] = []
-  const stack: Loc[] = [index.root]
+  const stack: Loc[] = index.docs.map((doc) => doc.root)
   while (0 < stack.length) {
     const loc = stack.pop()!
-    if (undefined !== loc.region) out.push(`${pointer(pathOf(loc))} ${loc.region.state} ${loc.region.by.at} ${loc.region.round}`)
+    if (undefined !== loc.region) {
+      const at = placed(index, loc.doc, pointer(pathOf(loc)))
+      out.push(`${at} ${loc.region.state} ${placed(index, loc.region.by.loc.doc, loc.region.by.at)} ${loc.region.round}`)
+    }
     for (const kid of loc.kids ?? []) stack.push(kid)
   }
   return out.sort()
@@ -605,5 +619,219 @@ describe('site index', () => {
     assert.equal(indexOf(deep(999)).rounds, 0)
     assert.throws(() => indexOf(deep(1000)), (err: any) => 'openapi_depth' === err.code)
     assert.throws(() => indexOf(deep(50), { maxDepth: 20 }), (err: any) => 'openapi_depth' === err.code)
+  })
+})
+
+// One index over a description and the documents given with it.
+describe('site index, several documents', () => {
+  const HERE = 'https://example.com/api/'
+  const versionOf = (raw: any): IndexConfig['mv'] | undefined => {
+    const v = 'string' === typeof raw?.openapi ? raw.openapi : 'string' === typeof raw?.swagger ? raw.swagger : undefined
+    if (undefined === v) return undefined
+    return (v.startsWith('2') ? '2.0' : v.startsWith('3.0') ? '3.0' : v.startsWith('3.1') ? '3.1' : '3.2') as IndexConfig['mv']
+  }
+  // The documents of a set, as `resolve` hands them to the index: each by
+  // the URI it was retrieved from, with its own where it has `$self`.
+  const given = (docs: Record<string, any>, entry: IndexConfig['mv']): DocInput[] =>
+    Object.entries(docs).map(([name, raw]) => {
+      const key = new URL(name, HERE).href
+      const mv = versionOf(raw)
+      const read = mv ?? entry
+      return {
+        key,
+        uri: '3.2' === mv && 'string' === typeof raw.$self ? new URL(raw.$self, key).href : key,
+        raw,
+        mv: read,
+        described: undefined !== mv,
+        rootDialect: 'string' === typeof raw?.jsonSchemaDialect ? raw.jsonSchemaDialect : (DIALECT[read] ?? ''),
+      }
+    })
+  const setOf = (entry: any, docs: Record<string, any>, over: Partial<IndexConfig> = {}): SiteIndex => {
+    const cfg = config(entry)
+    const at = HERE + 'openapi.yaml'
+    return indexOf(entry, { entry: at, retrieved: at, others: given(docs, cfg.mv), ...over })
+  }
+  const site = (index: SiteIndex, at: string) => {
+    const found = index.sites.find((r) => placed(index, r.loc.doc, r.at) === at)
+    assert.ok(undefined !== found, `no site at ${at}: ${index.sites.map((r) => placed(index, r.loc.doc, r.at)).join(', ')}`)
+    return found
+  }
+  const lands = (index: SiteIndex, at: string): string => {
+    const row = site(index, at)
+    const land = index.landing(row)
+    return land.found ? placed(index, land.doc, pointer(land.path!)) : true === land.loop ? 'loop' : (row.why ?? 'nowhere')
+  }
+
+  const shared = {
+    openapi: '3.1.0',
+    info: { title: 'shared', version: '1' },
+    components: {
+      responses: {
+        Ok: { description: 'ok', content: { 'application/json': { schema: { $ref: '#/components/schemas/Pet' } } } },
+      },
+      schemas: {
+        Pet: { $id: 'https://example.com/schemas/pet', type: 'object', properties: { tag: { $anchor: 'tag', type: 'string' } } },
+        Named: { $anchor: 'named', type: 'string' },
+      },
+    },
+  }
+  const entry = (refs: Record<string, string>) => ({
+    openapi: '3.1.0',
+    info: { title: 'entry', version: '1' },
+    paths: {},
+    components: {
+      responses: Object.fromEntries(Object.entries(refs).filter(([k]) => k.startsWith('r')).map(([k, $ref]) => [k, { $ref }])),
+      schemas: Object.fromEntries(Object.entries(refs).filter(([k]) => !k.startsWith('r')).map(([k, $ref]) => [k, { $ref }])),
+    },
+  })
+  const OTHER = HERE + 'shared.yaml'
+
+  test('a reference lands in the document that holds what it names', () => {
+    const index = setOf(
+      entry({
+        r1: 'shared.yaml#/components/responses/Ok',
+        byPointer: 'shared.yaml#/components/schemas/Named',
+        byId: 'https://example.com/schemas/pet',
+        byAnchor: 'shared.yaml#named',
+        byIdAnchor: 'https://example.com/schemas/pet#tag',
+        whole: 'shared.yaml',
+        absent: 'missing.yaml#/components/schemas/X',
+        noAnchor: 'shared.yaml#nothing',
+        notThere: 'shared.yaml#/components/schemas/Nothing',
+      }),
+      { 'shared.yaml': shared },
+    )
+    assert.deepEqual(index.docs.map((d) => d.key), [HERE + 'openapi.yaml', OTHER])
+    assert.equal(lands(index, '/components/responses/r1'), OTHER + ' /components/responses/Ok')
+    assert.equal(lands(index, '/components/schemas/byPointer'), OTHER + ' /components/schemas/Named')
+    assert.equal(lands(index, '/components/schemas/byId'), OTHER + ' /components/schemas/Pet')
+    assert.equal(lands(index, '/components/schemas/byAnchor'), OTHER + ' /components/schemas/Named')
+    assert.equal(lands(index, '/components/schemas/byIdAnchor'), OTHER + ' /components/schemas/Pet/properties/tag')
+    assert.equal(lands(index, '/components/schemas/whole'), OTHER + ' ')
+    // A document that was not given is another document still, and the
+    // site says which.
+    assert.equal(lands(index, '/components/schemas/absent'), 'external')
+    assert.equal(site(index, '/components/schemas/absent').uri, HERE + 'missing.yaml')
+    assert.equal(site(index, '/components/schemas/absent').fragment, '/components/schemas/X')
+    assert.equal(lands(index, '/components/schemas/noAnchor'), 'no-anchor')
+    assert.equal(lands(index, '/components/schemas/notThere'), 'nowhere')
+    // What the landing holds is typed by the model of its own document.
+    const land = index.landing(site(index, '/components/responses/r1'))
+    assert.equal(land.loc!.state, 'response?')
+    assert.equal(land.loc!.doc.key, OTHER)
+    assert.equal(index.stateAt(land), 'response?')
+  })
+
+  test('the sites of every document are found, each read against its own base', () => {
+    const index = setOf(entry({ r1: 'shared.yaml#/components/responses/Ok' }), { 'shared.yaml': shared })
+    const inner = OTHER + ' /components/responses/Ok/content/application~1json/schema'
+    assert.equal(site(index, inner).base, OTHER)
+    assert.equal(lands(index, inner), OTHER + ' /components/schemas/Pet')
+    // A fragment alone names the document it is written in.
+    const back = setOf(entry({ here: '#/components/schemas/there', there: 'shared.yaml#/components/schemas/Named' }), {
+      'shared.yaml': shared,
+    })
+    assert.equal(lands(back, '/components/schemas/here'), '/components/schemas/there')
+  })
+
+  test('a document is named by its own URI, and by the one it was retrieved from', () => {
+    const self = { ...shared, openapi: '3.2.0', $self: 'https://example.com/shared' }
+    const index = setOf(
+      {
+        ...entry({ bySelf: 'https://example.com/shared#/components/schemas/Named', byWhere: 'shared.yaml#/components/schemas/Named' }),
+        openapi: '3.2.0',
+      },
+      { 'shared.yaml': self },
+    )
+    assert.equal(index.docs[1].uri, 'https://example.com/shared')
+    assert.equal(lands(index, '/components/schemas/bySelf'), OTHER + ' /components/schemas/Named')
+    assert.equal(lands(index, '/components/schemas/byWhere'), OTHER + ' /components/schemas/Named')
+    // Its own references are read against its own URI, not the one it
+    // was retrieved from.
+    const moved = setOf(
+      { ...entry({ in: 'https://example.com/shared#/components/schemas/Out' }), openapi: '3.2.0' },
+      {
+        'shared.yaml': { ...self, components: { schemas: { Out: { $ref: 'next#/components/schemas/Named' } } } },
+        'https://example.com/next': { ...shared, openapi: '3.2.0' },
+      },
+    )
+    assert.equal(lands(moved, OTHER + ' /components/schemas/Out'), 'https://example.com/next /components/schemas/Named')
+  })
+
+  test('a document with no version is typed by the references that land in it, in rounds', () => {
+    const index = setOf(entry({ Pet: 'Pet.yaml', viaList: 'defs.yaml#/Owner' }), {
+      'Pet.yaml': { type: 'object', properties: { owner: { $ref: 'defs.yaml#/Owner' }, self: { $ref: '#' } } },
+      'defs.yaml': { Owner: { type: 'object', properties: { pets: { type: 'array', items: { $ref: 'Pet.yaml' } } } }, Other: { $ref: 'x' } },
+    })
+    const pet = HERE + 'Pet.yaml'
+    const defs = HERE + 'defs.yaml'
+    assert.deepEqual(regions(index), [
+      `${pet}  schema /components/schemas/Pet 1`,
+      `${defs} /Owner schema /components/schemas/viaList 1`,
+    ])
+    // The sites inside each are found once it is typed, and not before:
+    // `Other` is in no region, and is no site.
+    assert.equal(lands(index, pet + ' /properties/owner'), defs + ' /Owner')
+    assert.equal(lands(index, pet + ' /properties/self'), pet + ' ')
+    assert.equal(lands(index, defs + ' /Owner/properties/pets/items'), pet + ' ')
+    assert.equal(index.sites.some((r) => r.loc.doc.key === defs && '/Other' === r.at), false)
+    assert.equal(site(index, pet + ' /properties/owner').round, 1)
+    // Under `slots: 'all'` any `$ref` map with a string is a site.
+    const all = setOf(entry({ Pet: 'Pet.yaml' }), { 'defs.yaml': { Other: { $ref: 'x' } } }, { slots: 'all' })
+    assert.equal(site(all, defs + ' /Other').kind, 'data')
+    assert.equal(lands(all, defs + ' /Other'), 'external')
+  })
+
+  test('a pointer is read on through a reference into another document', () => {
+    const index = setOf(
+      entry({ A: 'shared.yaml#/components/schemas/Pet', deep: '#/components/schemas/A/properties/tag', gone: '#/components/schemas/A/properties/none' }),
+      { 'shared.yaml': shared },
+    )
+    const land = index.landing(site(index, '/components/schemas/deep'))
+    assert.equal(land.found, true)
+    assert.equal(placed(index, land.doc, pointer(land.path!)), OTHER + ' /components/schemas/Pet/properties/tag')
+    assert.deepEqual(land.through, ['/components/schemas/A'])
+    assert.equal(lands(index, '/components/schemas/gone'), 'nowhere')
+  })
+
+  test('two documents that name each other are indexed once each', () => {
+    const a = { ...entry({ A: 'b.yaml#/components/schemas/B' }) }
+    const b = { openapi: '3.1.0', info: { title: 'b', version: '1' }, components: { schemas: { B: { $ref: 'openapi.yaml#/components/schemas/A' } } } }
+    const index = setOf(a, { 'b.yaml': b })
+    assert.equal(lands(index, '/components/schemas/A'), HERE + 'b.yaml /components/schemas/B')
+    assert.equal(lands(index, HERE + 'b.yaml /components/schemas/B'), '/components/schemas/A')
+    assert.equal(index.rounds, 0)
+  })
+
+  test('each document is read by the model of its own version', () => {
+    const index = setOf(entry({ old: 'old.json#/definitions/Pet' }), {
+      'old.json': {
+        swagger: '2.0',
+        info: { title: 'old', version: '1' },
+        paths: {},
+        definitions: { Pet: { type: 'object', properties: { next: { $ref: '#/definitions/Pet' } } } },
+        parameters: { P: { name: 'p', in: 'query', type: 'string' } },
+      },
+    })
+    const old = HERE + 'old.json'
+    assert.equal(index.docs[1].mv, '2.0')
+    assert.equal(lands(index, '/components/schemas/old'), old + ' /definitions/Pet')
+    assert.equal(index.landing(site(index, '/components/schemas/old')).loc!.state, 'schema')
+    assert.equal(lands(index, old + ' /definitions/Pet/properties/next'), old + ' /definitions/Pet')
+    // A schema reference that lands on a 2.0 parameter conflicts with it.
+    const clash = setOf(entry({ wrong: 'old.json#/parameters/P' }), { 'old.json': index.docs[1].raw })
+    assert.equal(clash.conflict(site(clash, '/components/schemas/wrong')), 'parameter')
+  })
+
+  test('the index carried forward equals the index worked out from nothing, across documents', () => {
+    const docs = {
+      'Pet.yaml': { type: 'object', properties: { owner: { $ref: 'defs.yaml#/Owner' }, kind: { $ref: 'shared.yaml#named' } } },
+      'defs.yaml': { Owner: { properties: { pets: { items: { $ref: 'Pet.yaml' } }, deep: { $ref: 'Pet.yaml#/properties/owner/properties/pets' } } } },
+      'shared.yaml': shared,
+    }
+    const raw = entry({ r1: 'shared.yaml#/components/responses/Ok', Pet: 'Pet.yaml', far: 'defs.yaml#/Owner/properties/deep' })
+    const carried = setOf(raw, docs)
+    assert.ok(1 < carried.rounds, `rounds: ${carried.rounds}`)
+    assert.equal(answer(carried), answer(setOf(raw, docs, { incremental: false })))
   })
 })

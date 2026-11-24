@@ -301,6 +301,31 @@ baseline would count the accepted rows wrongly. `npm test` also holds every
 entry to a row of the committed ledger, so a ledger update that strands
 an entry fails there.
 
+## Descriptions in several documents
+
+The sweep resolves one document at a time, so a reference into another
+document is `external` there. `documents.cjs` is the other half:
+
+```sh
+node tools/corpus/documents.cjs            # run, and compare with test/corpus/documents.json
+node tools/corpus/documents.cjs --write    # run, and rewrite that file
+```
+
+For each of four sources it takes every file that is a description,
+resolves it with `resolveAll` and the file loader, confined to the
+source's folder, and counts what it loaded and what is left as written:
+`azure`, `redocly-starter`, `oai-learn`, and `digitalocean` under
+`slots: 'all'`, since its entry names a file for each operation, where
+3.0 has no Reference Object. It takes about half a minute.
+
+A reference that is left as external is looked for on disk. One whose
+document is there and was not read is the failure this run exists to
+find, and so is a description that throws. Either ends the run with 1,
+and `--write` then writes nothing. A figure that moved ends it with 1
+too, and says which. The record,
+[`test/corpus/documents.json`](../../test/corpus/documents.json), is
+written by the tool and never by hand.
+
 ## The other scripts
 
 | Script | What it does |

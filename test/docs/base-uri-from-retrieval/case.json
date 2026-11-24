@@ -1,0 +1,27 @@
+{
+  "source": "OpenAPI 3.2.0, Appendix F, Base URI From the Retrieval URI",
+  "note": "Neither document has a base URI in its content, so each takes the URI it was retrieved from. schemas/foo resolved against the first's is the retrieval URI of the second, a JSON Schema document.",
+  "entry": "openapis.yaml",
+  "retrievalUri": "https://example.com/api/openapis.yaml",
+  "documents": {
+    "https://example.com/api/schemas/foo": "foo.json"
+  },
+  "tree": {
+    "openapi": "3.2.0",
+    "info": { "title": "Example API", "version": 1 },
+    "components": {
+      "requestBodies": {
+        "Foo": {
+          "content": {
+            "application/json": { "schema": { "type": "object", "properties": { "bar": { "type": "string" } } } }
+          }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    ["", "/components/requestBodies/Foo/content/application~1json/schema", "https://example.com/api/schemas/foo", "", "resolved"]
+  ]
+}

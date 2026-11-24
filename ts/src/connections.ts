@@ -22,7 +22,8 @@
 
 import { slot, step } from './model'
 import type { ModelVersion } from './model'
-import type { Landing, Loc, SiteIndex } from './site-index'
+import { EXTRA_FACTOR, hasIds as schemasHaveIds } from './site-index'
+import type { DocFacts, Landing, Loc, SiteIndex } from './site-index'
 import { ANCHOR, NOTHING, fragmentOf, hierarchical, isMap, normalizeUri, own, pointer, resolveUri, stepInto } from './uri'
 import type { Path } from './uri'
 
@@ -46,9 +47,15 @@ type ConnectionKind =
 type Connection = {
   kind: ConnectionKind
   at: string
+  // The document that position is in, by the URI it was given under,
+  // where it is not the description.
+  doc?: string
   name: string
   found: boolean
   target: string | null
+  // The document `target` is in, by the URI it was given under, where
+  // that is not the description.
+  targetDoc?: string
   // Why a URI found nothing: as the resolver's unresolved reasons.
   why?: string
   // The object-model type at a located target: operationRef must reach
@@ -96,6 +103,8 @@ type Connection = {
 // loaded.
 type UrlUse = {
   at: string
+  // The document the field is in, where it is not the description.
+  doc?: string
   value: string
   base: 'description' | 'retrieval' | 'api' | 'none'
   uri?: string
@@ -103,6 +112,8 @@ type UrlUse = {
 
 type Use = {
   kind: ConnectionKind
+  // The document the use is in.
+  doc: DocFacts
   at: string
   name: string
   base: string
@@ -152,17 +163,29 @@ function connectionsOf(
 ): { rows: Connection[]; urls: UrlUse[] } {
   // A root that is neither a map nor a list names nothing.
   if (!Array.isArray(raw) && !isMap(raw)) return { rows: [], urls: [] }
+  const home = index.docs[0]
   const uses: Use[] = []
   const urls: UrlUse[] = []
-  const declared = new Map<string, string[]>()
+  // The operations that declare each operationId, in every document.
+  const declared = new Map<string, { doc: DocFacts; at: string }[]>()
+  // The tags of the description. A name used in another document is
+  // looked for among these, as the specification recommends.
   const tags = new Map<string, { at: string; parent?: string }>()
 
   // Every position the index types, in document order, a container before
   // its members. A value that is neither a map nor a list has no location
   // of its own: its state is its parent's step to it, and it is read under
   // its parent's base URI.
+  //
+  // Every document of the set is walked, each by the model of its own
+  // version. One that declares no version is data at its root, and is
+  // walked where a reference has typed it.
   type Frame = { node: any; loc: Loc | undefined; at: string; state: string; base: string; last: string | number; depth: number; holder: any }
-  const stack: Frame[] = [{ node: raw, loc: index.root, at: '', state: 'root', base: '', last: '', depth: 0, holder: undefined }]
+  for (const doc of index.docs) {
+  if (!Array.isArray(doc.raw) && !isMap(doc.raw)) continue
+  const dmv = doc.mv
+  const ids = doc === home ? hasIds : schemasHaveIds(dmv)
+  const stack: Frame[] = [{ node: doc.raw, loc: doc.root, at: '', state: doc.root.state, base: '', last: '', depth: 0, holder: undefined }]
   while (0 < stack.length) {
     const f = stack.pop()!
     if (undefined !== tick) tick()
@@ -170,13 +193,14 @@ function connectionsOf(
     const loc = f.loc
     const state = undefined !== loc ? loc.state : f.state
     if ('data' !== state) {
-      const s = slot(mv, state)
+      const s = slot(dmv, state)
       // The reference a schema's dialect leaves to evaluation: 2020-12's
       // `$dynamicRef`, or 2019-09's `$recursiveRef`.
-      const dynamic = hasIds && 'schema' === s.kind && isMap(node) ? loc?.rules?.dynamic : undefined
+      const dynamic = ids && 'schema' === s.kind && isMap(node) ? loc?.rules?.dynamic : undefined
       if (null != dynamic && 'string' === typeof node[dynamic]) {
         uses.push({
           kind: '$dynamicRef' === dynamic ? 'dynamicRef' : 'recursiveRef',
+          doc,
           at: f.at,
           name: node[dynamic],
           base: loc!.base,
@@ -184,23 +208,25 @@ function connectionsOf(
       }
       if ('string' === typeof node) {
         if ('connection:operationId' === state) {
-          uses.push({ kind: 'operationId', at: f.at, name: node, base: f.base })
+          uses.push({ kind: 'operationId', doc, at: f.at, name: node, base: f.base })
         } else if ('locator:operation' === state) {
-          uses.push({ kind: 'operationRef', at: f.at, name: node, base: f.base })
+          uses.push({ kind: 'operationRef', doc, at: f.at, name: node, base: f.base })
         } else if ('connection:tag' === state) {
           const holder = 'parent' === f.last ? f.holder : undefined
           uses.push({
             kind: 'parent' === f.last ? 'tagParent' : 'tag',
+            doc,
             at: f.at,
             name: node,
             base: f.base,
             holder: isMap(holder) && 'string' === typeof holder.name ? holder.name : undefined,
           })
         } else if ('mapping' === state) {
-          uses.push({ kind: 'defaultMapping' === f.last ? 'defaultMapping' : 'mapping', at: f.at, name: node, base: f.base })
+          uses.push({ kind: 'defaultMapping' === f.last ? 'defaultMapping' : 'mapping', doc, at: f.at, name: node, base: f.base })
         } else if ('url' === s.kind) {
           const base = ('description' === s.type || 'retrieval' === s.type || 'api' === s.type ? s.type : 'none') as UrlUse['base']
           const row: UrlUse = { at: f.at, value: node, base }
+          if (doc !== home) row.doc = doc.key
           // A server's URL with variables has no absolute form until
           // they are given.
           const uri =
@@ -210,7 +236,7 @@ function connectionsOf(
                 ? absoluteOf(node, undefined)
                 : /[{}]/.test(node)
                   ? undefined
-                  : absoluteOf(node, index.retrieved)
+                  : absoluteOf(node, doc.key)
           if (undefined !== uri) row.uri = uri
           urls.push(row)
         }
@@ -220,21 +246,21 @@ function connectionsOf(
         // from 3.0 an object that has it.
         if ('schema' === s.kind && undefined !== loc) {
           const d = node.discriminator
-          if ('2.0' === mv ? 'string' === typeof d : isMap(d) && 'string' === typeof d.propertyName) {
-            uses.push({ kind: 'implicitMapping', at: f.at + '/discriminator', name: '', base: f.base, loc, node })
+          if ('2.0' === dmv ? 'string' === typeof d : isMap(d) && 'string' === typeof d.propertyName) {
+            uses.push({ kind: 'implicitMapping', doc, at: f.at + '/discriminator', name: '', base: f.base, loc, node })
           }
         }
         if ('connection:securityScheme' === s.keys) {
           for (const key of Object.keys(node)) {
-            uses.push({ kind: 'securityScheme', at: f.at + '/' + esc(key), name: key, base: f.base })
+            uses.push({ kind: 'securityScheme', doc, at: f.at + '/' + esc(key), name: key, base: f.base })
           }
         }
         if ('operation' === s.type && 'object' === s.kind && 'string' === typeof node.operationId) {
           const list = declared.get(node.operationId) ?? []
-          list.push(f.at)
+          list.push({ doc, at: f.at })
           declared.set(node.operationId, list)
         }
-        if ('tag' === s.type && 2 === f.depth && 'tags' === loc!.parent!.seg && 'string' === typeof node.name) {
+        if (doc === home && 'tag' === s.type && 2 === f.depth && 'tags' === loc!.parent!.seg && 'string' === typeof node.name) {
           if (!tags.has(node.name)) {
             tags.set(node.name, { at: f.at, parent: 'string' === typeof node.parent ? node.parent : undefined })
           }
@@ -249,10 +275,11 @@ function connectionsOf(
       const kid = null != child && 'object' === typeof child ? index.child(loc, name) : undefined
       // What lies below a position the model gives no state is of
       // interest only where a reference has typed it, or something in it.
-      const next = undefined !== kid ? kid.state : 'data' === state ? 'data' : step(mv, state, name)
+      const next = undefined !== kid ? kid.state : 'data' === state ? 'data' : step(dmv, state, name)
       if ('data' === next && (undefined === kid || !kid.holdsRegion)) continue
       stack.push({ node: child, loc: kid, at: f.at + '/' + esc(name), state: next, base: loc.base, last: name, depth: f.depth + 1, holder: node })
     }
+  }
   }
 
   const schemes = namesAt(raw, '2.0' === mv ? ['securityDefinitions'] : ['components', 'securitySchemes'])
@@ -265,14 +292,24 @@ function connectionsOf(
   const byUri = (name: string, base: string) => {
     const where = index.locate(name, base)
     if (null == where.target) {
-      return { found: false, target: null, why: (where.why ?? 'not-found') as string | undefined, type: null, node: undefined }
+      return {
+        found: false,
+        target: null,
+        doc: undefined,
+        why: (where.why ?? 'not-found') as string | undefined,
+        type: null,
+        node: undefined,
+      }
     }
-    const land = index.landingAt(where.target)
+    // It may name a location in another document of the set, which is
+    // typed by the model of that document's own version.
+    const land = index.landingAt(where.target, where.doc)
     return {
       found: land.found,
       target: pointer(where.target),
+      doc: undefined === where.doc || where.doc === index.docs[0] ? undefined : where.doc.key,
       why: land.found ? undefined : 'not-found',
-      type: land.found ? slot(mv, index.stateAt(land)).type : null,
+      type: land.found ? slot((land.doc ?? index.docs[0]).mv, index.stateAt(land)).type : null,
       node: land.found ? land.node : undefined,
     }
   }
@@ -368,24 +405,36 @@ function connectionsOf(
     return rows
   }
 
+  // An operation, as a row names it: its pointer, after its document's
+  // URI where that is not the description.
+  const placed = (d: { doc: DocFacts; at: string }): string => (d.doc === home ? d.at : d.doc.key + '#' + d.at)
+
   const out: Connection[] = []
   for (const use of uses) {
     if ('implicitMapping' === use.kind) {
-      for (const row of implied(use)) out.push(row)
+      // The names a discriminator's value can take are those of the
+      // description's schema components, so the implicit ones are worked
+      // out for the description's own schemas.
+      if (use.doc === home) for (const row of implied(use)) out.push(row)
       continue
     }
     const row: Connection = { kind: use.kind, at: use.at, name: use.name, found: false, target: null }
+    if (use.doc !== home) row.doc = use.doc.key
     if ('operationId' === use.kind) {
+      // An operationId is looked for among the operations of every
+      // document, the description's first.
       const decl = declared.get(use.name)
       if (null != decl) {
         row.found = true
-        row.target = decl[0]
-        if (1 < decl.length) row.targets = decl
+        row.target = decl[0].at
+        if (decl[0].doc !== home) row.targetDoc = decl[0].doc.key
+        if (1 < decl.length) row.targets = decl.map(placed)
       }
     } else if ('operationRef' === use.kind || 'dynamicRef' === use.kind || 'recursiveRef' === use.kind) {
       const u = byUri(use.name, use.base)
       row.found = u.found
       row.target = u.target
+      if (undefined !== u.doc) row.targetDoc = u.doc
       if (null != u.why) row.why = u.why
       if ('operationRef' === use.kind) row.type = u.type
       if ('dynamicRef' === use.kind) {
@@ -399,14 +448,15 @@ function connectionsOf(
         row.found = true
         row.target = pointer([...schemesAt, use.name])
         row.via = 'name'
-        if ('3.2' === mv) {
+        if ('3.2' === use.doc.mv) {
           const u = byUri(use.name, use.base)
           if (u.found && 'securityScheme' === u.type) row.ambiguous = true
         }
-      } else if ('3.2' === mv) {
+      } else if ('3.2' === use.doc.mv) {
         const u = byUri(use.name, use.base)
         row.found = u.found
         row.target = u.target
+        if (undefined !== u.doc) row.targetDoc = u.doc
         row.via = 'uri'
         row.type = u.type
         if (null != u.why) row.why = u.why
@@ -440,6 +490,7 @@ function connectionsOf(
         const u = byUri(use.name, use.base)
         row.found = u.found
         row.target = u.target
+        if (undefined !== u.doc) row.targetDoc = u.doc
         row.via = 'uri'
         if (null != u.why) row.why = u.why
       }
@@ -461,10 +512,19 @@ function connectionsOf(
 // that comes back to a value it is already in ends there.
 //
 // A value that two routes reach is walked once for each, so the walk can
-// be far longer than the document: every visit is a step of the caller's
-// count, where one is kept.
-function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex, tick?: () => void): Connection[] {
+// be far longer than the document: callbacks that branch to a shared Path
+// Item double the routes at every level. Every visit is a step of the
+// caller's count, where one is kept. Kept or not, the visits are held to
+// the index's allowance, and past it the walk ends as `openapi_work`.
+function reuseOf(
+  raw: any,
+  mv: ModelVersion,
+  index: SiteIndex,
+  refuse: (code: string, message: string, at: string) => never,
+  tick?: () => void,
+): Connection[] {
   const routes = new Map<string, string[]>()
+  let visits = 0
   const onPath = new Set<any>()
   type Member = { value: any; loc: Loc | undefined }
   type Frame = { node: any; loc: Loc | undefined; at: string; state: string; leaving: boolean }
@@ -477,6 +537,13 @@ function reuseOf(raw: any, mv: ModelVersion, index: SiteIndex, tick?: () => void
     }
     if (null == f.node || 'object' !== typeof f.node) continue
     if (undefined !== tick) tick()
+    if (index.allowance < ++visits) {
+      refuse(
+        'openapi_work',
+        'walking the routes of this document takes more than ' + EXTRA_FACTOR + ' times the work of reading it once',
+        f.at,
+      )
+    }
     const s = slot(mv, f.state)
     if ('schema' === s.kind) continue
     // What a reference here stands for, and the fields a Path Item has

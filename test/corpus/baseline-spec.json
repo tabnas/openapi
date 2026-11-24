@@ -143,27 +143,26 @@
   },
   "ledger": {
     "accepted": 3,
-    "open": 2,
-    "rows": 5
+    "open": 0,
+    "rows": 3
   },
   "parse": {
     "all": {
       "died": 0,
-      "parsed": 8983,
-      "refused": 3
+      "parsed": 8985,
+      "refused": 1
     },
     "descriptions": {
       "died": 0,
-      "parsed": 5180,
-      "refused": 2
+      "parsed": 5182,
+      "refused": 0
     },
     "diedHow": {},
     "referenceRefuses": 0,
     "refusedByCode": {
-      "openapi_root": 1,
-      "openapi_size": 2
+      "openapi_root": 1
     },
-    "refusedValid": 3
+    "refusedValid": 1
   },
   "resolve": {
     "checks": {
@@ -177,11 +176,11 @@
         "notFound": 1
       },
       "implicitMapping": {
-        "count": 8241,
+        "count": 11072,
         "notFound": 0
       },
       "mapping": {
-        "count": 3863,
+        "count": 7810,
         "notFound": 47
       },
       "operationId": {
@@ -197,7 +196,7 @@
         "notFound": 1
       },
       "tag": {
-        "count": 123283,
+        "count": 152713,
         "notFound": 58701
       },
       "tagParent": {
@@ -205,30 +204,30 @@
         "notFound": 0
       }
     },
-    "cuts": 1924,
+    "cuts": 2123,
     "dataSlots": 53741,
     "documentsByUnresolved": {
       "external": 789,
       "not-found": 1
     },
     "documentsHeldAsWritten": 0,
-    "documentsWithCuts": 601,
+    "documentsWithCuts": 603,
     "documentsWithDataSlots": 886,
     "heldAsWritten": 0,
     "kinds": {
       "pathItem": 13,
-      "reference": 437418,
-      "schema": 708128
+      "reference": 547072,
+      "schema": 755700
     },
     "notRun": 0,
-    "resolved": 5180,
-    "sites": 1145559,
+    "resolved": 5182,
+    "sites": 1302785,
     "skipped": {
       "no-version": 3803
     },
     "status": {
-      "cut": 1924,
-      "resolved": 1114036,
+      "cut": 2123,
+      "resolved": 1271063,
       "unresolved": 29599
     },
     "threwByCode": {},
@@ -251,7 +250,7 @@
         "values": 626
       }
     },
-    "compared": 8983,
+    "compared": 8985,
     "differ": 2
   },
   "yamlFeatures": {

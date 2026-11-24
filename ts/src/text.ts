@@ -123,4 +123,46 @@ function units(b: Uint8Array, start: number, width: 2 | 4, big: boolean): { text
   return { text: out.join(''), illFormed }
 }
 
-export { decode, hasContent, utf8Length }
+// The largest text the grammar reads keeping every rule it has run until
+// the parse ends. That record is most of what a large text costs in
+// memory: about a hundred bytes for each byte of a description.
+const HISTORY_OVER = 16 * 1024 * 1024
+
+// The largest text the grammar is given unless the parse says otherwise.
+// Under that bound a description of this size takes the memory one of
+// `HISTORY_OVER` takes without it, about 1.6 GB, which is what the first
+// limit was set by.
+const MAX_BYTES = 128 * 1024 * 1024
+
+// The work the grammar is given with a size limit: a rule pass for each
+// ten bytes of it, and a hundred thousand passes at least, so that a
+// small limit still reads a small text. The largest descriptions take a
+// pass for each seven to nine bytes (GitHub's 7.9, Stripe's 9.3 and
+// Microsoft Graph's 7.0 and 7.8), so the bound on work comes a little
+// before the limit on size for one. At the default limit it is
+// 13,421,772 passes.
+const BYTES_A_STEP = 10
+const STEPS_FLOOR = 100_000
+
+function stepsOf(bytes: number): number {
+  return Infinity === bytes ? Infinity : Math.max(STEPS_FLOOR, Math.floor(bytes / BYTES_A_STEP))
+}
+
+// An option of `parse` that only `resolve` gives: the text is a document
+// of a description other than the description itself. Such a document
+// may be anything at its root, a schema that is `true` or a list of
+// parameters, and declares no version, so `parse` checks neither. Its
+// value is a map `parse` and `resolve` pass word through. `name` is the
+// document's URI, which an error then gives as the file it is in: a
+// description may be thousands of files, and an error that names none
+// of them is no help. `steps` is the most rule passes this text may
+// take, where that is fewer than its own limit gives it, and `parse`
+// leaves in it the passes the text took (`taken`) and what its aliases
+// copied out (`copied`). `resolve` holds the documents of one
+// description to one limit with them: see `partReader` there.
+const PART: unique symbol = Symbol('part')
+type Part = { name?: string; steps?: number; taken?: number; copied?: number }
+
+export { decode, hasContent, utf8Length, stepsOf, HISTORY_OVER, MAX_BYTES, PART }
+
+export type { Part }

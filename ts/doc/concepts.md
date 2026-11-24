@@ -97,6 +97,37 @@ that visits every reference and works out its target. That pass is
 `resolve`, and it leaves the raw tree alone: the tools that want the
 document as written still have it.
 
+## Several documents
+
+A description may be spread over several documents: a file of schemas,
+a file for each path, a shared file of parameters. The specification
+asks that every document be read whole before any reference is judged,
+because a reference can name a document by an identifier inside it, a
+`$self` or the `$id` of a schema, and not only by where it was found.
+
+So `resolve` takes the other documents as a table, indexes all of them
+with the description, and only then follows references. A document
+that declares a version is a description in its own right, read by
+that version. Any other is read by what refers to it: a file that
+holds one schema is a schema because a schema refers to it.
+
+Reading a document from a disk or a network is a different matter from
+resolving, and a riskier one, since the description says which
+documents to read. `resolve` reads nothing. `resolveAll` reads through
+a loader that the caller gives, and the loaders this package offers
+each state a bound when they are made: the file loader a directory,
+the HTTP loader a list of hosts. None is on unless you make it.
+
+The description also decides how many documents there are, and how
+large. Each limit that holds one text has a floor, so that `parse`
+still reads a small text, and a description of ten thousand small
+documents would have that floor ten thousand times. So the documents of one description
+share one limit: together they may be as large as one text may be, take
+the work one text may take, and copy out through aliases what one text
+may. `resolveAll` counts the documents it asks for as well, and the
+rounds it takes to find them, since each round reads the index of every
+document again.
+
 ## What is a reference
 
 Not every map that owns `$ref` is a reference. An example payload can
@@ -221,16 +252,21 @@ can cost. Three bounds are on by default:
   the budget before building any of it. It then holds the copies to the
   same budget as the grammar makes them, because a text can be written
   that the measure and the grammar read differently.
-- Reading YAML holds about a hundred bytes for each byte of the text.
+- Reading YAML holds about a hundred bytes for each byte of the text,
+  because the grammar keeps every rule it has run until the parse ends.
   Where this was measured, Node gave a process a heap of 2.2 GB by
   default. A description of 26 MB exhausted it, and one just under
-  16 MiB took about 1.4 GB. So the grammar is given 16 MiB at most.
+  16 MiB took about 1.4 GB. So `parse` reads that way only a text of
+  up to 16 MiB, and only for the steps a description of that size
+  takes. A larger text, or one that takes more steps, goes to a second
+  parser, which keeps its last three rules only. It reads the same
+  tree in three times the time, and a description of 128 MiB took it
+  about 1.6 GB. With it the grammar is given 128 MiB at most.
   `JSON.parse` has no such cost, and JSON text it reads has no limit.
-- Size is not the whole cost. The grammar keeps about a kilobyte for
-  each step it takes, and a text of very many small values takes ten
-  times the steps of a description its size. So the steps are counted
-  too, and a text is stopped once it has taken as many as a description
-  at the size limit takes.
+- Size is not the whole cost. A text of very many small values takes
+  ten times the steps of a description its size, and each step takes
+  time. So the steps are counted too, a step for each ten bytes of the
+  size limit, and `parse` stops a text that takes more.
 - A parser holds its last parse until the next one starts. `parse`
   makes its own parsers let go when a parse returns.
 

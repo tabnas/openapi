@@ -16,8 +16,10 @@ text in all three.
 This is an early release. `parse` reads a description and returns the
 raw tree: the document as written, with every `$ref` kept as a
 reference, after checking that the text is one description with a map
-at its root. `resolve` builds a new tree with the references within the
-document resolved; it does not load other documents yet.
+at its root. `resolve` builds a new tree with the references resolved,
+within the document and into any other document given with it. The
+TypeScript package also loads the documents a description names, with
+a loader the caller gives.
 
 ## Install
 

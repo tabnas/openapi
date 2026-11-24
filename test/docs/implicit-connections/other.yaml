@@ -1,0 +1,14 @@
+openapi: 3.2.0
+info:
+  title: Other
+  version: "1"
+components:
+  securitySchemes:
+    MySecurity:
+      type: http
+      scheme: basic
+  pathItems:
+    Foo:
+      get:
+        security:
+          - MySecurity: []

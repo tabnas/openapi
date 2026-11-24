@@ -1,0 +1,37 @@
+{
+  "source": "OpenAPI 3.2.0, Appendix F, Base URI Within Content",
+  "note": "Both documents define $self, so the retrieval URIs are irrelevant. The reference in the first is resolved against its $self and matches the $self of the second. There, ../schemas/foo matches a schema's $id, and that schema's bar is resolved against the $id and matches another.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "file://home/someone/src/api/openapi.yaml",
+  "documents": {
+    "https://git.example.com/shared/blob/main/shared/foo.yaml": "shared-foo.yaml"
+  },
+  "tree": {
+    "openapi": "3.2.0",
+    "$self": "https://example.com/api/openapi",
+    "info": { "title": "Example API", "version": 1 },
+    "paths": {
+      "/foo": {
+        "get": {
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$id": "https://example.com/api/schemas/foo",
+                  "properties": { "bar": { "$id": "https://example.com/api/schemas/bar", "type": "string" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    ["", "/paths/~1foo/get/requestBody", "https://git.example.com/shared/blob/main/shared/foo.yaml", "/components/requestBodies/Foo", "resolved"],
+    ["https://git.example.com/shared/blob/main/shared/foo.yaml", "/components/requestBodies/Foo/content/application~1json/schema", "", "/components/schemas/Foo", "resolved"],
+    ["https://git.example.com/shared/blob/main/shared/foo.yaml", "/components/schemas/Foo/properties/bar", "", "/components/schemas/Bar", "resolved"]
+  ]
+}
