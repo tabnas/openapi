@@ -1,0 +1,77 @@
+{
+  "note": "A reference that names nothing is left to name what it named: in content that was brought in, its text is written against the base it is read under now. An operationRef names its operation where the bundle has it, and is left where the bundle has no place for it.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/a": { "$ref": "parts/a.json" } },
+    "components": {
+      "links": {
+        "Here": { "operationRef": "parts/a.json#/get" },
+        "There": { "operationRef": "parts/b.json#/paths/~1b/get" },
+        "Mine": { "operationRef": "#/paths/~1a/get" }
+      },
+      "schemas": { "Gone": { "$ref": "nowhere.json#/x" } }
+    }
+  },
+  "documents": {
+    "parts/a.json": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok",
+            "links": { "next": { "operationRef": "#/get" }, "far": { "operationRef": "b.json#/paths/~1b/get" } },
+            "content": { "application/json": { "schema": { "$ref": "missing.json#/y" } } }
+          },
+          "404": { "$ref": "#/nothing" }
+        }
+      }
+    },
+    "parts/b.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/b": { "get": { "responses": { "200": { "description": "ok" } } } } }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/a": { "$ref": "#/components/pathItems/a" } },
+      "components": {
+        "links": {
+          "Here": { "operationRef": "#/components/pathItems/a/get" },
+          "There": { "operationRef": "parts/b.json#/paths/~1b/get" },
+          "Mine": { "operationRef": "#/paths/~1a/get" }
+        },
+        "schemas": { "Gone": { "$ref": "nowhere.json#/x" } },
+        "pathItems": {
+          "a": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "links": {
+                    "next": { "operationRef": "#/components/pathItems/a/get" },
+                    "far": { "operationRef": "parts/b.json#/paths/~1b/get" }
+                  },
+                  "content": { "application/json": { "schema": { "$ref": "parts/missing.json#/y" } } }
+                },
+                "404": { "$ref": "parts/a.json#/nothing" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "embedded": [["/components/pathItems/a", "https://example.com/api/parts/a.json", "", "component"]],
+    "left": [
+      ["/components/schemas/Gone", "nowhere.json#/x", "external"],
+      ["/components/pathItems/a/get/responses/200/content/application~1json/schema", "missing.json#/y", "external"],
+      ["/components/pathItems/a/get/responses/404", "#/nothing", "not-found"],
+      ["/components/links/There/operationRef", "parts/b.json#/paths/~1b/get", "outside"],
+      ["/components/pathItems/a/get/responses/200/links/far/operationRef", "b.json#/paths/~1b/get", "outside"]
+    ],
+    "dialects": []
+  }
+}

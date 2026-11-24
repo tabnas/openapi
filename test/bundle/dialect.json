@@ -1,0 +1,68 @@
+{
+  "note": "A schema read under another dialect than the description's says so in the bundle, so that it is read as it was: here a draft-07 schema, whose `definitions` hold schemas and whose `$ref` stands alone.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Old": { "$ref": "old.json#/components/schemas/Thing" },
+        "Said": { "$ref": "old.json#/components/schemas/Said" }
+      }
+    }
+  },
+  "documents": {
+    "old.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "jsonSchemaDialect": "http://json-schema.org/draft-07/schema#",
+      "components": {
+        "schemas": {
+          "Thing": {
+            "type": "object",
+            "definitions": { "inner": { "type": "string" } },
+            "properties": {
+              "p": {
+                "$ref": "#/components/schemas/Thing/definitions/inner",
+                "description": "ignored beside a $ref in draft-07"
+              }
+            }
+          },
+          "Said": { "$schema": "http://json-schema.org/draft-07/schema#", "type": "string" }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Old": { "$ref": "#/components/schemas/Thing" },
+          "Said": { "$ref": "#/components/schemas/Said_2" },
+          "Thing": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "definitions": { "inner": { "type": "string" } },
+            "properties": {
+              "p": {
+                "$ref": "#/components/schemas/Thing/definitions/inner",
+                "description": "ignored beside a $ref in draft-07"
+              }
+            }
+          },
+          "Said_2": { "$schema": "http://json-schema.org/draft-07/schema#", "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Thing", "https://example.com/api/old.json", "/components/schemas/Thing", "component"],
+      ["/components/schemas/Said_2", "https://example.com/api/old.json", "/components/schemas/Said", "component"]
+    ],
+    "left": [],
+    "dialects": [["/components/schemas/Thing", "http://json-schema.org/draft-07/schema#"]]
+  }
+}

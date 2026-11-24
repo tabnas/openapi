@@ -19,9 +19,10 @@ reference, after checking that the text is one description with a map
 at its root. `resolve` builds a new tree with the references resolved,
 within the document and into any other document given with it. The
 TypeScript package also loads the documents a description names, with
-a loader the caller gives. It gives each operation with the
-parameters, servers, and security that apply to it, and reads the
-runtime expressions and the templates that a description holds.
+a loader the caller gives, and writes a description in several
+documents as one. It gives each operation with the parameters,
+servers, and security that apply to it, and reads the runtime
+expressions and the templates that a description holds.
 
 ## Install
 

@@ -1,0 +1,59 @@
+{
+  "note": "Swagger 2.0 keeps schemas in `definitions`, parameters in `parameters` and responses in `responses`, at the root.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "swagger": "2.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": { "$ref": "paths.json#/a" },
+      "/b": {
+        "get": {
+          "parameters": [{ "$ref": "common.json#/parameters/Id" }],
+          "responses": { "200": { "$ref": "common.json#/responses/Ok" } }
+        }
+      }
+    }
+  },
+  "documents": {
+    "paths.json": {
+      "a": {
+        "get": {
+          "responses": { "200": { "description": "ok", "schema": { "$ref": "common.json#/definitions/Thing" } } }
+        }
+      }
+    },
+    "common.json": {
+      "parameters": { "Id": { "name": "id", "in": "query", "type": "string" } },
+      "responses": { "Ok": { "description": "ok", "schema": { "$ref": "#/definitions/Thing" } } },
+      "definitions": { "Thing": { "type": "object", "properties": { "next": { "$ref": "#/definitions/Thing" } } } }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "swagger": "2.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": { "responses": { "200": { "description": "ok", "schema": { "$ref": "#/definitions/Thing" } } } }
+        },
+        "/b": {
+          "get": {
+            "parameters": [{ "$ref": "#/parameters/Id" }],
+            "responses": { "200": { "$ref": "#/responses/Ok" } }
+          }
+        }
+      },
+      "definitions": { "Thing": { "type": "object", "properties": { "next": { "$ref": "#/definitions/Thing" } } } },
+      "parameters": { "Id": { "name": "id", "in": "query", "type": "string" } },
+      "responses": { "Ok": { "description": "ok", "schema": { "$ref": "#/definitions/Thing" } } }
+    },
+    "embedded": [
+      ["/definitions/Thing", "https://example.com/api/common.json", "/definitions/Thing", "component"],
+      ["/paths/~1a", "https://example.com/api/paths.json", "/a", "inline"],
+      ["/parameters/Id", "https://example.com/api/common.json", "/parameters/Id", "component"],
+      ["/responses/Ok", "https://example.com/api/common.json", "/responses/Ok", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

@@ -8,9 +8,10 @@ behind them.
 
 ```ts
 import { parse, resolve, resolveAll, version, make, aliasedSize, wellFormed, OpenApi, ResolveError, VERSION } from '@tabnas/openapi'
+import { bundle, bundleAll } from '@tabnas/openapi'
 import { readExpression, readTemplate, evaluateExpression, ExpressionError } from '@tabnas/openapi'
 import type { Connection, Lossy, ParseOptions, ParseReport, Reading, ResolveOptions, ResolveResult, VersionInfo } from '@tabnas/openapi'
-import type { Exchange, Expression, Ignored, OperationView, Template } from '@tabnas/openapi'
+import type { BundleOptions, BundleResult, Exchange, Expression, Ignored, OperationView, Template } from '@tabnas/openapi'
 ```
 
 ### `parse(text, options?)`
@@ -1208,6 +1209,220 @@ load('file:///etc/passwd') // => undefined
 // const { tree } = await resolveAll(raw, { retrievalUri: 'https://api.example.com/openapi.yaml', load })
 ```
 
+### `bundle(raw, options?)`
+
+```ts
+function bundle(raw: any, options?: BundleOptions): BundleResult
+
+type BundleOptions = Pick<ResolveOptions,
+  'version' | 'retrievalUri' | 'documents' | 'parse' | 'maxDepth' | 'maxSteps' | 'onCheck' | 'checkEveryN' | 'slots' | 'extensions'>
+
+type BundleResult = {
+  tree: any
+  version: string
+  documents: string[]
+  embedded: { at: string; doc: string; from: string; as: 'component' | 'defs' | 'inline' }[]
+  left: { at: string; ref: unknown; why: string }[]
+  dialects: { at: string; dialect: string }[]
+}
+```
+
+Writes a description that is several documents as one. `tree` is the
+description's own document, with what it names in the other documents
+brought in, and with each reference that named another document naming
+a place in the tree. Nothing is resolved: a reference is still a
+reference. The bundle resolves to what the documents resolve to, and
+bundled again it is itself.
+
+Neither the raw tree nor any document is changed, and the bundle shares
+no value with them. `JSON.stringify(tree)` is the bundle as JSON text.
+`version` is the version the description declares, and `documents`
+lists the other documents that were read, each by its URI.
+
+The options say how the documents are read, each as `resolve` takes
+it. `documents` gives the other documents, and `retrievalUri` the URI
+of the description. Any other option of `resolve` is a `TypeError`,
+since it asks something of a resolved tree.
+
+```js
+const { parse, bundle } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+info: { title: Pets, version: "1" }
+paths:
+  /pets:
+    get:
+      responses:
+        "200": { $ref: "responses.yaml#/Ok" }
+`)
+const out = bundle(raw, {
+  retrievalUri: 'https://example.com/api/openapi.yaml',
+  documents: {
+    'responses.yaml': 'Ok:\n  description: ok\n  content:\n    application/json:\n      schema: {$ref: "schemas/pet.yaml"}\n',
+    'schemas/pet.yaml': 'type: object\n',
+  },
+})
+out.tree.paths['/pets'].get.responses['200'] // => { $ref: '#/components/responses/Ok' }
+out.tree.components.responses.Ok.content['application/json'].schema // => { $ref: '#/components/schemas/pet' }
+out.tree.components.schemas.pet // => { type: 'object' }
+out.embedded.map((e) => [e.at, e.from, e.as]) // => [ [ '/components/responses/Ok', '/Ok', 'component' ], [ '/components/schemas/pet', '', 'component' ] ]
+out.left // => []
+```
+
+#### Where a target goes
+
+A target is what a reference names in another document. Where it goes
+follows from its type:
+
+- A target that the object model types goes among the components of
+  its type: a schema in `components.schemas`, a response in
+  `components.responses`. In 2.0 that is `definitions`, `parameters`,
+  or `responses`, at the root. Its type is its own where it has one,
+  and else the type that the reference to it expects.
+- Its name there is the last step of the pointer to it, or for a whole
+  document the name of its file, in the characters a component's name
+  has. A name that is taken has `_2` after it, then `_3`.
+- A target is brought in once, however many references name it. A
+  target inside another target is brought in as part of that one, and
+  named there.
+- Where the description's version has no component for the type, the
+  target is written in the place of the first reference to it, and
+  each later reference names that place. A Path Item in 3.0 and in 2.0
+  is one such, and so is what a `$ref` in data names under
+  `slots: 'all'`. A Path Item's own fields beside its `$ref` are laid
+  over the fields of the one it names, as `resolve` lays them, and
+  that place is then no other reference's to name.
+- A schema that declares an identifier of its own with `$id` is a
+  schema resource. It is brought whole into `components.schemas` and
+  keeps its identifier, so a reference that names it by the identifier
+  still does, and a reference inside it stands as written. A JSON
+  Schema document whose `$id` is its own URI is such a resource.
+- A reference inside a resource is read in the resource, so a fragment
+  there cannot name the rest of the bundle. What such a reference
+  names outside the resource is copied into the resource's own
+  `$defs`, or `definitions` in draft-04 to draft-07.
+
+A discriminator's mapping value that names a schema in another
+document brings that schema in too, and names it there. A schema that
+only a mapping value names is read as a schema, with the references
+in it. An `operationRef` names its operation where the bundle has it.
+
+What is written in the place of a reference is read as the object
+model reads that place. Under `slots: 'all'` an operation in a file of
+its own is written where its `$ref` was, and a response that it names
+is then a response, and goes among the responses.
+
+#### What is written again
+
+What is brought in is read in the bundle against the description's
+base URI, and under the description's schema dialect. So the bundle
+writes four things again, each to mean what it meant:
+
+- A relative URL that is read against the base URI, such as an
+  `externalDocs` URL, names the same resource from its new place. So
+  does a server's `url`, which is read against the URI its document
+  was retrieved from. A server's `url` that has variables stands as
+  written.
+- A reference that names nothing is written to name what it named.
+- A relative `$id` of a resource names the same URI from its new
+  place.
+- A schema that was read under another dialect than its new place is
+  given that dialect as `$schema`.
+
+A reference of the description's own that is a fragment alone stands
+as written, since every place of the description is where it was.
+
+#### The reports
+
+`embedded` has a row for each target that was brought in: `at` is
+where the bundle has it, `doc` and `from` are the document it came
+from and its pointer there, and `as` says how it was brought in. That
+is `component`, `defs` for a copy in the `$defs` of a resource, or
+`inline` for one written in the place of a reference.
+
+`left` has a row for each thing the bundle could not make whole. `at`
+is its place in the bundle and `ref` its text in the documents. A
+reference that names nothing has the `why` that `resolve` gives it,
+and `loop` where its pointer comes back to itself. The other reasons
+are these:
+
+| `why` | What was left |
+|---|---|
+| `cycle` | a reference to a target that would be written inside itself without end, and that no other reference holds alone |
+| `outside` | a mapping value or an `operationRef` whose target is in a document of the set, where the bundle has no place for the target |
+| `dynamic` | a `$dynamicRef` or a `$recursiveRef` in content that moved, where what it names first did not move with it |
+| `anchor` | an anchor that was left out, because the place it moved to has one of that name |
+| `id` | an identifier that was left out: it named the resource it was already in, and in its new place it would start a resource |
+
+`dialects` has a row for each schema that was given a `$schema`, with
+the dialect. OpenAPI reads `$schema` at any Schema Object that is not
+inside another, which is where the bundle writes it. A reader that
+takes `$schema` only at the root of a schema resource reads such a
+schema under the description's own dialect.
+
+#### Bounds
+
+`maxDepth`, `maxSteps`, `onCheck`, and `checkEveryN` hold as they do
+for `resolve`, and the copying counts as steps with the reading. The
+texts in `documents` are held together to the limits of one text. Two
+bounds are the bundle's own, with no option given:
+
+- A target written in the place of a reference is written again for
+  each reference that lays fields over it. Such copies can multiply,
+  so all the copying together is held to sixteen times the work of
+  reading the documents once, and 100,000 steps besides. Past it
+  `bundle` throws a `ResolveError` coded `openapi_work`.
+- Targets written one inside another deeper than `maxDepth` are
+  `openapi_depth`.
+
+#### What a bundle does not keep
+
+- The bundle is one document of one version. A document of another
+  version is read in it by the description's version.
+- A schema that is brought in becomes a component with a name. A
+  discriminator that lists it then has that name as an implicit
+  mapping value, where the schema had no name before.
+- A name that is looked for in every document, an `operationId`, is
+  looked for in the bundle alone. An operation that no reference
+  brings in is not in it.
+- A reference in data is read only under `slots: 'all'`. Under that
+  option, content that a mapping value names is read as a schema in
+  the bundle, where `resolve` reads it as data when a reference in
+  data names it too.
+- A server's `url` with variables, in a document from another
+  directory than the description, is read against the description.
+
+### `bundleAll(raw, options)`
+
+```ts
+function bundleAll(raw: any, options: BundleOptions & {
+  load: (uri: string) => unknown | Promise<unknown>
+  maxDocuments?: number         // default 10000
+  maxRounds?: number            // default 64
+}): Promise<BundleResult>
+```
+
+Finds and loads the documents a description names, as `resolveAll`
+does, and writes them as one, as `bundle` does. `load`,
+`maxDocuments`, and `maxRounds` are those of `resolveAll`, with the
+same bounds. The other options and the result are those of `bundle`.
+
+```js
+const { parse, bundleAll } = require('@tabnas/openapi')
+
+const files = {
+  'https://example.com/api/a.yaml': 'A: {type: object, properties: {b: {$ref: "b.yaml#/B"}}}\n',
+  'https://example.com/api/b.yaml': 'B: {type: string}\n',
+}
+const raw = parse('openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    A: {$ref: "a.yaml#/A"}\n')
+let schemas
+bundleAll(raw, { retrievalUri: 'https://example.com/api/openapi.yaml', load: (uri) => files[uri] }).then((b) => {
+  schemas = b.tree.components.schemas
+})
+// schemas is { A: { $ref: '#/components/schemas/A_2' }, A_2: { type: 'object', properties: { b: { $ref: '#/components/schemas/B' } } }, B: { type: 'string' } }
+```
+
 ### `readExpression(text)`
 
 ```ts
@@ -1450,8 +1665,12 @@ And where the readings part:
 
 ## What this release does not do
 
-`resolve` loads nothing, and `resolveAll` loads only what its `load`
-reads. No loader is on unless the caller makes one.
+`resolve` and `bundle` load nothing, and `resolveAll` and `bundleAll`
+load only what their `load` reads. No loader is on unless the caller
+makes one.
+
+`bundle` writes a tree, which `JSON.stringify` writes as JSON. Nothing
+here writes YAML.
 
 Under `refs: 'pointer'`, and so under `compat: 'apidef'`, no other
 document is read.

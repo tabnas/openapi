@@ -743,11 +743,13 @@ text for the texts of the set, which is Decision 36. It merged on
    resources kept. JSON out.
 
 Begun on the maintainer's word of 24 November 2026, and section 11 has
-the record. Items 1 and 2 are built. The view is the option
+the record. All three items are built. The view is the option
 `operations` of `resolve`, with the `ignored` report beside it, and
 the apidef branch drops `dropIgnoredHeaders`. The readers are
 `readExpression`, `readTemplate` and `evaluateExpression`, and their
-static checks are six kinds of row in `connections`.
+static checks are six kinds of row in `connections`. Bundling is
+`bundle` and `bundleAll`, each held to one check: the bundle resolves
+to what its documents resolve to.
 
 ### T6: finish, then publish (S to M)
 
@@ -768,6 +770,15 @@ static checks are six kinds of row in `connections`.
    apidef's install can take the `@tabnas/expr` this package needs.
    Today aontu's exact pins give apidef 0.5.10, where `fold` first
    shipped in 0.5.20.
+6. **A mapping value types what it names, in the index.** T5 found
+   that the index types a place by the references that land on it,
+   and that a discriminator's mapping value is none. So a schema in a
+   document with no version, which only a mapping value names, is
+   plain data to `resolve`: the mapping is reported as found, and the
+   references in the schema are not read. `bundle` works round it
+   with rounds of its own. The repair is in the typing rounds of the
+   site index, and it moves what `resolve` reports, so it is swept
+   like any change there.
 
 ## 5. Keeping the repository consistent meanwhile
 
@@ -976,6 +987,88 @@ what the code does.
   - The longest walk takes 2.8% of its allowance
     (`digitalocean.com/2.0`), and resolving the whole corpus takes 52
     seconds in all, with the view asked for.
+- **A bundle is written on the site index, and nothing in it is
+  resolved** (item 3). `bundle` copies the description, and at each
+  reference asks the index where it lands. A target in another
+  document is given a place, and the reference is written to name it
+  there. So an identifier, an anchor and a pointer that is read on
+  through another reference are all followed as `resolve` follows
+  them, and all come out as pointers. `bundleAll` finds the documents
+  first, in the rounds of `resolveAll`.
+- **Where a target goes**, as item 3 has it, and where the item left
+  room:
+  - Among the components of its type, under the last step of its
+    pointer or the name of its file, with a number after a name that
+    is taken. Its type is its own where the index gives it one, and
+    else the type the reference expects.
+  - A schema with an `$id` of its own is a resource: it moves whole
+    and keeps the `$id`, and what a reference inside it names outside
+    is copied into its own `$defs`, since a fragment there is read in
+    the resource. A JSON Schema document whose `$id` is its own URI
+    is one, which the index does not count as a new resource.
+  - Where the version has no component for the type, in the place of
+    the first reference, which every later reference then names: a
+    Path Item of 3.0 and 2.0, and what a reference in data names under
+    `slots: 'all'`. That is how a description that keeps each
+    operation in a file of its own is bundled.
+  - A target inside another target would be in the bundle twice, and
+    which of the two a reference named would follow the order the
+    references are met in. Where that is so the bundle is written a
+    second time, bringing the outer ones only.
+- **What moves is read again**, and three things decide what content
+  means in a place. Each is kept:
+  - The base URI. A relative URL, a reference that names nothing and
+    a relative `$id` are written to name what they named.
+  - The schema dialect. A schema that was read under another dialect
+    than its new place is given its own as `$schema`. OpenAPI reads
+    `$schema` at a Schema Object that is not inside another, and JSON
+    Schema only at the root of a resource, so the result lists each
+    one.
+  - The object model. An operation in a file of its own is plain data
+    to the index, and where it is written the model reads it as an
+    operation. What it names is then placed by what the model reads
+    there, so a response it names is a response. The other way round,
+    a part that a reference typed, inside content that goes where the
+    model reads data, goes among the components under `slots: 'all'`,
+    with a reference in its place.
+- **A mapping value is no reference to the index**, which types a
+  place by the references that land on it. A schema that only a
+  mapping value names was first brought in as a schema, with the
+  references in it unread, and one of them was left naming another
+  document. `bundle` now builds the index again with a reference to
+  each such schema, eight times at most, and writes the bundle on
+  that. Typing by a mapping value belongs in the index, where
+  `resolve` would have it too: it is the sixth item of T6.
+- **The check is one sentence: the bundle resolves to what the
+  documents resolve to.** `tools/corpus/bundle-agree.cjs` makes it. It
+  resolves the documents, bundles them, resolves the bundle, and
+  compares the two trees from the root, allowing only what the
+  bundle's own reports account for. It was built before most of
+  `bundle`, and on sets of documents that a generator writes it found
+  seven defects that no case written by hand had. Among them: a place
+  taken for a target's own when the reference had fields laid over
+  it; a reference to a reference that names nothing, written over
+  where `resolve` leaves it; and a loop of references taken for one
+  that names nothing.
+- **Bundling on the corpus**, with `tools/corpus/documents.cjs`:
+  - Each of the 5,167 descriptions in one document, the nine over
+    10 MB left out, is its own bundle, text for text.
+  - Each of the 925 descriptions of the four sources in several
+    documents agrees with its documents. 8,491 targets go among the
+    components, 6,224 of them Azure's.
+  - DigitalOcean's description, 3,622 files under `slots: 'all'`, is
+    one document of 3.5 MB: 2,218 targets among its components, 1,382
+    of them schemas, and 2,551 written in the place of a reference,
+    which are its operations and its code samples. It takes 3.4
+    seconds.
+  - Of 20,000 generated sets of documents, every bundle agrees, and
+    every bundle bundled again is itself.
+- **What a bundle does not keep**, each said in the reference: it is
+  read by the description's version; a schema that is brought in gains
+  a component's name, which a discriminator may then list; an
+  `operationId` is looked for in the bundle alone; a server's `url`
+  with variables stands as written; and a `$dynamicRef` in content
+  that moved is checked, not followed.
 
 **Since acceptance**, as T4 was begun:
 

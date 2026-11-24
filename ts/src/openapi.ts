@@ -954,6 +954,8 @@ const VERSION = '0.1.0'
 export { OpenApi, aliasedSize, make, parse, version, wellFormed, VERSION }
 
 export { resolve, resolveAll, ResolveError } from './resolve'
+export { bundle, bundleAll } from './bundle'
+export type { BundleAllOptions, BundleOptions, BundleResult, Declared, Embedded, Left } from './bundle'
 export { ExpressionError, evaluateExpression, readExpression, readTemplate } from './expression'
 export type {
   Exchange,

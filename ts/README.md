@@ -9,7 +9,8 @@ kept as a reference, after checking that it is one description with a
 map at its root. `resolve` builds a new tree with the references resolved,
 within the document and into any other document given with it, and
 `resolveAll` loads the documents a description names, with a loader
-you give it. `resolve` also reports what a description names without a
+you give it. `bundle` writes a description in several documents as
+one, with every reference still a reference. `resolve` also reports what a description names without a
 reference, and gives each operation with the parameters, servers, and
 security that apply to it. `readExpression`, `readTemplate`, and
 `evaluateExpression` read the runtime expressions and the templates

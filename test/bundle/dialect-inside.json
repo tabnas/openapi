@@ -1,0 +1,69 @@
+{
+  "note": "A schema inside a parameter of a document that is read under another dialect says its dialect where it is brought to.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": {
+        "get": {
+          "parameters": [{ "$ref": "old.json#/components/parameters/P" }],
+          "responses": { "200": { "description": "ok" } }
+        }
+      }
+    }
+  },
+  "documents": {
+    "old.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "jsonSchemaDialect": "http://json-schema.org/draft-07/schema#",
+      "components": {
+        "parameters": {
+          "P": {
+            "name": "p",
+            "in": "query",
+            "schema": {
+              "type": "object",
+              "definitions": { "x": { "type": "string" } },
+              "properties": { "x": { "$ref": "#/components/parameters/P/schema/definitions/x" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": {
+            "parameters": [{ "$ref": "#/components/parameters/P" }],
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      },
+      "components": {
+        "parameters": {
+          "P": {
+            "name": "p",
+            "in": "query",
+            "schema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "definitions": { "x": { "type": "string" } },
+              "properties": { "x": { "$ref": "#/components/parameters/P/schema/definitions/x" } }
+            }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/parameters/P", "https://example.com/api/old.json", "/components/parameters/P", "component"]
+    ],
+    "left": [],
+    "dialects": [["/components/parameters/P/schema", "http://json-schema.org/draft-07/schema#"]]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "note": "Under `slots: 'all'` a `$ref` where the object model has none is a reference too. The model has no component for an operation or for a list of parameters, so each is written in the place of its reference. What is written there is read as the model reads the place, so the response that the operation names is a response, and goes among the responses.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "options": { "slots": "all" },
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/a": { "get": { "$ref": "ops.json#/getA" }, "parameters": { "$ref": "ops.json#/common" } } }
+  },
+  "documents": {
+    "ops.json": {
+      "getA": { "operationId": "getA", "responses": { "200": { "$ref": "#/ok" } } },
+      "ok": { "description": "ok" },
+      "common": [{ "name": "trace", "in": "header" }]
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": { "operationId": "getA", "responses": { "200": { "$ref": "#/components/responses/ok" } } },
+          "parameters": [{ "name": "trace", "in": "header" }]
+        }
+      },
+      "components": { "responses": { "ok": { "description": "ok" } } }
+    },
+    "embedded": [
+      ["/components/responses/ok", "https://example.com/api/ops.json", "/ok", "component"],
+      ["/paths/~1a/get", "https://example.com/api/ops.json", "/getA", "inline"],
+      ["/paths/~1a/parameters", "https://example.com/api/ops.json", "/common", "inline"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

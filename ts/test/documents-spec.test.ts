@@ -8,19 +8,27 @@
 // `resolve` makes of them: the entry's resolved tree, the references
 // left as written, the cuts, and each site as
 // `[its document, where, its target's document, its target, its status]`,
-// a document being '' where it is the entry or the site's own. The first
-// cases are the specification's own examples of several documents, as it
-// writes them. See ../../test/AGENTS.md.
+// a document being '' where it is the entry or the site's own. `bundle`
+// is what `bundle` writes of them as one document, in the form a case of
+// test/bundle/ has it. The first cases are the specification's own
+// examples of several documents, as it writes them. See
+// ../../test/AGENTS.md.
 
 import { describe, test } from 'node:test'
 import assert from 'node:assert'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { parse, resolve } from '../dist/openapi'
+import * as O from '../dist/openapi'
+import * as U from '../dist/uri'
+import { bundle, parse, resolve } from '../dist/openapi'
 
 // At runtime this file is in ts/dist-test, so the repository root is two up.
-const DOCS = join(__dirname, '..', '..', 'test', 'docs')
+const ROOT = join(__dirname, '..', '..')
+const DOCS = join(ROOT, 'test', 'docs')
+
+// Whether a bundle resolves to what its documents resolve to.
+const { agree } = require(join(ROOT, 'tools', 'corpus', 'bundle-agree.cjs'))
 
 const plain = (v: unknown) => JSON.parse(JSON.stringify(v))
 
@@ -35,6 +43,7 @@ type Case = {
   cuts: unknown[]
   sites: unknown[]
   connections?: unknown[]
+  bundle: { tree: unknown; embedded: string[][]; left: unknown[][]; dialects: string[][] }
 }
 
 describe('several documents, from test/docs', () => {
@@ -51,7 +60,7 @@ describe('several documents, from test/docs', () => {
     const dir = join(DOCS, name)
     if (!existsSync(join(dir, 'case.json'))) continue
     const c: Case = JSON.parse(readFileSync(join(dir, 'case.json'), 'utf8'))
-    test(`${name}: ${c.source}`, () => {
+    test(`${name}: ${c.source}`, async () => {
       const read = (file: string) => readFileSync(join(dir, file), 'utf8')
       const documents: Record<string, string> = {}
       for (const [uri, file] of Object.entries(c.documents)) documents[uri] = read(file)
@@ -64,6 +73,18 @@ describe('several documents, from test/docs', () => {
         c.sites,
       )
       if (undefined !== c.connections) assert.deepEqual(plain(r.connections), c.connections)
+
+      // The same documents as one, which resolves to the same.
+      const options = { retrievalUri: c.retrievalUri, documents, ...(c.options ?? {}) }
+      const b = bundle(parse(read(c.entry)), options)
+      assert.deepEqual(plain(b.tree), c.bundle.tree)
+      assert.equal(JSON.stringify(b.tree), JSON.stringify(c.bundle.tree))
+      assert.deepEqual(b.embedded.map((e) => [e.at, e.doc, e.from, e.as]), c.bundle.embedded)
+      assert.deepEqual(b.left.map((l) => [l.at, l.ref, l.why]), c.bundle.left)
+      assert.deepEqual(b.dialects.map((d) => [d.at, d.dialect]), c.bundle.dialects)
+      const held = await agree(O, U, parse(read(c.entry)), options)
+      assert.ok(held.ok, held.why.join('; '))
+
       // Every file of the case is one of its documents.
       const used = new Set([c.entry, ...Object.values(c.documents), 'case.json'])
       assert.deepEqual(readdirSync(dir).filter((f) => !used.has(f)), [], `files of test/docs/${name} that the case does not name`)

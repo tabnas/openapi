@@ -1,0 +1,84 @@
+{
+  "note": "A schema that declares its own identifier is a schema resource, and is brought whole, with its identifier. A reference in it that is a fragment alone still names a place in it, and one that names another resource by its identifier still does. What it names in the plain content of a document is copied into its own `$defs`, since a fragment there is read in the resource.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": { "Start": { "$ref": "https://schemas.example.com/tree" }, "Plain": { "type": "string" } }
+    }
+  },
+  "documents": {
+    "https://files.example.com/schemas.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "components": {
+        "schemas": {
+          "tree": {
+            "$id": "https://schemas.example.com/tree",
+            "type": "object",
+            "$defs": { "node": { "type": "object" } },
+            "properties": {
+              "root": { "$ref": "#/$defs/node" },
+              "leaf": { "$ref": "leaf" },
+              "unit": { "$ref": "https://files.example.com/schemas.json#/components/schemas/Unit" },
+              "again": { "$ref": "https://files.example.com/schemas.json#/components/schemas/Unit" },
+              "mine": { "$ref": "https://example.com/api/openapi.json#/components/schemas/Plain" }
+            }
+          },
+          "leaf": { "$id": "https://schemas.example.com/leaf", "type": "string" },
+          "Unit": { "type": "number", "description": "Plain content, with no identifier." }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Start": { "$ref": "https://schemas.example.com/tree" },
+          "Plain": { "type": "string" },
+          "tree": {
+            "$id": "https://schemas.example.com/tree",
+            "type": "object",
+            "$defs": {
+              "node": { "type": "object" },
+              "Unit": { "type": "number", "description": "Plain content, with no identifier." },
+              "Plain": { "type": "string" }
+            },
+            "properties": {
+              "root": { "$ref": "#/$defs/node" },
+              "leaf": { "$ref": "leaf" },
+              "unit": { "$ref": "#/$defs/Unit" },
+              "again": { "$ref": "#/$defs/Unit" },
+              "mine": { "$ref": "#/$defs/Plain" }
+            }
+          },
+          "leaf": { "$id": "https://schemas.example.com/leaf", "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/tree", "https://files.example.com/schemas.json", "/components/schemas/tree", "component"],
+      ["/components/schemas/leaf", "https://files.example.com/schemas.json", "/components/schemas/leaf", "component"],
+      [
+        "/components/schemas/tree/$defs/Unit",
+        "https://files.example.com/schemas.json",
+        "/components/schemas/Unit",
+        "defs"
+      ],
+      [
+        "/components/schemas/tree/$defs/Plain",
+        "https://example.com/api/openapi.json",
+        "/components/schemas/Plain",
+        "defs"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "note": "A Path Item of 3.0 that is named with a field of its own beside the reference is written in that place with the field laid over, so the place is not the Path Item alone. A reference without one, later, holds it again, and that is the place every other reference names: the one inside the first that comes back to the Path Item among them.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": { "$ref": "item.json", "summary": "Mine" },
+      "/b": { "$ref": "item.json" },
+      "/c": { "$ref": "item.json", "summary": "Also mine" }
+    }
+  },
+  "documents": {
+    "item.json": {
+      "summary": "Theirs",
+      "post": {
+        "responses": { "200": { "description": "ok" } },
+        "callbacks": { "again": { "{$url}": { "$ref": "item.json" } } }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "summary": "Mine",
+          "post": {
+            "responses": { "200": { "description": "ok" } },
+            "callbacks": { "again": { "{$url}": { "$ref": "#/paths/~1b" } } }
+          }
+        },
+        "/b": {
+          "summary": "Theirs",
+          "post": {
+            "responses": { "200": { "description": "ok" } },
+            "callbacks": { "again": { "{$url}": { "$ref": "#/paths/~1b" } } }
+          }
+        },
+        "/c": { "$ref": "#/paths/~1b", "summary": "Also mine" }
+      }
+    },
+    "embedded": [
+      ["/paths/~1a", "https://example.com/api/item.json", "", "inline"],
+      ["/paths/~1b", "https://example.com/api/item.json", "", "inline"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

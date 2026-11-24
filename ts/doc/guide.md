@@ -474,6 +474,77 @@ description you trust that needs more. It sets no deadline: give the
 loader a `signal`, and return `false` from `onCheck` when your time is
 up.
 
+## Write a description in several files as one
+
+`bundle` writes a description and the documents it names as one
+document. What the others hold goes among the description's
+components, and each reference then names its target there. It takes
+the documents as `resolve` takes them:
+
+```js
+const { parse, bundle } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+info: { title: Pets, version: "1" }
+paths:
+  /pets:
+    $ref: "paths/pets.yaml"
+`)
+const out = bundle(raw, {
+  retrievalUri: 'https://example.com/api/openapi.yaml',
+  documents: {
+    'paths/pets.yaml': 'get:\n  responses:\n    "200": {$ref: "../responses.yaml#/Ok"}\n',
+    'responses.yaml': 'Ok: {description: ok}\n',
+  },
+})
+out.tree.paths['/pets'] // => { $ref: '#/components/pathItems/pets' }
+out.tree.components.pathItems.pets.get.responses['200'] // => { $ref: '#/components/responses/Ok' }
+out.tree.components.responses.Ok // => { description: 'ok' }
+out.left // => []
+```
+
+Nothing is resolved, so the bundle is as large as the documents, and
+no larger. To have the documents found and read, use `bundleAll` with
+a loader, and write the tree as JSON:
+
+```js
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { pathToFileURL } = require('node:url')
+const { parse, bundleAll } = require('@tabnas/openapi')
+const { fileLoader } = require('@tabnas/openapi/dist/loaders')
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-'))
+fs.writeFileSync(path.join(dir, 'openapi.yaml'), 'openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Pet: {$ref: "Pet.yaml"}\n')
+fs.writeFileSync(path.join(dir, 'Pet.yaml'), 'type: object\n')
+
+const entry = path.join(dir, 'openapi.yaml')
+const written = bundleAll(parse(fs.readFileSync(entry)), {
+  retrievalUri: pathToFileURL(entry).href,
+  load: fileLoader({ root: dir }),
+}).then((b) => fs.writeFileSync(path.join(dir, 'bundle.json'), JSON.stringify(b.tree, null, 2)))
+written instanceof Promise // => true
+// bundle.json then holds one description, with Pet_2 among its schemas.
+```
+
+Read `left` before you use the bundle. It lists each reference that
+names nothing, as `unresolved` does for `resolve`, and whatever else
+the bundle could not make whole. An empty list means that every
+reference of the bundle names a place in it.
+
+A name in the bundle is the last step of the pointer to its target, or
+the name of the target's file. Where the name is taken, as `Pet` is in
+the example, a number follows it. `embedded` says where each target
+went and where it came from.
+
+Some descriptions keep each operation in a file of its own and name it
+with a `$ref`, where the specification has no reference. Bundle such
+a description under `slots: 'all'`, as you would resolve it. The
+operation is then written where its `$ref` was, and what it names goes
+among the components.
+
 ## Check what the names in a description reach
 
 Tags, `operationId` values, security requirements, and discriminator

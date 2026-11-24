@@ -128,6 +128,33 @@ may. `resolveAll` counts the documents it asks for as well, and the
 rounds it takes to find them, since each round reads the index of every
 document again.
 
+## One document from several
+
+A description in several documents is easy to edit and awkward to
+hand on: a tool that takes one file cannot take forty. `bundle` writes
+the documents as one, and it does so without resolving anything. A
+reference stays a reference, so a schema that fifty operations use is
+still written once.
+
+What it moves has to mean in its new place what it meant in its old
+one, and three things about a place decide what its content means. The
+base URI decides what a relative URL names. The schema dialect in
+force decides how a schema is read. And the object model decides what
+each value is: a response, a schema, or plain data. So a bundle is
+more than a copy with the references renamed. A relative URL in a
+schema that moves is written again. A schema that was read as
+draft-07 says so where it arrives. A schema with an `$id` keeps the
+`$id` and moves whole, because the references inside it are read
+against it.
+
+The check on all of this is one sentence: the bundle resolves to what
+the documents resolve to. The test suite holds every case to it, and
+the corpus's descriptions in several documents as well.
+
+A bundle cannot keep one thing, which is the absence of a name. A
+schema in a file of its own has no component name, and in the bundle
+it has one.
+
 ## What is a reference
 
 Not every map that owns `$ref` is a reference. An example payload can

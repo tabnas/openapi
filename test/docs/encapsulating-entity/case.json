@@ -23,5 +23,25 @@
   "sites": [
     ["", "/components/requestBodies/Foo/content/application~1json/schema", "", "/components/api/schemas/Foo", "unresolved"],
     ["", "/components/schemas/Foo/properties/bar", "https://example.com/api/schemas/bar", "", "resolved"]
-  ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.2.0",
+      "info": { "title": "Example API", "version": 1, "externalDocs": { "url": "docs.html" } },
+      "components": {
+        "requestBodies": {
+          "Foo": { "content": { "application/json": { "schema": { "$ref": "#/components/api/schemas/Foo" } } } }
+        },
+        "schemas": {
+          "Foo": { "properties": { "bar": { "$ref": "#/components/schemas/bar" } } },
+          "bar": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/bar", "https://example.com/api/schemas/bar", "", "component"]],
+    "left": [
+      ["/components/requestBodies/Foo/content/application~1json/schema", "#/components/api/schemas/Foo", "not-found"]
+    ],
+    "dialects": []
+  }
 }

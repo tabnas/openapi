@@ -1,0 +1,125 @@
+{
+  "note": "OpenAPI 3.0: a schema, a parameter and a response of another document go among the components, and a Path Item, which 3.0 has no component for, is written in the place of its reference with its own fields laid over. A schema that names its neighbour brings it too, and one that names the entry names it by pointer.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/pets": { "$ref": "paths.json#/pets", "summary": "Mine" },
+      "/owners": {
+        "get": {
+          "parameters": [{ "$ref": "shared.json#/parameters/Limit" }],
+          "responses": {
+            "200": { "$ref": "shared.json#/responses/Ok" },
+            "default": {
+              "description": "no",
+              "content": { "application/json": { "schema": { "$ref": "shared.json#/schemas/Error" } } }
+            }
+          }
+        }
+      }
+    },
+    "components": { "schemas": { "Id": { "type": "string" } } }
+  },
+  "documents": {
+    "paths.json": {
+      "pets": {
+        "summary": "Theirs",
+        "get": {
+          "responses": {
+            "200": {
+              "description": "ok",
+              "content": { "application/json": { "schema": { "$ref": "shared.json#/schemas/Pet" } } }
+            }
+          }
+        }
+      }
+    },
+    "shared.json": {
+      "parameters": { "Limit": { "name": "limit", "in": "query", "schema": { "type": "integer" } } },
+      "responses": {
+        "Ok": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/schemas/Pet" } } } }
+      },
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "properties": {
+            "id": { "$ref": "openapi.json#/components/schemas/Id" },
+            "owner": { "$ref": "#/schemas/Owner" }
+          }
+        },
+        "Owner": {
+          "type": "object",
+          "properties": { "pets": { "type": "array", "items": { "$ref": "#/schemas/Pet" } } }
+        },
+        "Error": { "type": "object" },
+        "Unused": { "type": "string" }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/pets": {
+          "summary": "Mine",
+          "get": {
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } }
+              }
+            }
+          }
+        },
+        "/owners": {
+          "get": {
+            "parameters": [{ "$ref": "#/components/parameters/Limit" }],
+            "responses": {
+              "200": { "$ref": "#/components/responses/Ok" },
+              "default": {
+                "description": "no",
+                "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "Id": { "type": "string" },
+          "Pet": {
+            "type": "object",
+            "properties": {
+              "id": { "$ref": "#/components/schemas/Id" },
+              "owner": { "$ref": "#/components/schemas/Owner" }
+            }
+          },
+          "Error": { "type": "object" },
+          "Owner": {
+            "type": "object",
+            "properties": { "pets": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } } }
+          }
+        },
+        "parameters": { "Limit": { "name": "limit", "in": "query", "schema": { "type": "integer" } } },
+        "responses": {
+          "Ok": {
+            "description": "ok",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Pet", "https://example.com/api/shared.json", "/schemas/Pet", "component"],
+      ["/paths/~1pets", "https://example.com/api/paths.json", "/pets", "inline"],
+      ["/components/parameters/Limit", "https://example.com/api/shared.json", "/parameters/Limit", "component"],
+      ["/components/responses/Ok", "https://example.com/api/shared.json", "/responses/Ok", "component"],
+      ["/components/schemas/Error", "https://example.com/api/shared.json", "/schemas/Error", "component"],
+      ["/components/schemas/Owner", "https://example.com/api/shared.json", "/schemas/Owner", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

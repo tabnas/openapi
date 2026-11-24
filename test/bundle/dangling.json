@@ -1,0 +1,32 @@
+{
+  "note": "A reference to a reference that names nothing is left as that one is left, as resolving leaves it. Where its target has a place among the components it names the copy there, and where the target would be written in its place nothing is written.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/a": { "$ref": "parts.json#/items/gone" } },
+    "components": { "schemas": { "A": { "$ref": "parts.json#/schemas/gone" } } }
+  },
+  "documents": {
+    "parts.json": {
+      "items": { "gone": { "$ref": "nowhere.json" } },
+      "schemas": { "gone": { "$ref": "#/schemas/nothing" } }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/a": { "$ref": "parts.json#/items/gone" } },
+      "components": {
+        "schemas": { "A": { "$ref": "#/components/schemas/gone" }, "gone": { "$ref": "parts.json#/schemas/nothing" } }
+      }
+    },
+    "embedded": [["/components/schemas/gone", "https://example.com/api/parts.json", "/schemas/gone", "component"]],
+    "left": [
+      ["/paths/~1a", "parts.json#/items/gone", "external"],
+      ["/components/schemas/gone", "#/schemas/nothing", "not-found"]
+    ],
+    "dialects": []
+  }
+}

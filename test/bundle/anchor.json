@@ -1,0 +1,49 @@
+{
+  "note": "An anchor of plain content that is brought in becomes an anchor of the description. One that the description has already would take that one's place, so it is left out, and listed. A reference to it is written as a pointer, which needs no anchor.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Mine": { "$anchor": "thing", "type": "string" },
+        "ByAnchor": { "$ref": "#thing" },
+        "Theirs": { "$ref": "other.json#thing" },
+        "Other": { "$ref": "other.json#other" }
+      }
+    }
+  },
+  "documents": {
+    "other.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "components": {
+        "schemas": { "a": { "$anchor": "thing", "type": "integer" }, "b": { "$anchor": "other", "type": "boolean" } }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Mine": { "$anchor": "thing", "type": "string" },
+          "ByAnchor": { "$ref": "#thing" },
+          "Theirs": { "$ref": "#/components/schemas/a" },
+          "Other": { "$ref": "#/components/schemas/b" },
+          "a": { "type": "integer" },
+          "b": { "$anchor": "other", "type": "boolean" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/a", "https://example.com/api/other.json", "/components/schemas/a", "component"],
+      ["/components/schemas/b", "https://example.com/api/other.json", "/components/schemas/b", "component"]
+    ],
+    "left": [["/components/schemas/a/$anchor", "thing", "anchor"]],
+    "dialects": []
+  }
+}

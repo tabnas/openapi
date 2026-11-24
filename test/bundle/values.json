@@ -1,0 +1,37 @@
+{
+  "note": "A schema may be a Boolean, and a document may be one schema. Such a target is a component like any other, so the members beside the reference to it stand.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Never": { "$ref": "never.json", "description": "Nothing is valid." },
+        "Flag": { "$ref": "flags.json#/schemas/any" }
+      }
+    }
+  },
+  "documents": { "never.json": false, "flags.json": { "schemas": { "any": true } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Never": { "$ref": "#/components/schemas/never", "description": "Nothing is valid." },
+          "Flag": { "$ref": "#/components/schemas/any" },
+          "never": false,
+          "any": true
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/never", "https://example.com/api/never.json", "", "component"],
+      ["/components/schemas/any", "https://example.com/api/flags.json", "/schemas/any", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

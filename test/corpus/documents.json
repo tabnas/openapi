@@ -1,5 +1,5 @@
 {
-  "note": "What tools/corpus/documents.cjs counts: each description of these corpus sources resolved from its own file with resolveAll and the file loader, confined to the source. Written by that tool, never by hand.",
+  "note": "What tools/corpus/documents.cjs counts: each description of these corpus sources resolved from its own file with resolveAll and the file loader, confined to the source, and then written as one document with bundleAll and held to its documents. Written by that tool, never by hand.",
   "sources": {
     "azure": {
       "options": {},
@@ -13,7 +13,17 @@
       "cut": 396,
       "unresolved": {},
       "threw": 0,
-      "externalOnDisk": 0
+      "externalOnDisk": 0,
+      "bundle": {
+        "agree": 885,
+        "differ": 0,
+        "threw": 0,
+        "component": 6224,
+        "defs": 0,
+        "inline": 0,
+        "left": {},
+        "dialects": 0
+      }
     },
     "redocly-starter": {
       "options": {},
@@ -27,7 +37,17 @@
       "cut": 0,
       "unresolved": {},
       "threw": 0,
-      "externalOnDisk": 0
+      "externalOnDisk": 0,
+      "bundle": {
+        "agree": 1,
+        "differ": 0,
+        "threw": 0,
+        "component": 39,
+        "defs": 0,
+        "inline": 0,
+        "left": {},
+        "dialects": 0
+      }
     },
     "oai-learn": {
       "options": {},
@@ -41,7 +61,17 @@
       "cut": 0,
       "unresolved": {},
       "threw": 0,
-      "externalOnDisk": 0
+      "externalOnDisk": 0,
+      "bundle": {
+        "agree": 38,
+        "differ": 0,
+        "threw": 0,
+        "component": 10,
+        "defs": 0,
+        "inline": 0,
+        "left": {},
+        "dialects": 0
+      }
     },
     "digitalocean": {
       "options": {
@@ -57,7 +87,17 @@
       "cut": 14,
       "unresolved": {},
       "threw": 0,
-      "externalOnDisk": 0
+      "externalOnDisk": 0,
+      "bundle": {
+        "agree": 1,
+        "differ": 0,
+        "threw": 0,
+        "component": 2218,
+        "defs": 0,
+        "inline": 2551,
+        "left": {},
+        "dialects": 0
+      }
     }
   }
 }

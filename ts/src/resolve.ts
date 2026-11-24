@@ -63,7 +63,7 @@ import type { Path } from './uri'
 //
 // A tree is not counted: its size was whoever built it to bound. An
 // error `parse` raises for a text names the document, as its file.
-function partReader(given: ParseOptions | undefined): (doc: string | Uint8Array, uri: string) => any {
+function partReader(given: ParseOptions | undefined, who: string): (doc: string | Uint8Array, uri: string) => any {
   const limit = 'number' === typeof given?.maxBytes ? given.maxBytes : null == given?.instance ? MAX_BYTES : HISTORY_OVER
   // A limit that is no number of bytes is `parse`'s to refuse.
   if (!(0 <= limit)) return (doc, uri) => parse(doc, { ...given, [PART]: { name: uri } } as ParseOptions)
@@ -75,7 +75,7 @@ function partReader(given: ParseOptions | undefined): (doc: string | Uint8Array,
     if (pool.bytes < size) {
       throw new ResolveError(
         'openapi_size',
-        `resolve: the documents given as text are more than ${limit} bytes together, at ${quoted(uri)}`,
+        `${who}: the documents given as text are more than ${limit} bytes together, at ${quoted(uri)}`,
         uri,
       )
     }
@@ -90,7 +90,7 @@ function partReader(given: ParseOptions | undefined): (doc: string | Uint8Array,
       if ('openapi_work' === err?.code && pool.steps < all && pool.steps <= (part.taken ?? 0)) {
         throw new ResolveError(
           'openapi_work',
-          `resolve: the documents given as text take more than ${all} steps to read together, ` +
+          `${who}: the documents given as text take more than ${all} steps to read together, ` +
             `the most a limit of ${limit} bytes gives, at ${quoted(uri)}`,
           uri,
         )
@@ -411,11 +411,11 @@ type Settled = Required<Omit<ResolveOptions, Loose>> & Pick<ResolveOptions, Loos
 
 // The options in force: the preset, then what was given, then the
 // defaults, each choice checked.
-function settle(options: ResolveOptions): Settled {
+function settle(options: ResolveOptions, who = 'resolve'): Settled {
   let preset: ResolveOptions = {}
   if (null != options.compat) {
     preset = PRESETS[options.compat]
-    if (null == preset) throw new TypeError('resolve: unknown compat ' + quoted(options.compat))
+    if (null == preset) throw new TypeError(who + ': unknown compat ' + quoted(options.compat))
   }
   const given: Record<string, any> = {}
   for (const [k, v] of Object.entries(options)) if (undefined !== v) given[k] = v
@@ -437,29 +437,29 @@ function settle(options: ResolveOptions): Settled {
   for (const [name, allowed] of Object.entries(CHOICES)) {
     const v = (o as any)[name]
     if (!allowed.includes(v)) {
-      throw new TypeError(`resolve: ${name} must be one of ${allowed.join(', ')}, not ${quoted(v)}`)
+      throw new TypeError(`${who}: ${name} must be one of ${allowed.join(', ')}, not ${quoted(v)}`)
     }
   }
   if (!Array.isArray(o.extensions) || o.extensions.some((e) => 'string' !== typeof e)) {
-    throw new TypeError('resolve: extensions must be a list of member names, not ' + quoted(o.extensions))
+    throw new TypeError(who + ': extensions must be a list of member names, not ' + quoted(o.extensions))
   }
   if (('copy' === o.sharing || 'inline-once' === o.sharing) && 'keep' === o.cycles) {
-    throw new TypeError(`resolve: sharing ${o.sharing} makes a tree, so it cannot keep cycles`)
+    throw new TypeError(`${who}: sharing ${o.sharing} makes a tree, so it cannot keep cycles`)
   }
   if ('copy' === o.sharing && !(Number.isFinite(o.budget) && 0 <= (o.budget as number))) {
-    throw new ResolveError('openapi_budget', 'resolve: sharing copy needs a budget, the most bytes it may make')
+    throw new ResolveError('openapi_budget', who + ': sharing copy needs a budget, the most bytes it may make')
   }
   for (const name of ['maxDepth', 'maxSteps', 'checkEveryN'] as const) {
     const v = o[name]
     if (undefined !== v && !(('number' === typeof v && Number.isInteger(v) && 0 < v) || Infinity === v)) {
-      throw new TypeError(`resolve: ${name} must be a whole number above 0, not ${quoted(v)}`)
+      throw new TypeError(`${who}: ${name} must be a whole number above 0, not ${quoted(v)}`)
     }
   }
   if (undefined !== o.onCheck && 'function' !== typeof o.onCheck) {
-    throw new TypeError('resolve: onCheck must be a function, not ' + quoted(o.onCheck))
+    throw new TypeError(who + ': onCheck must be a function, not ' + quoted(o.onCheck))
   }
   if ('boolean' !== typeof o.operations) {
-    throw new TypeError('resolve: operations must be true or false, not ' + quoted(o.operations))
+    throw new TypeError(who + ': operations must be true or false, not ' + quoted(o.operations))
   }
   return o
 }
@@ -545,15 +545,27 @@ type SiteInfo = {
 // A site left as written, and whether that is for a cycle or a reason.
 type Left = { cut: boolean; why?: Why }
 
-// Resolve every `$ref` of a raw tree, from `parse`, into a new tree. The
-// raw tree is never changed.
-function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
-  const o = settle(options)
+// What resolving and bundling both start from: the version a description
+// is read by, the other documents given with it, the count of steps, and
+// the site index over the set.
+type Front = {
+  detected: ResolveResult['version']
+  mv: ModelVersion
+  others: DocInput[]
+  limit: number
+  pointers: boolean
+  counting: boolean
+  // The steps taken so far, the index's and then whatever follows it.
+  count: { steps: number }
+  tick: () => void
+  refuse: (code: string, message: string, at: string) => never
+  index: ReturnType<typeof buildIndex>
+}
+
+function frontOf(raw: any, o: Settled, who = 'resolve'): Front {
   const detected = readVersion(raw).version
   const mv: ModelVersion =
     'auto' !== o.version ? o.version : 'unknown' === detected ? '3.2' : (detected as ModelVersion)
-  const strict = true === o.strict
-  const siteShape = 'site' === o.sharing || o.xref
   const extensions = new Set(o.extensions)
 
   // The URI the description was retrieved from, and its own: both in
@@ -578,25 +590,25 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   // specification has it for a schema document that names none.
   const others: DocInput[] = []
   if (undefined !== o.documents) {
-    if (pointers) throw new TypeError("resolve: documents are read under refs: 'uri', and refs is 'pointer'")
-    if (!isMap(o.documents)) throw new TypeError('resolve: documents must be a map from URI to document')
+    if (pointers) throw new TypeError(who + ": documents are read under refs: 'uri', and refs is 'pointer'")
+    if (!isMap(o.documents)) throw new TypeError(who + ': documents must be a map from URI to document')
     const taken = new Set([retrieved, entry])
-    const read = partReader(o.parse)
+    const read = partReader(o.parse, who)
     for (const name of Object.keys(o.documents)) {
       if (undefined === o.retrievalUri && !ABSOLUTE.test(name)) {
         throw new TypeError(
-          `resolve: documents names ${quoted(name)}, which is relative, and no retrievalUri says what it is relative to`,
+          `${who}: documents names ${quoted(name)}, which is relative, and no retrievalUri says what it is relative to`,
         )
       }
       const key = withoutFragment(normalizeUri(resolveUri(retrieved, name)))
       if (taken.has(key)) {
-        throw new TypeError(`resolve: documents names ${quoted(name)}, and ${quoted(key)} is a document already`)
+        throw new TypeError(`${who}: documents names ${quoted(name)}, and ${quoted(key)} is a document already`)
       }
       taken.add(key)
       let doc: any = o.documents[name]
       // A document that is missing is not one with nothing in it.
       if (undefined === doc) {
-        throw new TypeError(`resolve: documents names ${quoted(name)} and gives no document for it`)
+        throw new TypeError(`${who}: documents names ${quoted(name)} and gives no document for it`)
       }
       if ('string' === typeof doc || doc instanceof Uint8Array) doc = read(doc, key)
       const said = readVersion(doc)
@@ -619,28 +631,23 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     }
   }
 
-  // The steps taken, the index's and then the fold's, for `maxSteps` and
-  // `onCheck`.
+  // The steps taken, the index's and then what follows it, for `maxSteps`
+  // and `onCheck`.
   const maxSteps = o.maxSteps ?? Infinity
   const onCheck = o.onCheck
   const checkEveryN = undefined === onCheck ? 0 : (o.checkEveryN ?? 1000)
-  let steps = 0
+  const count = { steps: 0 }
   const counting = Infinity !== maxSteps || undefined !== onCheck
-
-  // Under `refs: 'pointer'` a pointer is read by `site.at`, which every
-  // fold has. Anything else reads a landing as written, and a count of
-  // steps is kept through the fold's budget.
-  if (!pointers || counting) checkFold()
   const tick = () => {
-    steps++
-    if (maxSteps < steps) throw new ResolveError('openapi_work', `resolve: more than ${maxSteps} steps`)
+    const steps = ++count.steps
+    if (maxSteps < steps) throw new ResolveError('openapi_work', `${who}: more than ${maxSteps} steps`)
     if (0 < checkEveryN && 0 === steps % checkEveryN && false === onCheck!(steps)) {
-      throw new ResolveError('openapi_cancel', `resolve: stopped by onCheck after ${steps} steps`)
+      throw new ResolveError('openapi_cancel', `${who}: stopped by onCheck after ${steps} steps`)
     }
   }
 
   const refuse = (code: string, message: string, at: string): never => {
-    throw new ResolveError(code, `resolve: ${message}` + ('' === at ? '' : ` at ${quoted(at)}`), at)
+    throw new ResolveError(code, `${who}: ${message}` + ('' === at ? '' : ` at ${quoted(at)}`), at)
   }
 
   const index = buildIndex(raw, {
@@ -656,6 +663,20 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     refuse,
     tick: counting ? tick : undefined,
   })
+  return { detected, mv, others, limit, pointers, counting, count, tick, refuse, index }
+}
+
+// Resolve every `$ref` of a raw tree, from `parse`, into a new tree. The
+// raw tree is never changed.
+function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
+  const o = settle(options)
+  const strict = true === o.strict
+  const siteShape = 'site' === o.sharing || o.xref
+  // Under `refs: 'pointer'` a pointer is read by `site.at`, which every
+  // fold has. Anything else reads a landing as written, and a count of
+  // steps is kept through the fold's budget.
+  if ('pointer' !== o.refs || Infinity !== (o.maxSteps ?? Infinity) || undefined !== o.onCheck) checkFold()
+  const { detected, mv, others, limit, pointers, counting, count, tick, refuse, index } = frontOf(raw, o)
   // For `resolveAll`: the documents this set names and does not have. The
   // names and URIs of the `connections` report are located too, since a
   // document may be named by one of those alone.
@@ -996,11 +1017,11 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   if (counting) {
     // The fold's steps follow the index's, and are held to the same bound
     // and the same check: it reports each step before it takes it.
-    const before = steps
+    const before = count.steps
     opts.budget = {
       checkEveryN: 1,
       onCheck: (n: number) => {
-        steps = before + n - 1
+        count.steps = before + n - 1
         tick()
       },
     }
@@ -1334,19 +1355,33 @@ const WANTED = Symbol('wanted')
 // square of its length. And the texts `load` gives are read together as
 // one text would be: see `partReader`.
 async function resolveAll(raw: any, options: ResolveAllOptions): Promise<ResolveResult> {
+  const { rest, documents } = await gather(raw, options, 'resolveAll')
+  return resolve(raw, { ...rest, documents })
+}
+
+// Find and load the documents a description names, in rounds, as
+// `resolveAll` and `bundleAll` do before they start: the set so far is
+// indexed, what it names and does not have is asked of `load`, and so on
+// until a round names nothing new. Gives the documents, each read, and
+// the options that are not the loading's own.
+async function gather<T extends ResolveOptions>(
+  raw: any,
+  options: T & { load: Loader; maxDocuments?: number; maxRounds?: number },
+  who: string,
+): Promise<{ rest: Omit<T, 'load' | 'maxDocuments' | 'maxRounds'>; documents: Record<string, unknown> }> {
   const { load, maxDocuments = 10_000, maxRounds = 64, ...rest } = options
-  if ('function' !== typeof load) throw new TypeError('resolveAll: load must be a function, not ' + quoted(load))
+  if ('function' !== typeof load) throw new TypeError(who + ': load must be a function, not ' + quoted(load))
   for (const [name, n] of [
     ['maxDocuments', maxDocuments],
     ['maxRounds', maxRounds],
   ] as [string, number][]) {
     if (!((Number.isInteger(n) && 0 < n) || Infinity === n)) {
-      throw new TypeError(`resolveAll: ${name} must be a whole number above 0, not ` + quoted(n))
+      throw new TypeError(`${who}: ${name} must be a whole number above 0, not ` + quoted(n))
     }
   }
   // Each document is read once, here, so that a round does not read the
   // texts of the rounds before it again.
-  const read = partReader(rest.parse)
+  const read = partReader(rest.parse, who)
   const documents: Record<string, unknown> = {}
   for (const [name, doc] of Object.entries(rest.documents ?? {})) {
     documents[name] = 'string' === typeof doc || doc instanceof Uint8Array ? read(doc, name) : doc
@@ -1360,13 +1395,13 @@ async function resolveAll(raw: any, options: ResolveAllOptions): Promise<Resolve
     if (maxRounds <= round) {
       throw new ResolveError(
         'openapi_work',
-        `resolveAll: the documents name one another more than ${maxRounds} rounds of loading deep, at ${quoted(fresh[0])}`,
+        `${who}: the documents name one another more than ${maxRounds} rounds of loading deep, at ${quoted(fresh[0])}`,
         fresh[0],
       )
     }
     for (const uri of fresh) {
       if (maxDocuments <= asked.size) {
-        throw new ResolveError('openapi_work', `resolveAll: more than ${maxDocuments} documents to load, at ${quoted(uri)}`, uri)
+        throw new ResolveError('openapi_work', `${who}: more than ${maxDocuments} documents to load, at ${quoted(uri)}`, uri)
       }
       asked.add(uri)
       const doc = await load(uri)
@@ -1375,8 +1410,9 @@ async function resolveAll(raw: any, options: ResolveAllOptions): Promise<Resolve
       documents[uri] = 'string' === typeof doc || doc instanceof Uint8Array ? read(doc, uri) : doc
     }
   }
-  return resolve(raw, { ...rest, documents })
+  return { rest: rest as any, documents }
 }
+
 
 // A tree with nothing shared: every map and list copied, so a value two
 // sites share is written twice. With a budget, the copy stops with
@@ -1411,7 +1447,9 @@ function unshare(root: any, budget?: number): any {
   return copy(root)
 }
 
-export { resolve, resolveAll, ResolveError }
+export { resolve, resolveAll, ResolveError, frontOf, gather, quoted, settle }
+
+export type { Front }
 
 export type {
   Cut,

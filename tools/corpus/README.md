@@ -321,13 +321,24 @@ resolves it with `resolveAll` and the file loader, confined to the
 source's folder, and counts what it loaded and what is left as written:
 `azure`, `redocly-starter`, `oai-learn`, and `digitalocean` under
 `slots: 'all'`, since its entry names a file for each operation, where
-3.0 has no Reference Object. It takes about half a minute.
+3.0 has no Reference Object. It takes about a minute.
 
 A reference that is left as external is looked for on disk. One whose
 document is there and was not read is the failure this run exists to
 find, and so is a description that throws. Either ends the run with 1,
 and `--write` then writes nothing. A figure that moved ends it with 1
-too, and says which. The record,
+too, and says which.
+
+It then writes each description as one document, with `bundleAll` and
+the same loader, and holds the bundle to its documents with
+`bundle-agree.cjs`: the bundle has to resolve to what the documents
+resolve to. That module resolves the documents, bundles them, resolves
+the bundle and compares the two trees from the root, allowing only
+what the bundle's own reports account for. Its header lists each
+allowance. A bundle that does not agree ends the run with 1, as a
+description that throws does. The figures under `bundle` count the
+bundles that agree, the targets by how each was brought in, and what
+was left. The record,
 [`test/corpus/documents.json`](../../test/corpus/documents.json), is
 written by the tool and never by hand.
 
@@ -342,6 +353,7 @@ written by the tool and never by hand.
 | `parse-only.cjs <file>` | the time and peak memory of one document, with the package alone in the process |
 | `target-check.cjs [n] [seed]` | for a sample of described documents, checks that every resolved local pointer lands where it says |
 | `ref-census.cjs` | every `$ref` naming another document, in every document, by form and by what it names |
+| `bundle-agree.cjs` | a module: whether a bundle resolves to what its documents resolve to. `documents.cjs` and the suite's bundle tests call it |
 
 Everything in the corpus is data. Nothing in it is run, and no reference
 in it is followed beyond the files already fetched.

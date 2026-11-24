@@ -54,5 +54,26 @@
       "doc": "https://www.example.com/api/description/other",
       "via": "name"
     }
-  ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.2.0",
+      "info": { "title": "Entry", "version": "1" },
+      "components": {
+        "securitySchemes": { "MySecurity": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } },
+        "pathItems": { "Foo": { "get": { "security": [{ "MySecurity": [] }] } } }
+      },
+      "paths": { "/foo": { "$ref": "#/components/pathItems/Foo" } }
+    },
+    "embedded": [
+      [
+        "/components/pathItems/Foo",
+        "https://www.example.com/api/description/other",
+        "/components/pathItems/Foo",
+        "component"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
 }

@@ -13,6 +13,11 @@
 // left as external is then looked for on disk: one whose document is
 // there and was not read is the failure this run exists to find.
 //
+// It then writes each description as one document, with `bundleAll` and
+// the same loader, and holds the bundle to its documents: the bundle has
+// to resolve to what they resolve to, which bundle-agree.cjs checks. A
+// bundle that does not is the other failure.
+//
 // Run from the repository root, after `npm run build` in ts/ and the
 // corpus fetch, under the Node version `engines` in ts/package.json names:
 //
@@ -20,10 +25,11 @@
 //   node tools/corpus/documents.cjs --write    run, and rewrite that file
 //   node tools/corpus/documents.cjs --only azure,redocly-starter
 //
-// It takes about half a minute, and prints a line at least every 15
-// seconds. Exit status: 0 when the figures are the recorded ones, or were
-// written; 1 when one moved, a description threw, or a document on disk
-// was left unread; 2 when it could not run.
+// It takes about a minute, and prints a line at least every 15 seconds.
+// Exit status: 0 when the figures are the recorded ones, or were written;
+// 1 when one moved, a description threw, a document on disk was left
+// unread, or a bundle does not agree with its documents; 2 when it could
+// not run.
 //
 // DigitalOcean's source is run under `slots: 'all'`: its entry names a
 // file for each operation, where 3.0 has no Reference Object.
@@ -62,7 +68,9 @@ const only = valueOf('--only')?.split(',')
 for (const name of only ?? []) if (!SOURCES.some((s) => s.name === name)) fail(name + ' is not a source this run takes')
 
 const O = require(Path.join(DIST, 'openapi.js'))
+const U = require(Path.join(DIST, 'uri.js'))
 const { fileLoader } = require(Path.join(DIST, 'loaders.js'))
+const { agree } = require('./bundle-agree.cjs')
 
 const t0 = Date.now()
 let last = t0
@@ -104,6 +112,8 @@ async function run(source, done, all) {
     unresolved: {},
     threw: 0,
     externalOnDisk: 0,
+    // The same descriptions, each written as one document.
+    bundle: { agree: 0, differ: 0, threw: 0, component: 0, defs: 0, inline: 0, left: {}, dialects: 0 },
   }
   const trouble = []
   for (let i = 0; i < files.length; i++) {
@@ -117,9 +127,17 @@ async function run(source, done, all) {
     if ('unknown' === O.version(raw).version) continue
     figures.descriptions++
     const rel = Path.relative(dir, files[i])
+    // A file is read once for one description, however often it is asked for.
+    const read = fileLoader({ root: dir })
+    const had = new Map()
+    const load = (uri) => {
+      if (!had.has(uri)) had.set(uri, read(uri))
+      return had.get(uri)
+    }
+    const options = { retrievalUri: Url.pathToFileURL(files[i]).href, load, ...source.options }
     let r
     try {
-      r = await O.resolveAll(raw, { retrievalUri: Url.pathToFileURL(files[i]).href, load: fileLoader({ root: dir }), ...source.options })
+      r = await O.resolveAll(raw, options)
     } catch (err) {
       figures.threw++
       trouble.push(`${source.name}/${rel}: threw ${err.code ?? ''} ${String(err.message).slice(0, 160)}`)
@@ -145,6 +163,24 @@ async function run(source, done, all) {
       }
     }
     for (const u of r.unresolved) figures.unresolved[u.why] = (figures.unresolved[u.why] ?? 0) + 1
+
+    const b = figures.bundle
+    let held
+    try {
+      held = await agree(O, U, raw, options)
+    } catch (err) {
+      b.threw++
+      trouble.push(`${source.name}/${rel}: bundling threw ${err.code ?? ''} ${String(err.message).slice(0, 160)}`)
+      continue
+    }
+    if (held.ok) b.agree++
+    else {
+      b.differ++
+      trouble.push(`${source.name}/${rel}: its bundle does not resolve to what its documents do: ${held.why.slice(0, 2).join('; ').slice(0, 300)}`)
+    }
+    for (const e of held.bundle.embedded) b[e.as]++
+    for (const l of held.bundle.left) b.left[l.why] = (b.left[l.why] ?? 0) + 1
+    b.dialects += held.bundle.dialects.length
   }
   return { figures, trouble, files: files.length }
 }
@@ -169,6 +205,13 @@ async function run(source, done, all) {
         `${f.sites} sites: ${f.resolved} resolved, ${f.cut} cut; left as written: ${left}; ` +
         `${f.threw} threw, ${f.externalOnDisk} on disk and not read`,
     )
+    const b = f.bundle
+    const stays = Object.entries(b.left).map(([why, n]) => `${why} ${n}`).join(', ') || 'none'
+    console.log(
+      `  as one document: ${b.agree} agree with their documents, ${b.differ} do not, ${b.threw} threw; ` +
+        `${b.component} targets among the components, ${b.defs} in the $defs of a resource, ${b.inline} in the place of a reference; ` +
+        `left: ${stays}; ${b.dialects} schemas given a $schema`,
+    )
   }
   for (const line of trouble.slice(0, 20)) console.log('  ' + line)
   if (20 < trouble.length) console.log(`  and ${trouble.length - 20} more`)
@@ -176,10 +219,10 @@ async function run(source, done, all) {
   let exit = 0 < trouble.length ? 1 : 0
   const record = Fs.existsSync(RECORD) ? JSON.parse(Fs.readFileSync(RECORD, 'utf8')) : { sources: {} }
   if (flag('--write')) {
-    if (0 !== exit) console.log('documents: not written, since a description threw or a document on disk was left unread')
+    if (0 !== exit) console.log('documents: not written, since a description threw, a document on disk was left unread or a bundle does not agree')
     else {
       const next = {
-        note: 'What tools/corpus/documents.cjs counts: each description of these corpus sources resolved from its own file with resolveAll and the file loader, confined to the source. Written by that tool, never by hand.',
+        note: 'What tools/corpus/documents.cjs counts: each description of these corpus sources resolved from its own file with resolveAll and the file loader, confined to the source, and then written as one document with bundleAll and held to its documents. Written by that tool, never by hand.',
         sources: { ...(record.sources ?? {}), ...found },
       }
       Fs.writeFileSync(RECORD, JSON.stringify(next, null, 2) + '\n')

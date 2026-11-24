@@ -1,0 +1,77 @@
+{
+  "note": "A $dynamicRef in content that moved: what it names first has to move with it.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "List": { "$ref": "generic.json#/components/schemas/List" },
+        "Loose": { "$ref": "generic.json#/components/schemas/Loose" },
+        "Tree": { "$ref": "https://example.com/schemas/tree" }
+      }
+    }
+  },
+  "documents": {
+    "generic.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "components": {
+        "schemas": {
+          "List": {
+            "type": "array",
+            "items": { "$dynamicRef": "#item" },
+            "$defs": { "item": { "$dynamicAnchor": "item" } }
+          },
+          "Loose": { "type": "array", "items": { "$dynamicRef": "#elsewhere" } },
+          "Elsewhere": { "$dynamicAnchor": "elsewhere" }
+        }
+      }
+    },
+    "https://example.com/schemas/tree": {
+      "$id": "https://example.com/schemas/tree",
+      "$dynamicAnchor": "node",
+      "type": "object",
+      "properties": { "children": { "type": "array", "items": { "$dynamicRef": "#node" } } }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "List": { "$ref": "#/components/schemas/List_2" },
+          "Loose": { "$ref": "#/components/schemas/Loose_2" },
+          "Tree": { "$ref": "https://example.com/schemas/tree" },
+          "List_2": {
+            "type": "array",
+            "items": { "$dynamicRef": "#item" },
+            "$defs": { "item": { "$dynamicAnchor": "item" } }
+          },
+          "Loose_2": { "type": "array", "items": { "$dynamicRef": "#elsewhere" } },
+          "tree": {
+            "$id": "https://example.com/schemas/tree",
+            "$dynamicAnchor": "node",
+            "type": "object",
+            "properties": { "children": { "type": "array", "items": { "$dynamicRef": "#node" } } }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/List_2", "https://example.com/api/generic.json", "/components/schemas/List", "component"],
+      [
+        "/components/schemas/Loose_2",
+        "https://example.com/api/generic.json",
+        "/components/schemas/Loose",
+        "component"
+      ],
+      ["/components/schemas/tree", "https://example.com/schemas/tree", "", "component"]
+    ],
+    "left": [["/components/schemas/Loose_2/items", "#elsewhere", "dynamic"]],
+    "dialects": []
+  }
+}

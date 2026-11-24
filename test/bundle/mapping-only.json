@@ -1,0 +1,91 @@
+{
+  "note": "A schema that only a mapping value names: no reference says what it is, and the mapping value does. It is brought in as a schema, with what it names in turn, and so is one that a mapping value in it names.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/pets": {
+        "get": {
+          "responses": {
+            "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "pet.json" } } } }
+          }
+        }
+      }
+    }
+  },
+  "documents": {
+    "pet.json": {
+      "type": "object",
+      "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.json", "cat": "cat.json" } }
+    },
+    "dog.json": {
+      "allOf": [
+        { "$ref": "pet.json" },
+        {
+          "properties": {
+            "bark": { "$ref": "sounds.json#/loud" },
+            "kind": { "discriminator": { "propertyName": "size", "mapping": { "small": "puppy.json" } } }
+          }
+        }
+      ]
+    },
+    "cat.json": { "allOf": [{ "$ref": "pet.json" }] },
+    "puppy.json": { "type": "object", "title": "Puppy" },
+    "sounds.json": { "loud": { "type": "string" } }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/pets": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": { "application/json": { "schema": { "$ref": "#/components/schemas/pet" } } }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "pet": {
+            "type": "object",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": { "dog": "#/components/schemas/dog", "cat": "#/components/schemas/cat" }
+            }
+          },
+          "dog": {
+            "allOf": [
+              { "$ref": "#/components/schemas/pet" },
+              {
+                "properties": {
+                  "bark": { "$ref": "#/components/schemas/loud" },
+                  "kind": {
+                    "discriminator": { "propertyName": "size", "mapping": { "small": "#/components/schemas/puppy" } }
+                  }
+                }
+              }
+            ]
+          },
+          "cat": { "allOf": [{ "$ref": "#/components/schemas/pet" }] },
+          "loud": { "type": "string" },
+          "puppy": { "type": "object", "title": "Puppy" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/pet", "https://example.com/api/pet.json", "", "component"],
+      ["/components/schemas/dog", "https://example.com/api/dog.json", "", "component"],
+      ["/components/schemas/cat", "https://example.com/api/cat.json", "", "component"],
+      ["/components/schemas/loud", "https://example.com/api/sounds.json", "/loud", "component"],
+      ["/components/schemas/puppy", "https://example.com/api/puppy.json", "", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

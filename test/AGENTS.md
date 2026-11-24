@@ -120,6 +120,7 @@ section 5 of
 | the object model | `model/` | `ts/test/model.test.ts` |
 | a description in several files | `docs/<case>/` | `ts/test/documents-spec.test.ts` |
 | what `readExpression`, `readTemplate` or `evaluateExpression` gives | `expression/` | `ts/test/expression-spec.test.ts` |
+| what `bundle` writes of several documents | `bundle/<case>.json` | `ts/test/bundle-spec.test.ts` |
 
 A case of `docs/` is a folder: the documents as files, and `case.json`.
 That file names the `entry` document and the `retrievalUri` it was
@@ -132,6 +133,23 @@ the site's own. `source` says where the case comes from, and `options`,
 when present, is given to `resolve`. Every file of a folder must be one
 the case names. The first five are the examples of OpenAPI 3.2.0's
 Appendix F and Appendix G, written as the specification writes them.
+`bundle` is what `bundle` writes of the same documents, in the form
+that a case of `bundle/` has it.
+
+A case of `bundle/` is one JSON file: a `note` that says what the case
+shows, the `entry` document and its `retrievalUri`, each other
+document in `documents` by its URI, the `options` if any, and what
+`bundle` gives. That is the bundle's `tree`, and each row of its
+reports as a list: an `embedded` row is its place, its document, its
+place there and how it was brought in; a `left` row its place, its
+text and why; a `dialects` row its place and the dialect. The runner
+also holds each case to three things that no case writes down. The
+bundle resolves to what the documents resolve to, which
+[`tools/corpus/bundle-agree.cjs`](../tools/corpus/bundle-agree.cjs)
+checks, and which the cases of `docs/` are held to as well. No
+document is changed. And the bundle, bundled again, is itself. So read
+the `tree` of a new case by hand for what it should be, and leave
+whether it means the same to the runner.
 
 A folder is not made ahead of its contents, because a fixture folder
 with nothing in it fails here, as an empty fixture does. When porting

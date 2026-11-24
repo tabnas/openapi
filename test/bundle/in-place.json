@@ -1,0 +1,46 @@
+{
+  "note": "OpenAPI 3.0 has no component for a Path Item, so the first reference to one holds it, and every later reference names that place. A reference that comes back to the Path Item from inside it names the place too.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": { "$ref": "item.json" },
+      "/b": { "$ref": "item.json" },
+      "/c": { "$ref": "item.json", "summary": "Mine" },
+      "/d": { "$ref": "loop.json" }
+    }
+  },
+  "documents": {
+    "item.json": { "get": { "responses": { "200": { "description": "ok" } } } },
+    "loop.json": {
+      "post": {
+        "responses": { "200": { "description": "ok" } },
+        "callbacks": { "again": { "{$url}": { "$ref": "loop.json" } } }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": { "get": { "responses": { "200": { "description": "ok" } } } },
+        "/b": { "$ref": "#/paths/~1a" },
+        "/c": { "$ref": "#/paths/~1a", "summary": "Mine" },
+        "/d": {
+          "post": {
+            "responses": { "200": { "description": "ok" } },
+            "callbacks": { "again": { "{$url}": { "$ref": "#/paths/~1d" } } }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/paths/~1a", "https://example.com/api/item.json", "", "inline"],
+      ["/paths/~1d", "https://example.com/api/loop.json", "", "inline"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}
