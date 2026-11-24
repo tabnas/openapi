@@ -172,6 +172,11 @@ and 370 to 717 MB. A process with less time or less memory to give
 needs a smaller `maxBytes`: under 16 MiB it holds the first parser to
 fewer steps as well.
 
+These figures are with `@tabnas/parser` 0.12.20 or later, which is
+where the package's peer range starts. An earlier one takes more memory
+for each rule, and the largest texts then run the second parser out of
+a heap of 2.2 GB.
+
 A parser from `make`, given as `instance`, keeps every rule whatever the
 size of the text, and is the only parser to read it. So the limit for
 one is 16 MiB, unless `maxBytes` says otherwise.

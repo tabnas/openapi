@@ -1182,6 +1182,16 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   with the 13 that `parse` refuses unread, all 46 rows, and the nine
   documents over 10 MB.
 
+**Run them by themselves.** The sweep holds each phase of a document to
+120 seconds, and each worker of the sweep and of the preset comparison
+may take 4 GB, 12 GB for the documents over 10 MB. A suite, a
+measurement of the peer floors or a second gate run beside them can
+fail a document for its time, or have a worker killed for memory, and
+either reads as a failure of the gate. One such run did: a trial of
+the peer floors tool beside the preset comparison had the kernel kill
+one of the comparison's workers. A build during a sweep is refused by
+the sweep's own hash, and a test run is not.
+
 All three print a status line at least every 20 seconds. None
 publishes, pushes or installs anything. The code in each that decides
 what a failure is does run in `npm test`, on small inline values:

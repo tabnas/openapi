@@ -1052,6 +1052,22 @@ what the code does.
   again with it. The range and the record follow the measurement,
   which is the standing rule, and the five pass together at their
   floors.
+- **Verified, on the last commit that changes the build.** The suite
+  passes, 966 tests and the 11 of the prose gate, here and on Linux,
+  macOS and Windows in continuous integration. Both corpus sweeps
+  leave their ledgers and baselines as committed: 235 rows under the
+  base reading, and 3 under `reading: 'spec'`, every one accepted and
+  none open. The run of descriptions in several documents gives the
+  figures recorded. The apidef gate passes at voxgig/apidef 2a66bb9
+  against 25f8d4b: 2,691 of 2,692 tests, one skipped as on apidef's
+  `main`, and 110 of 110 definitions byte-identical. The preset
+  comparison finds no difference in 15,177 documents, nor in the nine
+  of the corpus over 10 MB. The gates were run three times in all: on
+  T4 as first built, where each passed; beside a trial of the peer
+  floors tool, where the machine ran out of memory and one worker of
+  the preset comparison was killed, so that run was put aside; and
+  alone on the final build, which is the run recorded here. The gates
+  are run by themselves, and the guide now says so.
 - **What T4 leaves as it is.** Under `refs: 'pointer'` no other
   document is read, and `documents` is refused there. The implicit
   mapping of a discriminator is worked out for the description's own
