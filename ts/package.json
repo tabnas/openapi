@@ -50,7 +50,7 @@
     "@tabnas/expr": ">=0.6.4",
     "@tabnas/json": ">=0.3.2",
     "@tabnas/jsonic": ">=0.3.1",
-    "@tabnas/parser": ">=0.12.16",
+    "@tabnas/parser": ">=0.12.20",
     "@tabnas/yaml": ">=0.5.33"
   },
   "devDependencies": {

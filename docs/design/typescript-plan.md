@@ -1033,6 +1033,25 @@ what the code does.
   a `file:` URI with a host is a network path on Windows. The test
   names its folder by its real path, two tests pin the rule on every
   platform, and the reference states it.
+- **The peer floors tool measured its own last answer, and one floor
+  had moved.** The review of this change found two faults in
+  `tools/peer-floors.cjs`, and both were right. A trial ran the whole
+  suite, the test that holds the installed peers to the recorded floors
+  included, so a release under a recorded floor failed whether or not
+  the package works with it, and a peer with no record failed at its
+  latest release. A trial now leaves that one test out. And a trial ran
+  silent for longer than 30 seconds: it now says the trial, the step
+  and how far the run is every 20 seconds, and a failed trial names the
+  tests that failed. Measured again with the repaired tool, in 36
+  trials and 18 minutes, four floors are where they were and one is
+  not: `@tabnas/parser` starts at 0.12.20, where the record had
+  0.12.16. On 0.12.17 to 0.12.19 one test fails, the one that holds
+  Decision 34's second reading to a 2.2 GB heap: a rule takes more
+  memory before 0.12.20, and that reading runs out of it. The floors
+  had been measured before Decision 34 was built, and were not measured
+  again with it. The range and the record follow the measurement,
+  which is the standing rule, and the five pass together at their
+  floors.
 - **What T4 leaves as it is.** Under `refs: 'pointer'` no other
   document is read, and `documents` is refused there. The implicit
   mapping of a discriminator is worked out for the description's own
@@ -1085,7 +1104,9 @@ what the code does.
   `@tabnas/parser` at 0.12.16, since 0.12.15 fails 281. `@tabnas/jsonic`
   starts at 0.3.1 and `@tabnas/json` at 0.3.2, since the 0.2.0 of each
   cannot be installed beside the others. The five pass together at
-  their floors. Section 6 gave `expr` 0.5.20 as its example, for
+  their floors. Measured again on 24 November, once Decision 34 and T4
+  were built, `@tabnas/parser` starts at 0.12.20: see the record of T4
+  above. Section 6 gave `expr` 0.5.20 as its example, for
   `fold`; the package has since come to call the step budget, and the
   floor follows the code, which is the rule.
 - **No range has a ceiling.** Every `@tabnas` peer range in the fleet is

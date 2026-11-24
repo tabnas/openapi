@@ -328,6 +328,13 @@ in `test/pending/` and its other tests in `ts/test/openapi.test.ts` and
   - `ts/test/history.test.ts` holds the two parsers to each other on
     every row of `test/spec/` and `test/pending/`, reports and refusals
     included, and on the petstore with a member past 16 MiB.
+  - Every figure here is with `@tabnas/parser` 0.12.20 or later, where a
+    rule takes less memory. On 0.12.19 the second reading of the worst
+    text ran out of a 2.2 GB heap, so that release is the peer's floor.
+    The floor was first measured before this decision was built, and
+    stood at 0.12.16 until the measurement was run again: a change that
+    adds a bound moves a floor as a change that calls a new function
+    does.
 - **A refusal decided from the text** (`openapi_size`,
   `openapi_alias_budget`, `openapi_encoding`) is put in the parse state
   as `refuse`, and `refuseAt` raises it. An error needs a token and a
@@ -880,8 +887,8 @@ and the installed peers to the floors.
 | Peer | Range | The release under it |
 |---|---|---|
 | `@tabnas/expr` | `>=0.6.4` | 0.6.3 does not build: its fold has no `budget` |
-| `@tabnas/yaml` | `>=0.5.33` | 0.5.32 fails 62 tests: it has no `schema: 'core'` option |
-| `@tabnas/parser` | `>=0.12.16` | 0.12.15 fails 281 tests |
+| `@tabnas/yaml` | `>=0.5.33` | 0.5.32 fails 65 tests: it has no `schema: 'core'` option |
+| `@tabnas/parser` | `>=0.12.20` | 0.12.19 fails one test: the second reading of Decision 34 runs out of a 2.2 GB heap |
 | `@tabnas/jsonic` | `>=0.3.1` | 0.2.0 cannot be installed beside the others |
 | `@tabnas/json` | `>=0.3.2` | 0.2.0 cannot be installed beside the others |
 

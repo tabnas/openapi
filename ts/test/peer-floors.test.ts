@@ -118,16 +118,17 @@ describe('the peer floors tool', () => {
     const search = (releases: number, floor: number) => {
       const seen = new Set<number>()
       const passes = (i: number) => (seen.add(i), floor <= i)
-      if (!passes(releases - 1)) return seen.size
-      let lo = 0
-      let hi = releases - 1
-      if (passes(0)) hi = 0
-      else
+      // Between a release that fails and one that passes there is a
+      // floor to find, and nowhere else.
+      if (passes(releases - 1) && !passes(0)) {
+        let lo = 0
+        let hi = releases - 1
         while (1 < hi - lo) {
           const mid = (lo + hi) >> 1
           if (passes(mid)) hi = mid
           else lo = mid
         }
+      }
       return seen.size
     }
     for (let releases = 1; releases <= 70; releases++) {

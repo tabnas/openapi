@@ -1,6 +1,6 @@
 {
   "note": "The floor of each @tabnas peer range in ts/package.json, as tools/peer-floors.cjs measured it: the oldest release on which this package's suite passes with every other peer at its latest, the release under it, and how that one fails. ts/test/peer-floors.test.ts holds the manifest to this file. The plan's Decision 33.",
-  "measured": "2026-11-23",
+  "measured": "2026-11-24",
   "floors": {
     "expr": {
       "floor": "0.6.4",
@@ -18,14 +18,14 @@
       "fails": "install: code ERESOLVE | ERESOLVE unable to resolve dependency tree"
     },
     "parser": {
-      "floor": "0.12.16",
-      "under": "0.12.15",
-      "fails": "suite: 281 of 889 tests fail"
+      "floor": "0.12.20",
+      "under": "0.12.19",
+      "fails": "suite: 1 of 958 tests fail: at the default limit, a text past the steps of a parser t..."
     },
     "yaml": {
       "floor": "0.5.33",
       "under": "0.5.32",
-      "fails": "suite: 62 of 889 tests fail"
+      "fails": "suite: 65 of 958 tests fail: the specification's reading adds no token, rule or alternate; ts/doc/guide.md block #8 (line 123); and 63 more"
     }
   }
 }
