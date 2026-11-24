@@ -237,14 +237,42 @@ describe('bundle, its bounds', () => {
     )
   })
 
-  test('targets written one inside another deeper than maxDepth are refused', () => {
-    const fits = doubling(8, 1)
-    assert.equal(bundle(fits.raw, { retrievalUri: HOME, documents: fits.documents, maxDepth: 8 }).embedded.length, 8)
-    const { raw, documents } = doubling(9, 1)
+  test('the bundle nests no deeper than maxDepth, as no document does', () => {
+    // Each target written inside the last is four deeper than it.
+    const fits = doubling(4, 1)
+    assert.equal(bundle(fits.raw, { retrievalUri: HOME, documents: fits.documents, maxDepth: 20 }).embedded.length, 4)
+    const { raw, documents } = doubling(5, 1)
+    assert.throws(
+      () => bundle(raw, { retrievalUri: HOME, documents, maxDepth: 20 }),
+      (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code && /^bundle: the bundle nests deeper than 20 at "\/paths\/~1start\/post\/callbacks\//.test(e.message),
+    )
+    // With no option given it is the default that holds, and no stack that runs out.
+    const deep = doubling(400, 1)
+    assert.throws(
+      () => bundle(deep.raw, { retrievalUri: HOME, documents: deep.documents }),
+      (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code && e.message.startsWith('bundle: the bundle nests deeper than 1000 at '),
+    )
+  })
+
+  test('references that each name the next are written one in another, to maxDepth', () => {
+    // Each document is a reference to the next, and the last a Path
+    // Item. One is written in the place of another, and none is deeper.
+    const chain = (length: number) => {
+      const documents: Record<string, unknown> = {}
+      for (let i = 0; i < length; i++) documents[`R${i}.json`] = i + 1 < length ? { $ref: `R${i + 1}.json` } : { get: { responses: ok } }
+      return { raw: description({ paths: { '/start': { $ref: 'R0.json' } } }, { openapi: '3.0.3' }), documents }
+    }
+    const fits = chain(8)
+    const b = bundle(fits.raw, { retrievalUri: HOME, documents: fits.documents, maxDepth: 8 })
+    assert.deepEqual(C(b.tree.paths), { '/start': { get: { responses: ok } } })
+    assert.equal(b.embedded.length, 8)
+    const { raw, documents } = chain(9)
     assert.throws(
       () => bundle(raw, { retrievalUri: HOME, documents, maxDepth: 8 }),
-      (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code && /^bundle: targets written one inside another deeper than 8 at /.test(e.message),
+      (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code && 'bundle: targets written one inside another deeper than 8 at "/paths/~1start"' === e.message,
     )
+    const long = chain(900)
+    assert.equal(bundle(long.raw, { retrievalUri: HOME, documents: long.documents }).embedded.length, 900)
   })
 
   test('a document nested deeper than maxDepth is refused as resolve refuses it', () => {

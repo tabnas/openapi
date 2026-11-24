@@ -1373,8 +1373,11 @@ bounds are the bundle's own, with no option given:
   so all the copying together is held to sixteen times the work of
   reading the documents once, and 100,000 steps besides. Past it
   `bundle` throws a `ResolveError` coded `openapi_work`.
-- Targets written one inside another deeper than `maxDepth` are
-  `openapi_depth`.
+- A target written in the place of a reference is as deep as its
+  place and its own depth together, so a bundle can nest deeper than
+  any of its documents. A bundle that nests deeper than `maxDepth` is
+  `openapi_depth`, and so are references that each name the next,
+  written one in the place of another more than `maxDepth` times.
 
 #### What a bundle does not keep
 

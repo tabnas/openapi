@@ -200,8 +200,29 @@ type From = {
   mapping: boolean
 }
 
+// A place of the bundle while it is being written: the steps to it from
+// the root, the last one first. A step further is one more link,
+// however deep the place is, where a path would be copied whole.
+type At = { up: At; seg: string | number; n: number } | null
+
+const down = (at: At, seg: string | number): At => ({ up: at, seg, n: (null === at ? 0 : at.n) + 1 })
+
+const atOf = (path: Path): At => {
+  let at: At = null
+  for (const seg of path) at = down(at, seg)
+  return at
+}
+
+const stepsOf = (at: At): Path => {
+  const out: Path = []
+  for (let p = at; null !== p; p = p.up) out.push(p.seg)
+  return out.reverse()
+}
+
+const pointerAt = (at: At): string => pointer(stepsOf(at))
+
 // A string that is read once every target has its place.
-type Later = { what: 'operationRef' | 'dynamic'; out: any; key: string | number; text: string; loc: Loc; space: Space; at: Path }
+type Later = { what: 'operationRef' | 'dynamic'; out: any; key: string | number; text: string; loc: Loc; space: Space; at: At }
 
 // A pointer as a URI fragment: a `%` or a `#` of a member name is
 // written as its escape, which a reader of the fragment reads back.
@@ -441,13 +462,13 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     // place of its reference where that place is not its alone. Those
     // can multiply, so the copying is held to the index's allowance.
     let copied = 0
-    const work = (at: Path) => {
+    const work = (at: At) => {
       if (counting) tick()
       if (index.allowance < ++copied) {
         refuse(
           'openapi_work',
           'bundling this description takes more than ' + EXTRA_FACTOR + ' times the work of reading its documents once',
-          pointer(at),
+          pointerAt(at),
         )
       }
     }
@@ -557,9 +578,9 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
 
     // Write a target in the place of the reference that names it. Where
     // it stands there alone, that place is the target's from then on.
-    const inline = (land: Landing, at: Path, dd: string, pure: boolean, ds: Dest): { inline: any } | { left: string } => {
+    const inline = (land: Landing, at: At, dd: string, pure: boolean, ds: Dest): { inline: any } | { left: string } => {
       const loc = land.loc
-      const place = pointer(at)
+      const place = pointerAt(at)
       const lays = !pure && !overlaid.has(place)
       if (undefined !== loc) {
         if (inlining.has(loc)) return { left: 'cycle' }
@@ -567,7 +588,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
           refuse('openapi_depth', 'targets written one inside another deeper than ' + limit, place)
         }
         inlining.add(loc)
-        if (pure && !overlaid.has(place)) rootSpace.defs.set(loc, at)
+        if (pure && !overlaid.has(place)) rootSpace.defs.set(loc, stepsOf(at))
       }
       if (lays) overlaid.add(place)
       let value: any
@@ -600,7 +621,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
       from: From,
       land: Landing,
       space: Space,
-      at: Path,
+      at: At,
       dd: string,
       ds: Dest,
     ): { ref: string } | { inline: any } | { left: string } => {
@@ -690,7 +711,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
 
     // A discriminator's mapping value: the name of one of the
     // description's schemas, or a URI reference to a schema.
-    const mapped = (v: string, holder: Loc, space: Space, at: Path): string => {
+    const mapped = (v: string, holder: Loc, space: Space, at: At): string => {
       if (isMap(named) && own(named, v)) return v
       const settled = settledAt(holder, space)
       const where = index.locate(v, holder.base)
@@ -698,19 +719,19 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
       if (undefined === land || !land.found) {
         // What reads as a name is one, wherever it is.
         if (NAME.test(v)) return v
-        left.push({ at: pointer(at), ref: v, why: where.why ?? 'not-found' })
+        left.push({ at: pointerAt(at), ref: v, why: where.why ?? 'not-found' })
         return settled ? v : rebase(v, holder.base, space.base)
       }
       const from: From = { loc: holder, text: v, base: holder.base, expect: 'schema', inline: false, pure: true, mapping: true }
       const to = refer(from, land, space, at, '', rootDest)
       if ('ref' in to) return to.ref
-      if ('left' in to) left.push({ at: pointer(at), ref: v, why: to.left })
+      if ('left' in to) left.push({ at: pointerAt(at), ref: v, why: to.left })
       return settled ? v : rebase(v, holder.base, space.base)
     }
 
     // A string the object model types, in content that the bundle has:
     // what it names is named from where it is now.
-    const leaf = (v: string, holder: Loc, k: string | number, space: Space, at: Path, out: any, as: Dest): string => {
+    const leaf = (v: string, holder: Loc, k: string | number, space: Space, at: At, out: any, as: Dest): string => {
       const state = as.state
       if ('data' === state) return v
       if ('mapping' === state) return mapped(v, holder, space, at)
@@ -746,9 +767,13 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     // Under `slots: 'all'`, where a reference in data is read, it goes
     // among the components of its type, and a reference to it stands in
     // its place.
-    function copy(node: any, loc: Loc | undefined, sp: Space, at: Path, dd: string, ds: Dest): any {
+    function copy(node: any, loc: Loc | undefined, sp: Space, at: At, dd: string, ds: Dest): any {
       if (null === node || 'object' !== typeof node) return node
       work(at)
+      // A target written in the place of a reference is as deep as its
+      // place and its own depth together, so the bundle can nest deeper
+      // than any of its documents. It is held to what one of them is.
+      if (null !== at && limit <= at.n) refuse('openapi_depth', 'the bundle nests deeper than ' + limit, pointerAt(at))
       const child = (k: string | number, v: any): Loc | undefined =>
         undefined === loc || null === v || 'object' !== typeof v ? undefined : index.child(loc, k)
       // A schema resource starts here: what is in it is read against its
@@ -779,12 +804,12 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
             return ref
           }
         }
-        return copy(v, kid, space, [...at, k], dialect, d)
+        return copy(v, kid, space, down(at, k), dialect, d)
       }
       // A string is what the documents read it as, and where they give
       // it no type, what the bundle will.
       const text = (v: string, k: string | number, space: Space, into: any): string =>
-        undefined === loc ? v : leaf(v, loc, k, space, [...at, k], into, undefined !== was ? destFrom(was, [k]) : destOf(k))
+        undefined === loc ? v : leaf(v, loc, k, space, down(at, k), into, undefined !== was ? destFrom(was, [k]) : destOf(k))
       if (Array.isArray(node)) {
         const list: any[] = []
         for (let i = 0; i < node.length; i++) {
@@ -799,7 +824,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
       let space = sp
       const rules = loc?.rules
       if (starts) {
-        space = { res: loc!, node: out, at, base: loc!.base, dialect: loc!.dialect, defs: new Map(), values: new Map(), anchors: new Set() }
+        space = { res: loc!, node: out, at: stepsOf(at), base: loc!.base, dialect: loc!.dialect, defs: new Map(), values: new Map(), anchors: new Set() }
       }
       // Whether the schema's identifier and anchors are read at all.
       const reads = undefined !== rules && !(rules.refAlone && 'string' === typeof node.$ref)
@@ -811,7 +836,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
       if (undefined !== loc && undefined !== rules && '' !== loc.dialect) {
         if (!own(node, '$schema') && normalizeUri(loc.dialect) !== normalizeUri(dd)) {
           define(out, '$schema', loc.dialect)
-          dialects.push({ at: pointer(at), dialect: loc.dialect })
+          dialects.push({ at: pointerAt(at), dialect: loc.dialect })
         }
         inside = loc.dialect
       }
@@ -829,7 +854,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
             // it is in. One that the space has already would take that
             // one's place, so it is left out.
             if (space.anchors.has(name) || undefined !== index.locate('#' + name, space.base).target) {
-              left.push({ at: pointer([...at, k]), ref: v, why: 'anchor' })
+              left.push({ at: pointerAt(down(at, k)), ref: v, why: 'anchor' })
               continue
             }
             space.anchors.add(name)
@@ -837,7 +862,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
             // An identifier that named the resource it was in. Where it
             // is now it would start a resource, and what is below it
             // would be read against that.
-            left.push({ at: pointer([...at, k]), ref: v, why: 'id' })
+            left.push({ at: pointerAt(down(at, k)), ref: v, why: 'id' })
             continue
           }
         }
@@ -863,7 +888,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
       // A reference the bundle has as it was written still names what
       // it named, where it is read against another base.
       const stands = (why: string) => {
-        left.push({ at: pointer(at), ref: site.ref, why })
+        left.push({ at: pointerAt(at), ref: site.ref, why })
         if (!settled && 'string' === typeof site.ref) define(out, '$ref', rebase(site.ref, site.base, space.base))
       }
       const land = index.landing(site)
@@ -899,13 +924,13 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
       return out
     }
 
-    const tree = copy(raw, index.root, rootSpace, [], home.rootDialect, rootDest)
+    const tree = copy(raw, index.root, rootSpace, null, home.rootDialect, rootDest)
     rootSpace.node = tree
 
     // The targets, each copied where it was put. A target may name more.
     for (let i = 0; i < queue.length; i++) {
       const unit = queue[i]
-      const value = copy(unit.node, unit.loc, unit.space, unit.at, unit.dd, unit.ds)
+      const value = copy(unit.node, unit.loc, unit.space, atOf(unit.at), unit.dd, unit.ds)
       let holder = unit.space.node
       if (!isMap(holder)) continue
       for (const seg of unit.rel.slice(0, -1)) {
@@ -945,7 +970,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
         if (settled && d.text.startsWith('#')) continue
         if (null === d.space.res && undefined !== there) text = '#' + fragment([...there, ...rest])
         else {
-          left.push({ at: pointer(d.at), ref: d.text, why: undefined === path ? (where.why ?? 'not-found') : 'outside' })
+          left.push({ at: pointerAt(d.at), ref: d.text, why: undefined === path ? (where.why ?? 'not-found') : 'outside' })
           if (!settled) text = rebase(d.text, d.loc.base, d.space.base)
         }
       } else {
@@ -963,7 +988,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
         } else if (null !== res) {
           fine = res.doc === home || undefined !== within(rootSpace, res)
         }
-        if (!fine) left.push({ at: pointer(d.at), ref: d.text, why: 'dynamic' })
+        if (!fine) left.push({ at: pointerAt(d.at), ref: d.text, why: 'dynamic' })
         if (!settled && !d.text.startsWith('#')) text = rebase(d.text, d.loc.base, d.space.base)
       }
       if (text === d.text) continue
@@ -974,7 +999,20 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     return { tree, embedded, left, dialects, units }
   }
 
-  let done = write(undefined)
+  // The copying follows the nesting of what it copies. A depth that the
+  // stack cannot hold is refused as the index refuses one.
+  const writing = (tops: Map<Loc, string | null> | undefined) => {
+    try {
+      return write(tops)
+    } catch (err: any) {
+      if (err instanceof RangeError && /call stack/i.test(String(err.message))) {
+        refuse('openapi_depth', 'the stack ran out before maxDepth (' + limit + ') was reached; lower maxDepth', '')
+      }
+      throw err
+    }
+  }
+
+  let done = writing(undefined)
   // A target that is inside another target would be in the bundle
   // twice, and which of the two a reference names would follow the
   // order the references are met in. Where that is so the bundle is
@@ -987,7 +1025,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
   if (units.some(inside)) {
     const tops = new Map<Loc, string | null>()
     for (const loc of units) if (!inside(loc)) tops.set(loc, done.units.get(loc)!)
-    done = write(tops)
+    done = writing(tops)
   }
 
   const result: BundleResult = {

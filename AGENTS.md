@@ -835,8 +835,12 @@ documents with `gather`, which is the rounds of `resolveAll`.
 - **Bounds.** The copying is counted with the reading, and is held to
   `index.allowance` besides (`openapi_work`): a target written in a
   place with fields laid over it is written again at the next such
-  reference, and those copies can multiply. Targets written one
-  inside another are held to `maxDepth` (`openapi_depth`).
+  reference, and those copies can multiply. A target written in a
+  place is as deep as the place and itself together, so the bundle's
+  own nesting is held to `maxDepth`, and so is a chain of references
+  written one in the place of another (`openapi_depth`). `copy`
+  follows the nesting on the stack: 400 targets nested in place ran it
+  out before the first of these bounds was there.
 
 **The check of a bundle is that it resolves to what its documents
 resolve to**, and [`tools/corpus/bundle-agree.cjs`](tools/corpus/bundle-agree.cjs)
@@ -1491,8 +1495,9 @@ for the reading of the documents, in messages that start with their
 own names: a wrong option is a `TypeError`, and a bound is a
 `ResolveError`. Two bounds are the bundle's own, pinned in
 `ts/test/bundle.test.ts`: `openapi_work` for copies that take more
-than the index's allowance, and `openapi_depth` for targets written
-one inside another deeper than `maxDepth`. A reference that names
+than the index's allowance, and `openapi_depth` for a bundle that
+nests deeper than `maxDepth`, or writes more targets than that one in
+the place of another. A reference that names
 nothing is no error: it is a row of `left`.
 
 `readExpression` and `readTemplate` raise an `ExpressionError`, with
