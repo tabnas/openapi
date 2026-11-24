@@ -119,7 +119,7 @@ function baselineOf(records, environment = {}, ledger = null) {
   b.yamlFeatures = f
 
   // resolve.
-  const rs = { resolved: 0, threwByCode: {}, skipped: {}, notRun: 0, sites: 0, status: {}, kinds: {}, unresolved: {}, documentsByUnresolved: {}, cuts: 0, documentsWithCuts: 0, heldAsWritten: 0, documentsHeldAsWritten: 0, dataSlots: 0, documentsWithDataSlots: 0, connections: {}, checks: {} }
+  const rs = { resolved: 0, threwByCode: {}, skipped: {}, notRun: 0, sites: 0, status: {}, kinds: {}, unresolved: {}, documentsByUnresolved: {}, cuts: 0, documentsWithCuts: 0, heldAsWritten: 0, documentsHeldAsWritten: 0, dataSlots: 0, documentsWithDataSlots: 0, connections: {}, operations: { count: 0, byKind: {}, partial: 0 }, ignored: { byWhat: {}, documents: 0 }, checks: {} }
   for (const r of R) {
     const x = r.resolve
     if (!x) { if (isDesc(r) && r.parse?.ok) rs.notRun++; continue }
@@ -138,6 +138,16 @@ function baselineOf(records, environment = {}, ledger = null) {
     rs.dataSlots += ds
     if (ds) rs.documentsWithDataSlots++
     for (const [k, v] of Object.entries(x.connections ?? {})) { const c = (rs.connections[k] ??= { count: 0, notFound: 0 }); c.count += v; c.notFound += x.connMissing?.[k] ?? 0 }
+    // Why a name was not found, for the kinds that say: `kind:why`.
+    for (const [k, v] of Object.entries(x.connWhy ?? {})) {
+      const [kind, why] = k.split(':')
+      inc(((rs.connections[kind] ??= { count: 0, notFound: 0 }).why ??= {}), why, v)
+    }
+    rs.operations.count += x.operations ?? 0
+    rs.operations.partial += x.partial ?? 0
+    for (const [k, v] of Object.entries(x.opKinds ?? {})) inc(rs.operations.byKind, k, v)
+    for (const [k, v] of Object.entries(x.ignored ?? {})) inc(rs.ignored.byWhat, k, v)
+    if (Object.keys(x.ignored ?? {}).length) rs.ignored.documents++
     for (const [w, g] of Object.entries(x.checks ?? {})) for (const [v, n] of Object.entries(g.verdicts)) inc((rs.checks[w] ??= {}), v, n)
   }
   b.resolve = rs

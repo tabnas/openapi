@@ -118,6 +118,32 @@ describe('corpus tool: classifying one document', () => {
     assert.deepStrictEqual(L.rowsOf(both), [['inline', 'doc.yaml', 'differs', 'type:string->boolean:yaml11-bool-word:PLAIN=1']])
   })
 
+  test('the operations, what is ignored, and why a name was not found are counted', () => {
+    const r = sweep(JSON.stringify({
+      openapi: '3.0.0', info: { title: 't', version: '1' },
+      servers: [{ url: 'https://{region}.example.com' }],
+      paths: {
+        '/a/{id}': {
+          parameters: [{ name: 'Accept', in: 'header' }, { $ref: 'common.json#/parameters/X' }],
+          get: { responses: {} },
+          put: { responses: { 200: { description: 'ok', headers: { 'Content-Type': {} } } } },
+        },
+        '/b/{id}': { get: { responses: {} } },
+      },
+    }))
+    assert.strictEqual(r.resolve.ok, true)
+    assert.strictEqual(r.resolve.operations, 3)
+    assert.deepStrictEqual(r.resolve.opKinds, { path: 3 })
+    assert.strictEqual(r.resolve.partial, 2)
+    assert.deepStrictEqual(r.resolve.ignored, { parameter: 1, responseHeader: 1 })
+    assert.deepStrictEqual(r.resolve.connWhy, { 'serverVariable:missing': 1, 'pathParameter:unresolved': 2, 'pathParameter:no-parameter': 1 })
+    const b = A.baselineOf([{ id: 'x', done: true, ...r }], {})
+    assert.deepStrictEqual(b.resolve.operations, { count: 3, byKind: { path: 3 }, partial: 2 })
+    assert.deepStrictEqual(b.resolve.ignored, { byWhat: { parameter: 1, responseHeader: 1 }, documents: 1 })
+    assert.deepStrictEqual(b.resolve.connections.pathParameter, { count: 3, notFound: 3, why: { unresolved: 2, 'no-parameter': 1 } })
+    assert.deepStrictEqual(b.resolve.connections.serverVariable, { count: 1, notFound: 1, why: { missing: 1 } })
+  })
+
   test('a reference the check cannot follow to an end is a verdict, and the document finishes', () => {
     // B names a member that A's example lacks; the example holds a `$ref` of
     // its own, which the check follows, and which leads back to itself.

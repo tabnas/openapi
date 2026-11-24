@@ -180,7 +180,12 @@ Each document runs in its own process (`worker.cjs`), through
    document. It also counts the sites reported resolved while the tree
    still holds, at the site, the very map the document has there: said to
    be resolved, and left as written. That figure is `heldAsWritten` in
-   the baseline, and the plan's T3 holds it to zero.
+   the baseline, and the plan's T3 holds it to zero. It asks for the
+   operation view, and counts the operations by how each is reached,
+   the ones whose list of parameters lacks one behind a reference left
+   as written, and what the `ignored` report lists. For the connections
+   that read a template or a runtime expression, it counts why each
+   name was not found.
 
 A phase that ends sends its result to the sweep at once, so a document
 that runs out of memory or time keeps the phases it finished.
