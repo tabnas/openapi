@@ -1,8 +1,8 @@
 # apidef's swap
 
 What `voxgig/apidef` changes so that it reads and resolves an OpenAPI
-description with this package. This is apidef's side of T1 and T2 in
-[`../typescript-plan.md`](../typescript-plan.md).
+description with this package. This is apidef's side of T1, T2 and the
+first item of T5 in [`../typescript-plan.md`](../typescript-plan.md).
 
 The change lives in apidef, on its branch `claude/jolly-maxwell-jhjgus`,
 as the pull request voxgig/apidef#230. That is the plan's Decision 20,
@@ -18,6 +18,7 @@ apidef's `main`, the second at `00778c4`, which is apidef 8.33.1.
 | `Say syntax for a syntax error, and prefix apidef's own parse errors once` | The two faults in how apidef's parse stage wraps an error. It needs nothing from this package, so it can go to apidef's `main` by itself |
 | `Read and resolve OpenAPI definitions with @tabnas/openapi` | `parse` and `resolve` from `@tabnas/openapi` in place of apidef's own reader and resolver. Every other step of its parse stage stays |
 | `Take the source checks, the alias limit and the surrogate repair from @tabnas/openapi` | The checks apidef made on the text before reading it, and its repair of lone surrogates, taken from this package in place of apidef's own |
+| `Drop the ignored headers the reader lists` | Which header parameters OpenAPI says to ignore is read from the `ignored` report of `resolve`, in place of apidef's own search of the paths. It follows the merges of apidef's `main` |
 
 Against apidef's `main` the branch changes five files of source and
 fixtures: `ts/src/parse.ts`, `ts/src/yamlalias.ts`, which goes,
@@ -112,8 +113,35 @@ implementations of the scan are still held to one table. One comment in
 the other implementation named the file this commit deletes, and is
 reworded.
 
-Two sources read differently after this commit, both of them texts with
-nothing in them:
+**The ignored headers.** From 3.0 a header parameter named `Accept`,
+`Content-Type` or `Authorization` is to be ignored. apidef's
+`dropIgnoredHeaders` searched the resolved tree for them, in each path's
+own list and in the lists of eight methods, dropped each, and recorded
+it for a warning. Which parameters those are is the specification's to
+say, and `resolve` now says it, in `ignored`. So the search goes:
+
+- `resolve(parsed, { compat: 'apidef' })` gives the tree and `ignored`.
+- `dropIgnoredHeaders` applies the rows that are apidef's to act on: a
+  parameter, under `paths`, in a Path Item's own list or in the list of
+  one of the eight methods apidef reads. It drops each by its place in
+  its list, and records the path, the method and the name, sorted as
+  the search found them: by path, a path's own list first, then the
+  methods in apidef's order.
+- `normalizeColonPathParams` says which paths it renamed, since it runs
+  between the two and a row names a path as the tree had it.
+
+What apidef does with them is still apidef's: that it drops them, that
+it reads eight methods, that it warns. The report also lists the ones
+under webhooks and callbacks, under `query` and `additionalOperations`,
+and a `Content-Type` header of a response or of an encoding. apidef
+passes those by, as its search did.
+
+On the corpus the two agree on every description: 5,238 of them, read
+as apidef reads them, give the same list and the same tree. 95 have
+such a parameter, 2,388 in all.
+
+Two sources read differently after the third commit, both of them texts
+with nothing in them:
 
 | Source | Before | After |
 |---|---|---|
@@ -171,6 +199,11 @@ two, and for the twelve more that the plan's G2 names, given with
 `--extra`. That run was on this checkout's build, with its
 dependencies as the registry serves them: `@tabnas/expr` 0.6.4, yaml
 0.5.34 and parser 0.12.21.
+
+At apidef `ef123d3`, which adds the commit for the ignored headers,
+against `25f8d4b`, apidef 8.33.2, the gate passes the same: 2,691 of
+2,692 tests, one skipped as on apidef's `main`, and all 110 definitions
+byte-identical, the twelve of G2 among them.
 
 At apidef `3b24341`, where the change was made, the three diffs gave
 the same result on the suite and definitions apidef had then: 2,477 of
