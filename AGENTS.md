@@ -1407,11 +1407,11 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   the run proved nothing about it. The candidate is the branch, and
   `--base` names what it is compared with: the commit of apidef's `main`
   that the branch last merged, so that the two differ by the swap alone.
-  Nothing is allowed to fail. At apidef 10cdaed against 895450a that is
-  2,700 of 2,701 tests passing, none failing, one skipped as on apidef's
-  `main`, and every definition byte-identical: the 98 it compares by
+  Nothing is allowed to fail. At apidef 9bceec8 against 2ffac75 that is
+  2,734 of 2,735 tests passing, none failing, one skipped as on apidef's
+  `main`, and every definition byte-identical: the 104 it compares by
   itself, the twelve of G2 below, and the four of
-  `docs/design/apidef-swap/definitions/`. None of the 110 has a header
+  `docs/design/apidef-swap/definitions/`. None of the 116 has a header
   that apidef ignores or a parameter that is repeated, so the
   comparison says nothing of those two steps of apidef's parse stage
   without the four, which have them. When apidef's `main` moves, merge
@@ -1431,7 +1431,7 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   the latest record, where `ts/src/parse.ts` is as it was at 3b24341,
   the reference of the earlier records. apidef's `main` has since added
   a step to that file, which runs after resolving and keeps the first
-  of a repeated parameter. Its resolver is as it was: at 895450a it
+  of a repeated parameter. Its resolver is as it was: at 2ffac75 it
   gives every row of the two fixtures, as at 0f41ce1. It runs both
   resolvers on one
   raw tree for each document of four sets: 167 hand-written edge shapes,

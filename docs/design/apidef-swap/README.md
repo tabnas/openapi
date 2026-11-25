@@ -229,6 +229,13 @@ description, where no header is ignored. apidef drops 17 headers and
 20 repeats from them, and its output for each is byte-identical to that
 of its `main`.
 
+At apidef `9bceec8`, which merges apidef's `main` at `2ffac75`, apidef
+8.33.3, the gate passes the same: 2,734 of 2,735 tests, one skipped as
+on apidef's `main`, and all 120 definitions byte-identical. Those are
+the 104 the gate compares by itself, six of which apidef had added, the
+twelve of G2, and the four here. None of the six has a header that
+apidef ignores or a parameter that is repeated either.
+
 At apidef `3b24341`, where the change was made, the three diffs gave
 the same result on the suite and definitions apidef had then: 2,477 of
 2,478 tests, and 57 definitions. With the first of them alone the suite

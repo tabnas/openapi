@@ -1225,6 +1225,14 @@ what the code does.
   resolver in apidef's `main` is as it was: at 895450a it gives every
   row of the two fixtures, as at 0f41ce1. This package's build did not
   change, so the other gates stand as recorded.
+- **And again the same day**, to 2ffac75, which is apidef 8.33.3. The
+  branch merges it as 9bceec8, where the one conflict was in a file
+  that apidef's build writes. The gate passes there against 2ffac75:
+  2,734 of 2,735 tests, one skipped as on apidef's `main`, and 120 of
+  120 definitions byte-identical: the 104 the gate compares by itself,
+  six of them new in apidef, the twelve of G2 and the four kept for
+  it. apidef's parse stage and the fixture that
+  `test/resolve/apidef.tsv` copies did not change between the two.
 
 **Since acceptance**, as T4 was begun:
 
