@@ -1164,7 +1164,7 @@ what the code does.
     identifier once a schema's reference landed on the part first.
   - A reference that was left as written found something in the
     bundle that the bundle of the bundle then acted on.
-  - Three were the check's: it did not know the base of a resource
+  - Two were the check's: it did not know the base of a resource
     that was brought only in part, and it did not go into a part
     listed under `type` that it had come to first by a reference.
 - **Where that stands**, on the build that is put up. The second and

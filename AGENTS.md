@@ -924,7 +924,15 @@ documents with `gather`, which is the rounds of `resolveAll`.
   own nesting is held to `maxDepth`, and so is a chain of references
   written one in the place of another (`openapi_depth`). `copy`
   follows the nesting on the stack: 400 targets nested in place ran it
-  out before the first of these bounds was there.
+  out before the first of these bounds was there. The stack is the
+  machine's, and the default `maxDepth` of 1,000 is at its edge: a
+  fresh process on Linux holds a bundle about 1,100 deep, and the
+  macOS runner fewer than 1,000. Where the stack is the smaller, the
+  refusal is `openapi_depth` all the same, so a test of the default
+  asserts the code and takes either message. `below` says what to go
+  into a member with and is done before `copy` goes in (`GO`), so that
+  its frame is not under the whole of what is below: with it there, a
+  fresh process held 870.
 
 **The check of a bundle is that it resolves to what its documents
 resolve to**, and [`tools/corpus/bundle-agree.cjs`](tools/corpus/bundle-agree.cjs)

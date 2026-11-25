@@ -246,11 +246,17 @@ describe('bundle, its bounds', () => {
       () => bundle(raw, { retrievalUri: HOME, documents, maxDepth: 20 }),
       (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code && /^bundle: the bundle nests deeper than 20 at "\/paths\/~1start\/post\/callbacks\//.test(e.message),
     )
-    // With no option given it is the default that holds, and no stack that runs out.
+    // With no option given it is the default that holds, or the stack
+    // where that is the smaller of the two: a copy goes as deep as the
+    // bundle nests, and how deep the stack goes is the machine's. Either
+    // way the bundle is refused with the code, and never a RangeError.
     const deep = doubling(400, 1)
     assert.throws(
       () => bundle(deep.raw, { retrievalUri: HOME, documents: deep.documents }),
-      (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code && e.message.startsWith('bundle: the bundle nests deeper than 1000 at '),
+      (e: any) =>
+        e instanceof ResolveError &&
+        'openapi_depth' === e.code &&
+        /^bundle: (the bundle nests deeper than 1000 at |the stack ran out before maxDepth \(1000\) was reached)/.test(e.message),
     )
   })
 

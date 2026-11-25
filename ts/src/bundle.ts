@@ -1242,6 +1242,15 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     //
     // `skip` names the members that are not written: the ones that a
     // reference's own are laid over.
+    //
+    // A copy goes as deep as the bundle nests, on the stack. So what
+    // decides how a member is copied (`below`) is done with before the
+    // member is gone into, and says what to go into with: its frame is
+    // not on the stack under the whole of what is below.
+    const GO = Symbol('go')
+    let goKid: Loc | undefined
+    let goAt: At = null
+    let goDest: Dest = rootDest
     function copy(node: any, loc: Loc | undefined, sp: Space, at: At, dd: string, ds: Dest, skip?: Set<string>): any {
       if (null === node || 'object' !== typeof node) return node
       work(at)
@@ -1365,7 +1374,10 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
             d = { state: kid.state, v: kid.doc.mv, edge: true }
           }
         }
-        return copy(v, kid, space, next, dialect, d)
+        goKid = kid
+        goAt = next
+        goDest = d
+        return GO
       }
       // A string is what the documents read it as, and where they give
       // it no type, what the bundle will.
@@ -1375,7 +1387,12 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
         const list: any[] = []
         for (let i = 0; i < node.length; i++) {
           const v = node[i]
-          list.push('string' === typeof v ? text(v, i, sp, list) : below(i, v, sp, dd))
+          if ('string' === typeof v) {
+            list.push(text(v, i, sp, list))
+            continue
+          }
+          const done = below(i, v, sp, dd)
+          list.push(GO === done ? copy(v, goKid, sp, goAt, dd, goDest) : done)
         }
         return list
       }
@@ -1438,7 +1455,8 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
           continue
         }
         if ('string' !== typeof v) {
-          define(out, k, below(k, v, space, inside))
+          const done = below(k, v, space, inside)
+          define(out, k, GO === done ? copy(v, goKid, space, goAt, inside, goDest) : done)
           continue
         }
         if (moved && undefined !== schema && !(schema.refAlone && 'string' === typeof node.$ref)) {
