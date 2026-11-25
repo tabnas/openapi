@@ -145,15 +145,19 @@ more than a copy with the references renamed. A relative URL in a
 schema that moves is written again. A schema that was read as
 draft-07 says so where it arrives. A schema with an `$id` keeps the
 `$id` and moves whole, because the references inside it are read
-against it.
+against it. A value that a reference names inside an example comes
+with the schema that holds the example, so that it is still plain
+data, and a `$ref` in it is still no reference.
 
 The check on all of this is one sentence: the bundle resolves to what
 the documents resolve to. The test suite holds every case to it, and
-the corpus's descriptions in several documents as well.
+the corpus's descriptions in several documents as well. Where a bundle
+cannot keep a meaning it says so, in `left`: a reference that it had
+no place for, or a part that has its type from a reference and not
+from where it is.
 
-A bundle cannot keep one thing, which is the absence of a name. A
-schema in a file of its own has no component name, and in the bundle
-it has one.
+A bundle cannot keep the absence of a name. A schema in a file of its
+own has no component name, and in the bundle it has one.
 
 ## What is a reference
 

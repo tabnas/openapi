@@ -1,0 +1,82 @@
+{
+  "note": "A reference lands on a schema's `default` before anything reads the schema, and so reads a schema there. In the bundle the schema is read first, and its `default` is plain JSON that no reference types. The part is brought again by itself: among the schemas, or among the definitions of the resource that names it.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Y": {
+              "properties": {
+                "q": { "properties": { "q": { "properties": { "q": { "$ref": "sub/b.json#/Z/default/k" } } } } }
+              }
+            },
+            "Z": { "properties": { "r": { "$ref": "sub/b.json#/X" } } }
+          }
+        }
+      },
+      "documents": {
+        "sub/b.json": {
+          "X": {
+            "properties": { "q": { "properties": { "q": { "properties": { "q": { "$ref": "b.json#/Z" } } } } } }
+          },
+          "Z": { "$id": "Y.s", "default": { "k": { "$ref": "../openapi.json#/paths/~1p/get" } } }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": { "X": { "properties": { "q": { "properties": { "q": { "$ref": "c.json#/Z/default/k" } } } } } }
+        }
+      },
+      "documents": {
+        "c.json": {
+          "Z": { "$id": "https://e.org/A", "default": { "k": { "properties": { "q": { "$ref": "#/Z" } } } } }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": { "Y": { "$ref": "#/components/schemas/Z/properties/q/default" }, "Z": { "$ref": "a.json#/Y" } }
+        }
+      },
+      "documents": { "a.json": { "Y": { "properties": { "q": { "default": { "$ref": "d.json#/x-d/Y" } } } } } }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Z": {
+              "properties": {
+                "q": {
+                  "properties": { "q": { "properties": { "q": { "$ref": "sub/b.json#/X/properties/q/default" } } } }
+                }
+              },
+              "$id": "Y.s"
+            }
+          }
+        }
+      },
+      "documents": {
+        "sub/b.json": {
+          "X": { "properties": { "q": { "default": { "$ref": "../d.json#/x-d/Z" } } }, "$id": "https://e.org/pet" }
+        },
+        "d.json": { "openapi": "3.0.3", "components": { "schemas": { "A": { "$ref": "sub/b.json#/X" } } } }
+      }
+    }
+  ]
+}

@@ -742,6 +742,8 @@ type Connection = {
   found: boolean
   target: string | null   // what it names, when found
   targetDoc?: string      // the document that is in, where not the description
+  landing?: string        // where a pointer lands, when it is read on through a reference
+  landingDoc?: string     // the document that is in, where not the description
   why?: string            // why a URI found nothing, as in unresolved
   type?: string | null    // the object type at a located target
   via?: 'name' | 'uri'
@@ -757,6 +759,12 @@ type Connection = {
 
 `connections` lists the places a description names something other than
 through `$ref`. Nothing in it is put into the tree.
+
+`target` is the place a URI names, as the URI is written. A pointer is
+read on the document as it is written, so where a step is missing at a
+reference it is read on in what that reference names. `landing` is the
+place it comes to then, as the `landing` of a `provenance` row is, and
+a row has it only where it is not `target`.
 
 | `kind` | `at` | What it names | Other members |
 |---|---|---|---|
@@ -1240,8 +1248,8 @@ Writes a description that is several documents as one. `tree` is the
 description's own document, with what it names in the other documents
 brought in, and with each reference that named another document naming
 a place in the tree. Nothing is resolved: a reference is still a
-reference. The bundle resolves to what the documents resolve to, and
-bundled again it is itself.
+reference. The bundle resolves to what the documents resolve to, but
+for what its `left` report lists, and bundled again it is itself.
 
 Neither the raw tree nor any document is changed, and the bundle shares
 no value with them. `JSON.stringify(tree)` is the bundle as JSON text.
@@ -1292,6 +1300,12 @@ follows from its type:
 - Its name there is the last step of the pointer to it, or for a whole
   document the name of its file, in the characters a component's name
   has. A name that is taken has `_2` after it, then `_3`.
+- A name is taken, too, where something hopes for it: a reference that
+  names a component the description does not have, a mapping value
+  that does, by pointer or by name, and the name of a security
+  requirement with no scheme. A target of that name would be what it
+  names, and it named nothing. An anchor that a reference hopes for is
+  left out of what is brought in, for the same reason.
 - A target is brought in once, however many references name it. A
   target inside another target is brought in as part of that one, and
   named there.
@@ -1301,7 +1315,21 @@ follows from its type:
   is one such, and so is what a `$ref` in data names under
   `slots: 'all'`. A Path Item's own fields beside its `$ref` are laid
   over the fields of the one it names, as `resolve` lays them, and
-  that place is then no other reference's to name.
+  that place is then no other reference's to name. The fields they
+  are laid over are not written.
+- The description may have something else where the components of a
+  type go: a value that is no map, or under `slots: 'all'` a reference
+  to a document. Nothing is put there, and no such place is made where
+  a reference names it and finds nothing. A target of that type is
+  then written in the place of a reference too.
+- A target is written in the place of a reference only where that
+  keeps what the documents mean. The place has to read the type the
+  target has, or read data. And the members beside the reference have
+  to be ones that are not read: those beside a reference in data, or
+  one of 2.0 or 3.0, or one in a schema of draft-04 to draft-07. Any
+  other reference has to be alone. A reference that cannot hold its target
+  names the place where another one does, and is listed in `left` as
+  `outside` where none does.
 - A schema that declares an identifier of its own with `$id` is a
   schema resource. It is brought whole into `components.schemas` and
   keeps its identifier, so a reference that names it by the identifier
@@ -1310,7 +1338,37 @@ follows from its type:
 - A reference inside a resource is read in the resource, so a fragment
   there cannot name the rest of the bundle. What such a reference
   names outside the resource is copied into the resource's own
-  `$defs`, or `definitions` in draft-04 to draft-07.
+  `$defs`, or `definitions` in draft-04 to draft-07. Under
+  `slots: 'all'` a reference in data may name content that nothing
+  gave a type. That is written in the place of the reference, in a
+  resource as anywhere else: among the definitions it would be read as
+  a schema.
+- A resource is in the bundle once, where a schema is read, so that
+  its identifier is declared once and is read. Plain content may be
+  written in more places than one, and a reference stands for a
+  resource in every copy but the one that holds it. A resource in a
+  part of a target that the bundle reads as data is brought again by
+  itself.
+- Of two schemas that declare one identifier, the documents are read
+  with the last of them as its resource. The other is plain content
+  to a bundle: its identifier is left out, and listed in `left`.
+- A description of 3.0 or 2.0 has no schema resource, whatever its
+  other documents are, since nothing in it reads an identifier. A
+  schema of a 3.1 document that declares one is plain content in such
+  a bundle. A fragment in it is written as a pointer from the root,
+  and its identifier is left out, and listed in `left`.
+- A reference may land on a value that the object model reads as
+  plain JSON: the `example` of a schema, or its `default`. Among the
+  components it would be read as one of them, and a `$ref` in it as a
+  reference. So the object that the value is in is brought, and the
+  reference names the value in it.
+- A part may have its type from a reference alone, in a place where
+  the object that holds it reads plain JSON: the `default` of a
+  schema, on which a reference landed before anything read the schema.
+  In the bundle the schema is read first, and no reference makes the
+  part what it was there. So the part is brought once more by itself,
+  where its type is read, and each reference to it names that one. The
+  copy in the object that holds it is listed in `left` as `type`.
 
 A discriminator's mapping value that names a schema in another
 document brings that schema in too, and names it there. A schema that
@@ -1334,13 +1392,28 @@ writes four things again, each to mean what it meant:
   was retrieved from. A server's `url` that has variables stands as
   written.
 - A reference that names nothing is written to name what it named.
+  One that names the description by its URI is written as the
+  fragment alone, as a reference to a place in the description is.
 - A relative `$id` of a resource names the same URI from its new
   place.
 - A schema that was read under another dialect than its new place is
   given that dialect as `$schema`.
 
 A reference of the description's own that is a fragment alone stands
-as written, since every place of the description is where it was.
+as written, since every place of the description is where it was. One
+whose pointer is read on through another reference, into another
+document, is the exception. A reader that takes a pointer by the
+letter reads on through no reference, and the bundle may have no
+place for what the reference on the way names. So it is written to
+name where the bundle has what it named.
+
+Under `slots: 'all'` a reference in data may be written where the
+bundle reads a type: in a file that holds an operation, say, which is
+written where an operation is. The members beside such a reference
+were not read, and there they would be, so it is written alone. What
+it names had no type either. Where the bundle has that only in a
+place that reads data, it is brought again where the type is read, and
+the copy that is data stays data.
 
 #### The reports
 
@@ -1359,10 +1432,32 @@ are these:
 | `why` | What was left |
 |---|---|
 | `cycle` | a reference to a target that would be written inside itself without end, and that no other reference holds alone |
-| `outside` | a mapping value or an `operationRef` whose target is in a document of the set, where the bundle has no place for the target |
+| `outside` | a reference, a mapping value or an `operationRef` whose target is in a document of the set, where the bundle has no place for the target |
 | `dynamic` | a `$dynamicRef` or a `$recursiveRef` in content that moved, where what it names first did not move with it |
-| `anchor` | an anchor that was left out, because the place it moved to has one of that name |
-| `id` | an identifier that was left out: it named the resource it was already in, and in its new place it would start a resource |
+| `anchor` | an anchor that was left out, because the place it moved to has one of that name, or has a reference that names one and finds none |
+| `id` | an identifier that was left out. It named the resource it was already in, or another schema has it, or the description's version reads none, or it was not read, and in its place in the bundle it would start a resource |
+| `type` | a part of a target that the documents read as one type, where the bundle may read it as another, or as data |
+
+A `type` row is for a part that has its type from a reference, and not
+from where it is: a schema in a member that its document gives no
+meaning, which a reference names. In the bundle it is read as it was
+only if a reference of that type lands on it there. It is listed where
+none does, where one of another type does too, and where its place in
+the bundle has a type of its own or is one that the model reads plain
+JSON in. What is in a listed part is not read as the documents read
+it, and `ref` is where the part came from. A description that names
+each thing as one type has no such row.
+
+An identifier in a part that the documents read as another type than
+a schema is a plain member there. It is left out, and listed as `id`,
+where a reference of the bundle may read the part as a schema: the
+member would then name a resource.
+
+A reference that is listed as `outside` is written to name what it
+named. In a schema resource it may have named its target through a
+reference of the description. That place of the description holds
+something else in the bundle, a reference that stands for the target,
+so the text names the target in its own document.
 
 `dialects` has a row for each schema that was given a `$schema`, with
 the dialect. OpenAPI reads `$schema` at any Schema Object that is not
@@ -1387,21 +1482,28 @@ bounds are the bundle's own, with no option given:
   any of its documents. A bundle that nests deeper than `maxDepth` is
   `openapi_depth`, and so are references that each name the next,
   written one in the place of another more than `maxDepth` times.
+  Where the stack runs out before either, that is `openapi_depth` too.
 
 #### What a bundle does not keep
 
 - The bundle is one document of one version. A document of another
-  version is read in it by the description's version.
+  version is read in it by the description's version. A schema
+  resource of 3.1 is plain content in a description of 3.0.
 - A schema that is brought in becomes a component with a name. A
   discriminator that lists it then has that name as an implicit
   mapping value, where the schema had no name before.
 - A name that is looked for in every document, an `operationId`, is
   looked for in the bundle alone. An operation that no reference
   brings in is not in it.
-- A reference in data is read only under `slots: 'all'`. Under that
-  option, content that a mapping value names is read as a schema in
-  the bundle, where `resolve` reads it as data when a reference in
-  data names it too.
+- A schema that only a mapping value names is read as a schema in the
+  bundle, with the references in it. `resolve` reads it as data: it
+  types a place by the references that land on it, and a mapping
+  value is none.
+- Under `slots: 'all'`, content that nothing typed may be written where
+  the bundle reads a type. An identifier in it was a plain member, and
+  is left out where it would start a schema resource.
+- A bundle that lists a part under `type` is not its own bundle.
+  Bundled again, that part is read as the bundle has it.
 - A server's `url` with variables, in a document from another
   directory than the description, is read against the description.
 

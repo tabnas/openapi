@@ -72,6 +72,11 @@ type Connection = {
   // The document `target` is in, by the URI it was given under, where
   // that is not the description.
   targetDoc?: string
+  // Where the pointer of a URI lands, where it is read on through a
+  // reference, and the document that is in where it is not the
+  // description. `target` is the place as the URI is written.
+  landing?: string
+  landingDoc?: string
   // Why a URI found nothing: as the resolver's unresolved reasons. For a
   // `template`, what is wrong with it: `malformed` braces, a name
   // `repeated`, `no-slash` at the start of a path, a `query` or a
@@ -351,6 +356,7 @@ function connectionsOf(
     // It may name a location in another document of the set, which is
     // typed by the model of that document's own version.
     const land = index.landingAt(where.target, where.doc)
+    const through = land.found && undefined !== land.through
     return {
       found: land.found,
       target: pointer(where.target),
@@ -358,7 +364,16 @@ function connectionsOf(
       why: land.found ? undefined : 'not-found',
       type: land.found ? slot((land.doc ?? index.docs[0]).mv, index.stateAt(land)).type : null,
       node: land.found ? land.node : undefined,
+      landing: through ? pointer(land.path!) : undefined,
+      landingDoc: through && undefined !== land.doc && land.doc !== index.docs[0] ? land.doc.key : undefined,
     }
+  }
+
+  // Where a URI lands, on its row, where that is not where it is written.
+  const lands = (row: Connection, u: { landing?: string; landingDoc?: string }): void => {
+    if (undefined === u.landing) return
+    row.landing = u.landing
+    if (undefined !== u.landingDoc) row.landingDoc = u.landingDoc
   }
 
   // The schema components that build on a schema with `allOf`, by the
@@ -486,6 +501,7 @@ function connectionsOf(
       row.found = u.found
       row.target = u.target
       if (undefined !== u.doc) row.targetDoc = u.doc
+      lands(row, u)
       if (null != u.why) row.why = u.why
       if ('operationRef' === use.kind) row.type = u.type
       if ('dynamicRef' === use.kind) {
@@ -508,6 +524,7 @@ function connectionsOf(
         row.found = u.found
         row.target = u.target
         if (undefined !== u.doc) row.targetDoc = u.doc
+        lands(row, u)
         row.via = 'uri'
         row.type = u.type
         if (null != u.why) row.why = u.why
@@ -542,6 +559,7 @@ function connectionsOf(
         row.found = u.found
         row.target = u.target
         if (undefined !== u.doc) row.targetDoc = u.doc
+        lands(row, u)
         row.via = 'uri'
         if (null != u.why) row.why = u.why
       }

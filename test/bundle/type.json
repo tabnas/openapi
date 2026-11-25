@@ -1,0 +1,39 @@
+{
+  "note": "A part of a target may have its type from a reference, and not from where it is. Here a Path Item reference lands inside a schema, on one of its properties, before anything reads the schema. In the bundle the schema is among the schemas, and the property is a schema by where it is. That is listed: what is in the part is not read as the documents read it.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/q": { "$ref": "a.json#/Shape/properties/item" } },
+    "components": { "schemas": { "Shape": { "$ref": "a.json#/Shape" } } }
+  },
+  "documents": {
+    "a.json": {
+      "Shape": {
+        "type": "object",
+        "properties": { "item": { "get": { "responses": { "200": { "description": "ok" } } } } }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/q": { "$ref": "#/components/schemas/Shape_2/properties/item" } },
+      "components": {
+        "schemas": {
+          "Shape": { "$ref": "#/components/schemas/Shape_2" },
+          "Shape_2": {
+            "type": "object",
+            "properties": { "item": { "get": { "responses": { "200": { "description": "ok" } } } } }
+          }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/Shape_2", "https://example.com/api/a.json", "/Shape", "component"]],
+    "left": [
+      ["/components/schemas/Shape_2/properties/item", "https://example.com/api/a.json#/Shape/properties/item", "type"]
+    ],
+    "dialects": []
+  }
+}

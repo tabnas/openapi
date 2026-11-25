@@ -121,6 +121,7 @@ section 5 of
 | a description in several files | `docs/<case>/` | `ts/test/documents-spec.test.ts` |
 | what `readExpression`, `readTemplate` or `evaluateExpression` gives | `expression/` | `ts/test/expression-spec.test.ts` |
 | what `bundle` writes of several documents | `bundle/<case>.json` | `ts/test/bundle-spec.test.ts` |
+| a set of documents that a generator failed `bundle` on | `bundle-held/<what was wrong>.json` | `ts/test/bundle-spec.test.ts` |
 
 A case of `docs/` is a folder: the documents as files, and `case.json`.
 That file names the `entry` document and the `retrievalUri` it was
@@ -149,7 +150,23 @@ bundle resolves to what the documents resolve to, which
 checks, and which the cases of `docs/` are held to as well. No
 document is changed. And the bundle, bundled again, is itself. So read
 the `tree` of a new case by hand for what it should be, and leave
-whether it means the same to the runner.
+whether it means the same to the runner. A rule of `bundle` that a
+review found has a case here under a name of its own: `occupied`,
+`hoped`, `seat`, `one-identifier`, `two-identifiers`, `type` and the
+rest. `ts/test/bundle.test.ts` has what a case cannot carry: the sets
+of documents that three generators write, and the bundles that the
+check has to fail.
+
+A file of `bundle-held/` is for one thing that was wrong: a `note`
+that says what, the `retrievalUri` of the entry, and `sets`. Each set
+is an `entry`, its `documents` and its `options` if any, as a
+generator wrote it and cut down to what failed. No set says what
+`bundle` gives. The runner holds each to what every bundle is held to:
+it resolves to what the documents resolve to, no document is changed,
+and it is its own bundle unless it lists a part under `type`. A set
+that a generator fails on goes here once it is repaired, in the file
+of its cause or a new one, so that a seed that is no longer run still
+counts.
 
 A folder is not made ahead of its contents, because a fixture folder
 with nothing in it fails here, as an empty fixture does. When porting

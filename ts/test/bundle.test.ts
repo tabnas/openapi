@@ -271,8 +271,15 @@ describe('bundle, its bounds', () => {
       () => bundle(raw, { retrievalUri: HOME, documents, maxDepth: 8 }),
       (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code && 'bundle: targets written one inside another deeper than 8 at "/paths/~1start"' === e.message,
     )
-    const long = chain(900)
-    assert.equal(bundle(long.raw, { retrievalUri: HOME, documents: long.documents }).embedded.length, 900)
+    const long = chain(500)
+    assert.equal(bundle(long.raw, { retrievalUri: HOME, documents: long.documents }).embedded.length, 500)
+    // Past what the stack holds, a chain is refused as one past maxDepth
+    // is: with a code, whichever of the two it meets first.
+    const endless = chain(5000)
+    assert.throws(
+      () => bundle(endless.raw, { retrievalUri: HOME, documents: endless.documents, maxDepth: 100000 }),
+      (e: any) => e instanceof ResolveError && 'openapi_depth' === e.code,
+    )
   })
 
   test('a document nested deeper than maxDepth is refused as resolve refuses it', () => {
@@ -300,6 +307,175 @@ describe('bundle, its bounds', () => {
       (e: any) => 'openapi_cancel' === e.code && 'bundle: stopped by onCheck after 5 steps' === e.message,
     )
   })
+})
+
+describe('bundle, what a review of it found', () => {
+  const schemaAt = (ref: string) => ({
+    get: { responses: { 200: { description: 'ok', content: { 'application/json': { schema: { $ref: ref } } } } } },
+  })
+
+  test('nothing is put where the description has something that is no map', () => {
+    const documents = { 'a.json': { Pet: { type: 'string' } } }
+    const cases: [object, object, string][] = [
+      [{ paths: { '/a': schemaAt('a.json#/Pet') }, components: [1] }, { openapi: '3.1.0' }, 'components'],
+      [{ paths: { '/a': schemaAt('a.json#/Pet') }, components: { schemas: 'text' } }, { openapi: '3.0.3' }, 'components'],
+      [
+        { paths: { '/a': { get: { responses: { 200: { description: 'ok', schema: { $ref: 'a.json#/Pet' } } } } } }, definitions: 5 },
+        { swagger: '2.0' },
+        'definitions',
+      ],
+    ]
+    for (const [rest, version, member] of cases) {
+      const raw = description(rest, version)
+      const b = bundle(raw, { retrievalUri: HOME, documents })
+      // What was there is there, and the schema is where its reference was.
+      assert.deepEqual(C(b.tree[member]), C((raw as any)[member]), member)
+      assert.deepEqual(b.embedded.map((e) => e.as), ['inline'], member)
+      assert.deepEqual(b.left, [], member)
+    }
+  })
+
+  test('a name that a reference hopes for is kept clear of, whichever of the two is met first', async () => {
+    const documents = { 'a.json': { Pet: { type: 'string' } } }
+    const hopes = { $ref: '#/components/schemas/Pet' }
+    const has = { $ref: 'a.json#/Pet' }
+    // The second order finds the hope after the name was given, and
+    // the bundle is written again.
+    for (const schemas of [{ Hopes: hopes, Has: has }, { Has: has, Hopes: hopes }]) {
+      const held = await agree(O, U, description({ paths: {}, components: { schemas } }), { retrievalUri: HOME, documents })
+      assert.ok(held.ok, held.why.join('; '))
+      const got = C(held.bundle.tree.components.schemas)
+      assert.deepEqual(got.Has, { $ref: '#/components/schemas/Pet_2' })
+      assert.deepEqual(got.Hopes, hopes)
+      assert.deepEqual(got.Pet_2, { type: 'string' })
+      assert.deepEqual(held.bundle.left, [{ at: '/components/schemas/Hopes', ref: '#/components/schemas/Pet', why: 'not-found' }])
+    }
+  })
+
+  test('a place that a reference hopes for is not made', async () => {
+    // The reference names the map of the schema components, and the
+    // description has none. A new one would be what it names.
+    const raw = description({ paths: { '/a': schemaAt('a.json#/Pet') }, 'x-hopes': { $ref: '#/components/schemas' } })
+    const held = await agree(O, U, raw, { retrievalUri: HOME, documents: { 'a.json': { Pet: { type: 'string' } } }, slots: 'all' as const })
+    assert.ok(held.ok, held.why.join('; '))
+    assert.equal(held.bundle.tree.components, undefined)
+    assert.deepEqual(held.bundle.embedded.map((e: any) => e.as), ['inline'])
+    assert.deepEqual(held.bundle.left, [{ at: '/x-hopes', ref: '#/components/schemas', why: 'not-found' }])
+  })
+
+  test("a root that is a reference is written as what it names, under slots: 'all'", async () => {
+    const raw = parse(JSON.stringify({ $ref: 'root.json', openapi: '3.1.0', info, paths: {} }))
+    const documents = {
+      'root.json': { openapi: '3.1.0', info, paths: {}, components: { schemas: { A: { $ref: 'a.json#/X' } } } },
+      'a.json': { X: { type: 'string' } },
+    }
+    const held = await agree(O, U, raw, { retrievalUri: HOME, documents, slots: 'all' as const })
+    assert.ok(held.ok, held.why.join('; '))
+    assert.deepEqual(C(held.bundle.tree), { openapi: '3.1.0', info, paths: {}, components: { schemas: { A: { type: 'string' } } } })
+  })
+
+  test('many targets of one name are each given one', () => {
+    const documents: Record<string, unknown> = {}
+    const schemas: Record<string, unknown> = {}
+    for (let i = 0; i < 2000; i++) {
+      documents[`d${i}.json`] = { Same: { title: 'n' + i } }
+      schemas['S' + i] = { $ref: `d${i}.json#/Same` }
+    }
+    const b = bundle(description({ paths: {}, components: { schemas } }), { retrievalUri: HOME, documents })
+    const got = b.tree.components.schemas
+    assert.equal(Object.keys(got).length, 4000)
+    assert.deepEqual(C(got.S0), { $ref: '#/components/schemas/Same' })
+    assert.deepEqual(C(got.S1999), { $ref: '#/components/schemas/Same_2000' })
+    assert.deepEqual(C(got.Same_2000), { title: 'n1999' })
+  })
+
+  test('the steps of every round of typing are those of one run', () => {
+    // Schemas that only mapping values name, each naming the next: the
+    // index is told of one more in each round, and built again.
+    const documents: Record<string, unknown> = {}
+    const length = 5
+    for (let i = 0; i < length; i++) {
+      documents[`m${i}.json`] = { type: 'object', discriminator: { propertyName: 'k', mapping: { n: `m${i + 1}.json` } } }
+    }
+    documents[`m${length}.json`] = { type: 'object' }
+    const raw = () => description({ paths: {}, components: { schemas: { P: { discriminator: { propertyName: 'k', mapping: { a: 'm0.json' } } } } } })
+    const seen: number[] = []
+    const b = bundle(raw(), { retrievalUri: HOME, documents, onCheck: (n: number) => (seen.push(n), true), checkEveryN: 1 })
+    assert.deepEqual(Object.keys(b.tree.components.schemas), ['P', 'm0', 'm1', 'm2', 'm3', 'm4', 'm5'])
+    const total = seen.length
+    assert.deepEqual(seen, Array.from({ length: total }, (_, i) => i + 1))
+    assert.throws(() => bundle(raw(), { retrievalUri: HOME, documents, maxSteps: total - 1 }), (e: any) => 'openapi_work' === e.code)
+    assert.equal(bundle(raw(), { retrievalUri: HOME, documents, maxSteps: total }).embedded.length, length + 1)
+  })
+})
+
+describe('the check of a bundle', () => {
+  // tools/corpus/bundle-agree.cjs holds every bundle here to its
+  // documents, so it has to fail the ones that are wrong. Each of these
+  // is the bundle of one description, changed in one way.
+  const entry = () =>
+    description({
+      paths: {},
+      components: {
+        schemas: {
+          Has: { $ref: 'a.json#/Pet' },
+          Hopes: { $ref: '#/components/schemas/Pet' },
+          Animal: { discriminator: { propertyName: 'kind', mapping: { cat: 'a.json#/Cat' } }, oneOf: [{ $ref: 'a.json#/Cat' }] },
+        },
+      },
+    })
+  const documents = { 'a.json': { Pet: { type: 'object', title: 'A pet' }, Cat: { type: 'string' } } }
+  const checked = (change: (b: any) => void) =>
+    agree(
+      {
+        ...O,
+        bundle: (raw: any, options: any) => {
+          const b = bundle(raw, options)
+          change(b)
+          return b
+        },
+      },
+      U,
+      entry(),
+      { retrievalUri: HOME, documents },
+    )
+
+  test('holds the bundle as it is', async () => {
+    const held = await checked(() => undefined)
+    assert.ok(held.ok, held.why.join('; '))
+    assert.deepEqual(Object.keys(held.bundle.tree.components.schemas), ['Has', 'Hopes', 'Animal', 'Pet_2', 'Cat'])
+    assert.equal(held.located, 1)
+  })
+
+  const wrong: [string, (b: any) => void, RegExp][] = [
+    ['a string that no bundle writes again', (b) => (b.tree.info.title = './t'), /^info\/title: /],
+    ['a member of a target that is gone', (b) => delete b.tree.components.schemas.Pet_2.title, /members /],
+    [
+      'a reference that named nothing, and names a target',
+      (b) => {
+        const schemas = b.tree.components.schemas
+        schemas.Pet = schemas.Pet_2
+        delete schemas.Pet_2
+        schemas.Has.$ref = '#/components/schemas/Pet'
+        b.embedded[0].at = '/components/schemas/Pet'
+      },
+      /named nothing, and names something in the bundle$/,
+    ],
+    [
+      'a mapping value that lands on another schema',
+      (b) => (b.tree.components.schemas.Animal.discriminator.mapping.cat = '#/components/schemas/Pet_2'),
+      /lands on another place in the bundle$/,
+    ],
+    ['a mapping value that names nothing now', (b) => (b.tree.components.schemas.Animal.discriminator.mapping.cat = '#/components/schemas/Gone'), /was found, and is not found in the bundle$/],
+    ['a reference that names nothing, with nothing said of it', (b) => (b.left.length = 0), /names nothing in the bundle, and the bundle does not say so$/],
+  ]
+  for (const [name, change, said] of wrong) {
+    test('fails ' + name, async () => {
+      const held = await checked(change)
+      assert.equal(held.ok, false)
+      assert.ok(held.why.some((line: string) => said.test(line)), held.why.join('; '))
+    })
+  }
 })
 
 describe('bundleAll', () => {
@@ -370,7 +546,7 @@ describe('bundle, on sets of documents that are generated', () => {
   // nothing. What it writes need not be a valid description. It has to
   // be something `resolve` reads, and the bundle of it has to resolve to
   // the same.
-  const set = (seed: number, mappings = true) => {
+  const set = (seed: number) => {
     let state = seed >>> 0
     const next = () => (state = (Math.imul(state, 1664525) + 1013904223) >>> 0) / 2 ** 32
     const upto = (n: number) => Math.floor(next() * n)
@@ -411,7 +587,7 @@ describe('bundle, on sets of documents that are generated', () => {
         if (chance(0.2)) out.allOf = [schema(from, depth + 1)]
         if ('2.0' !== version && chance(0.15)) {
           const mapping = { one: ref(from, 'schema'), two: 'S' + upto(COUNT) }
-          if (mappings) out.discriminator = { propertyName: 'kind', mapping }
+          out.discriminator = { propertyName: 'kind', mapping }
         }
       }
       if (ids && chance(0.1)) out.$anchor = 'an' + upto(4)
@@ -474,16 +650,235 @@ describe('bundle, on sets of documents that are generated', () => {
   })
 
   // A mapping value says that what it names is a schema, and the bundle
-  // reads it as one. Where nothing else says so, `resolve` reads the
-  // same content as data when a reference in data names it too, so the
-  // two differ there, and these sets have no mapping values.
+  // reads it as one, where `resolve` reads the same content as data when
+  // nothing but a reference in data names it. The check reads the
+  // documents as the bundle does there, so these sets have mapping
+  // values too.
   test("and under slots: 'all', where a reference in data is one", async () => {
     for (let seed = 301; seed <= 400; seed++) {
-      const { entry, documents } = set(seed, false)
+      const { entry, documents } = set(seed)
       entry['x-data'] = { one: { $ref: 'a.json#/schemas/S0' }, two: { $ref: 'a.json#/schemas/S0' }, three: { $ref: '#/x-data/one' } }
       const raw = parse(JSON.stringify(entry))
       const held = await agree(O, U, raw, { retrievalUri: HOME, documents, slots: 'all' as const })
       assert.ok(held.ok, `seed ${seed}: ${held.why.slice(0, 3).join('; ')}`)
     }
+  })
+})
+
+// Hold `count` sets of a generator to the check: the bundle of each
+// resolves to what the documents resolve to, with what it could not keep
+// in its reports, and is its own bundle unless it lists a part whose
+// type it could not keep.
+const held = async (next: () => { entry: any; documents: Record<string, any> }, seed: number, count: number, more: object) => {
+  for (let i = 0; i < count; i++) {
+    const { entry, documents } = next()
+    const options = { retrievalUri: HOME, documents, ...more }
+    let got
+    try {
+      got = await agree(O, U, parse(JSON.stringify(entry)), options)
+    } catch (e: any) {
+      // A set may be past a bound, and is then refused with its code.
+      assert.ok(e instanceof ResolveError && ['openapi_depth', 'openapi_work'].includes(e.code as string), `seed ${seed}, set ${i}: ${e}`)
+      continue
+    }
+    assert.ok(got.ok, `seed ${seed}, set ${i}: ${got.why.slice(0, 3).join('; ')}`)
+    if (got.bundle.left.some((l: any) => 'type' === l.why)) continue
+    const again = bundle(got.bundle.tree, { retrievalUri: HOME, ...more })
+    assert.equal(JSON.stringify(again.tree), JSON.stringify(got.bundle.tree), `seed ${seed}, set ${i}`)
+    assert.deepEqual(again.embedded, [], `seed ${seed}, set ${i}`)
+  }
+}
+
+describe('bundle, on sets that a review of it generated', () => {
+  // The generator an independent review of `bundle` wrote to break it.
+  // Its sets are worse than a description is: a schema named where a
+  // Path Item is and a Path Item where a schema is, two schemas with one
+  // identifier, references to references that name nothing, pointers
+  // that are read on through references, a mapping value of every kind,
+  // and whole documents named as schemas. A bundle of one still has to
+  // resolve to what the documents resolve to, with what it could not
+  // keep in its reports, and to be its own bundle unless it lists a part
+  // whose type it could not keep.
+  const DOCS = ['a.json', 'sub/b.json', 'c.json']
+  const NAMES = ['X', 'Y', 'Z', 'pet', 'A']
+  const sets = (seed: number) => {
+    let state = seed
+    const rnd = () => {
+      state |= 0
+      state = (state + 0x6d2b79f5) | 0
+      let t = Math.imul(state ^ (state >>> 15), 1 | state)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    const pick = <T>(list: T[]): T => list[Math.floor(rnd() * list.length)]
+    const ref = (from: string): string => {
+      const d = pick([...DOCS, 'openapi.json', ''])
+      const n = pick(NAMES)
+      let doc = d
+      if (from.startsWith('sub/') && '' !== d && 'openapi.json' !== d) doc = d.startsWith('sub/') ? d.slice(4) : '../' + d
+      if (from.startsWith('sub/') && 'openapi.json' === d) doc = '../openapi.json'
+      const inner =
+        'openapi.json' === d || '' === d
+          ? pick(['#/components/schemas/' + n, '#/paths/~1p/get', '#/x-d/' + n])
+          : pick(['#/' + n, '#/' + n + '/properties/q', ''])
+      return doc + inner
+    }
+    const schema = (from: string, depth: number): any => {
+      if (rnd() < 0.35 || 2 < depth) return { $ref: ref(from) }
+      const s: any = { type: 'object', properties: { q: schema(from, depth + 1) } }
+      if (rnd() < 0.2) s.properties.r = { $ref: ref(from) }
+      if (rnd() < 0.1) s.$id = pick(['https://e.org/' + pick(NAMES), pick(NAMES) + '.s'])
+      if (rnd() < 0.1) s.$anchor = pick(NAMES)
+      if (rnd() < 0.1) s.discriminator = { propertyName: 'k', mapping: { m: ref(from) } }
+      return s
+    }
+    const pathItem = (from: string): any => {
+      const p: any = { get: { responses: { 200: { description: 'x', content: { 'a/b': { schema: schema(from, 0) } } } } } }
+      if (rnd() < 0.3) {
+        const named =
+          rnd() < 0.5
+            ? { $ref: 'openapi.json' === from ? '#/paths/~1p' : pick(DOCS.map(() => '#/' + pick(NAMES))) }
+            : { $ref: ref(from).split('#')[0] + '#/' + pick(NAMES), summary: 's' }
+        p.post = { callbacks: { cb: { '{$url}': named } }, responses: { 200: { description: 'y' } } }
+      }
+      return p
+    }
+    return () => {
+      const version = pick(['3.0.3', '3.1.0'])
+      const entry: any = {
+        openapi: version,
+        info,
+        paths: {
+          '/p': pathItem('openapi.json'),
+          '/q': { $ref: ref('openapi.json').split('#')[0] + '#/' + pick(NAMES), ...(rnd() < 0.3 ? { summary: 'o' } : {}) },
+        },
+        components: { schemas: {} },
+        'x-d': {},
+      }
+      for (const n of NAMES.slice(0, 3)) if (rnd() < 0.5) entry.components.schemas[n] = schema('openapi.json', 0)
+      const documents: Record<string, any> = {}
+      for (const d of DOCS) {
+        const doc: any = {}
+        for (const n of NAMES) doc[n] = rnd() < 0.6 ? schema(d, 0) : pathItem(d)
+        documents[d] = doc
+      }
+      return { entry, documents }
+    }
+  }
+
+  test('the bundle resolves to what the documents resolve to', async () => {
+    await held(sets(1), 1, 600, {})
+  })
+
+  test("and under slots: 'all'", async () => {
+    await held(sets(2), 2, 300, { slots: 'all' })
+  })
+})
+
+describe('bundle, on sets with what the generators before never wrote', () => {
+  // The review's generator, with three things more. A reference may land
+  // on a value that the model reads as plain JSON, a schema's `default`
+  // or `example`, and such a value may hold what reads as a reference or
+  // as a schema. One document of the set is a description itself, of
+  // 3.0 or 3.1 whatever the entry is, so that a schema resource of 3.1
+  // comes into a description of 3.0, which has none. And a reference may
+  // be where the model puts an operation or a response, where only
+  // `slots: 'all'` reads the first.
+  //
+  // The first run of it found what the sets before could not: a schema
+  // resource written into a 3.0 description as one, a reference that
+  // landed on plain JSON written among the schemas, a part that a
+  // reference had typed left where no reference types it, and under
+  // `slots: 'all'` content with no type written where it gained one.
+  const DOCS = ['a.json', 'sub/b.json', 'c.json', 'd.json']
+  const NAMES = ['X', 'Y', 'Z', 'pet', 'A']
+  const TAILS = ['', '', '/properties/q', '/default', '/example', '/properties/q/default', '/default/k', '/example/k']
+  const sets = (seed: number) => {
+    let state = seed
+    const rnd = () => {
+      state |= 0
+      state = (state + 0x6d2b79f5) | 0
+      let t = Math.imul(state ^ (state >>> 15), 1 | state)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    const pick = <T>(list: T[]): T => list[Math.floor(rnd() * list.length)]
+    const ref = (from: string): string => {
+      const d = pick([...DOCS, 'openapi.json', ''])
+      const n = pick(NAMES)
+      let doc = d
+      if (from.startsWith('sub/') && '' !== d && 'openapi.json' !== d) doc = d.startsWith('sub/') ? d.slice(4) : '../' + d
+      if (from.startsWith('sub/') && 'openapi.json' === d) doc = '../openapi.json'
+      const described = 'openapi.json' === d || 'd.json' === d || ('' === d && ('openapi.json' === from || 'd.json' === from))
+      const inner = described
+        ? pick(['#/components/schemas/' + n + pick(TAILS), '#/components/schemas/' + n, '#/paths/~1p/get', '#/x-d/' + n])
+        : pick(['#/' + n + pick(TAILS), '#/' + n, ''])
+      return doc + inner
+    }
+    const plain = (from: string, depth: number): any =>
+      pick([
+        { $ref: ref(from), note: 1 },
+        { k: { $ref: ref(from) } },
+        { k: schema(from, depth + 2) },
+        { note: 'n', discriminator: { propertyName: 'k', mapping: { m: ref(from) } } },
+      ])
+    const schema = (from: string, depth: number): any => {
+      if (rnd() < 0.35 || 2 < depth) return { $ref: ref(from) }
+      const s: any = { type: 'object', properties: { q: schema(from, depth + 1) } }
+      if (rnd() < 0.2) s.properties.r = { $ref: ref(from) }
+      if (rnd() < 0.1) s.$id = pick(['https://e.org/' + pick(NAMES), pick(NAMES) + '.s'])
+      if (rnd() < 0.1) s.$anchor = pick(NAMES)
+      if (rnd() < 0.1) s.discriminator = { propertyName: 'k', mapping: { m: ref(from) } }
+      if (rnd() < 0.2) s.default = plain(from, depth)
+      if (rnd() < 0.15) s.example = plain(from, depth)
+      return s
+    }
+    const pathItem = (from: string): any => {
+      const answer = () => (rnd() < 0.15 ? { $ref: ref(from) } : { description: 'x', content: { 'a/b': { schema: schema(from, 0) } } })
+      const p: any = { get: rnd() < 0.15 ? { $ref: ref(from).split('#')[0] + '#/' + pick(NAMES) } : { responses: { 200: answer() } } }
+      if (rnd() < 0.3) {
+        const named =
+          rnd() < 0.5
+            ? { $ref: 'openapi.json' === from ? '#/paths/~1p' : pick(DOCS.map(() => '#/' + pick(NAMES))) }
+            : { $ref: ref(from).split('#')[0] + '#/' + pick(NAMES), summary: 's' }
+        p.post = { callbacks: { cb: { '{$url}': named } }, responses: { 200: { description: 'y' } } }
+      }
+      return p
+    }
+    return () => {
+      const version = pick(['3.0.3', '3.1.0'])
+      const entry: any = {
+        openapi: version,
+        info,
+        paths: {
+          '/p': pathItem('openapi.json'),
+          '/q': { $ref: ref('openapi.json').split('#')[0] + '#/' + pick(NAMES), ...(rnd() < 0.3 ? { summary: 'o' } : {}) },
+        },
+        components: { schemas: {} },
+        'x-d': rnd() < 0.3 ? { $ref: ref('openapi.json') } : {},
+      }
+      for (const n of NAMES.slice(0, 3)) if (rnd() < 0.5) entry.components.schemas[n] = schema('openapi.json', 0)
+      const documents: Record<string, any> = {}
+      for (const d of DOCS) {
+        if ('d.json' === d) {
+          const doc: any = { openapi: pick(['3.0.3', '3.1.0']), info: { title: 'd', version: '1' }, paths: { '/p': pathItem(d) }, components: { schemas: {} } }
+          for (const n of NAMES) if (rnd() < 0.7) doc.components.schemas[n] = schema(d, 0)
+          documents[d] = doc
+          continue
+        }
+        const doc: any = {}
+        for (const n of NAMES) doc[n] = rnd() < 0.6 ? schema(d, 0) : pathItem(d)
+        documents[d] = doc
+      }
+      return { entry, documents }
+    }
+  }
+
+  test('the bundle resolves to what the documents resolve to', async () => {
+    await held(sets(1), 1, 600, {})
+  })
+
+  test("and under slots: 'all'", async () => {
+    await held(sets(2), 2, 400, { slots: 'all' })
   })
 })

@@ -1,0 +1,152 @@
+{
+  "note": "A description of 3.0 with a document of 3.1 that declares identifiers. Nothing in a 3.0 description reads an identifier, so the bundle has no schema resources: a fragment in it is read from its root. Each schema was written as a resource, with fragments that named nothing.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "X": {
+              "properties": {
+                "q": {
+                  "properties": {
+                    "q": { "properties": { "q": { "$ref": "d.json#/components/schemas/Y/properties/q" } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "documents": {
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Y": {
+                "properties": {
+                  "q": {
+                    "properties": {
+                      "q": { "properties": { "q": { "$ref": "d.json#/components/schemas/Z" } }, "$id": "Y.s" }
+                    }
+                  }
+                }
+              },
+              "Z": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": { "schemas": { "X": { "$ref": "sub/b.json#/X" } } }
+      },
+      "documents": {
+        "sub/b.json": {
+          "X": { "properties": { "q": { "properties": { "q": { "$ref": "../d.json#/components/schemas/Y" } } } } },
+          "Y": {}
+        },
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Y": { "properties": { "q": { "properties": { "q": { "$ref": "sub/b.json#/Y" } } } }, "$id": "Z.s" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": { "/q": { "$ref": "c.json#/pet" } }
+      },
+      "documents": {
+        "a.json": {},
+        "c.json": { "pet": { "$ref": "d.json#/components/schemas/Z" } },
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": { "schemas": { "Z": { "properties": { "r": { "$ref": "a.json" } }, "$id": "Z.s" } } }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": { "/q": { "$ref": "a.json#/pet" } }
+      },
+      "documents": {
+        "a.json": {
+          "pet": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": { "q": { "properties": { "q": { "$ref": "d.json#/components/schemas/A" } } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "c.json": {},
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "A": {
+                "properties": {
+                  "q": { "properties": { "q": { "$id": "Y.s", "discriminator": { "mapping": { "m": "c.json" } } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": { "schemas": { "X": { "properties": { "r": { "$ref": "a.json" } } } } }
+      },
+      "documents": {
+        "a.json": { "X": { "properties": { "q": { "$ref": "c.json#/Z" } } } },
+        "sub/b.json": { "X": { "properties": { "q": { "$ref": "../a.json#/X/properties/q" } } } },
+        "c.json": {
+          "Y": {
+            "properties": { "q": { "properties": { "r": { "$ref": "d.json#/components/schemas/Z/properties/q" } } } }
+          },
+          "Z": { "properties": { "q": { "properties": { "q": { "$ref": "#/Y" } } } } }
+        },
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Z": {
+                "properties": {
+                  "q": { "properties": { "q": { "properties": { "q": { "$ref": "a.json" } }, "$id": "A.s" } } }
+                }
+              },
+              "pet": { "properties": { "q": { "$ref": "sub/b.json#/X/properties/q" } } }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

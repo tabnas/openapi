@@ -1,0 +1,66 @@
+{
+  "note": "A reference of the description's own is read on through another reference, into another document. The bundle could not keep that reference, so the pointer named nothing. It is written to name where the bundle has what it named.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": { "/q": { "$ref": "sub/b.json#/A", "summary": "o" } },
+        "components": { "schemas": { "Z": { "$ref": "#/x-d/X" } } },
+        "x-d": { "$ref": "sub/b.json#/A" }
+      },
+      "documents": {
+        "sub/b.json": {
+          "Y": {
+            "get": {
+              "responses": {
+                "200": { "content": { "a/b": { "schema": { "properties": { "r": { "$ref": "" } } } } } }
+              }
+            }
+          },
+          "pet": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": { "q": { "properties": { "q": { "properties": { "q": { "$ref": "#/Y" } } } } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "A": { "$ref": "../c.json" }
+        },
+        "c.json": { "X": {}, "A": { "get": { "$ref": "sub/b.json#/pet" } } }
+      },
+      "options": { "slots": "all" }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "X": { "$ref": "d.json#/components/schemas/Z" },
+            "Y": { "properties": { "q": { "default": { "k": { "$ref": "#/components/schemas/X/example" } } } } }
+          }
+        }
+      },
+      "documents": {
+        "sub/b.json": { "Y": { "example": {} } },
+        "d.json": {
+          "openapi": "3.0.3",
+          "paths": { "/p": { "get": { "$ref": "sub/b.json#/Y" } } },
+          "components": { "schemas": { "Z": { "$ref": "#/paths/~1p/get" } } }
+        }
+      },
+      "options": { "slots": "all" }
+    }
+  ]
+}

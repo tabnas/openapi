@@ -1,0 +1,62 @@
+{
+  "note": "A reference that is left as written names the description by its URI, and the bundle has that place though the documents did not: content was written where a reference in data stood. The bundle of the bundle wrote the pointer alone, so the bundle does too.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": { "schemas": { "Y": { "properties": { "q": { "default": { "$ref": "a.json#/Z" } } } } } },
+        "x-d": { "$ref": "sub/b.json" }
+      },
+      "documents": {
+        "a.json": { "Z": { "properties": { "q": { "properties": { "r": { "$ref": "openapi.json#/x-d/X" } } } } } },
+        "sub/b.json": { "X": { "$ref": "../openapi.json#/components/schemas/A" } }
+      },
+      "options": { "slots": "all" }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": { "/q": { "$ref": "c.json#/Z" } },
+        "components": { "schemas": { "Y": { "example": { "$ref": "a.json#/pet/properties/q/default" } } } }
+      },
+      "documents": {
+        "a.json": { "pet": { "properties": { "q": { "default": { "k": { "$ref": "a.json#/Y/example" } } } } } },
+        "c.json": {
+          "Z": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": {
+                          "q": { "default": { "k": { "$ref": "openapi.json#/components/schemas/Y/example/k" } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": { "slots": "all" }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": { "schemas": { "Z": { "default": { "k": { "$ref": "openapi.json#/x-d/X" } } } } },
+        "x-d": { "$ref": "a.json" }
+      },
+      "documents": { "a.json": { "X": { "$ref": "d.json#/x-d/A" } } },
+      "options": { "slots": "all" }
+    }
+  ]
+}

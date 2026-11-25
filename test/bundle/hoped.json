@@ -1,0 +1,77 @@
+{
+  "note": "A reference that names nothing still names nothing in the bundle. Each target takes its name from its pointer, and here every such name is one that something hopes for: a reference, a mapping value by pointer and one by name, and a security requirement. A target that took it would be found by what never named it, so each is given another. An anchor that a reference hopes for is left out for the same reason.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "security": [{ "key": [] }],
+    "components": {
+      "securitySchemes": { "Mine": { "$ref": "other.json#/key" } },
+      "schemas": {
+        "Hopes": { "$ref": "#/components/schemas/Pet" },
+        "Has": { "$ref": "other.json#/Pet" },
+        "Animal": {
+          "discriminator": { "propertyName": "kind", "mapping": { "cat": "#/components/schemas/Cat", "dog": "Dog" } },
+          "oneOf": [{ "$ref": "other.json#/Cat" }, { "$ref": "other.json#/Dog" }]
+        },
+        "ByAnchor": { "$ref": "#here" },
+        "Anchored": { "$ref": "other.json#/Anchored" }
+      }
+    }
+  },
+  "documents": {
+    "other.json": {
+      "key": { "type": "apiKey", "name": "k", "in": "header" },
+      "Pet": { "type": "object" },
+      "Cat": { "type": "string" },
+      "Dog": { "type": "integer" },
+      "Anchored": { "$anchor": "here", "type": "boolean" }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "security": [{ "key": [] }],
+      "components": {
+        "securitySchemes": {
+          "Mine": { "$ref": "#/components/securitySchemes/key_2" },
+          "key_2": { "type": "apiKey", "name": "k", "in": "header" }
+        },
+        "schemas": {
+          "Hopes": { "$ref": "#/components/schemas/Pet" },
+          "Has": { "$ref": "#/components/schemas/Pet_2" },
+          "Animal": {
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": { "cat": "#/components/schemas/Cat", "dog": "Dog" }
+            },
+            "oneOf": [{ "$ref": "#/components/schemas/Cat_2" }, { "$ref": "#/components/schemas/Dog_2" }]
+          },
+          "ByAnchor": { "$ref": "#here" },
+          "Anchored": { "$ref": "#/components/schemas/Anchored_2" },
+          "Pet_2": { "type": "object" },
+          "Cat_2": { "type": "string" },
+          "Dog_2": { "type": "integer" },
+          "Anchored_2": { "type": "boolean" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/securitySchemes/key_2", "https://example.com/api/other.json", "/key", "component"],
+      ["/components/schemas/Pet_2", "https://example.com/api/other.json", "/Pet", "component"],
+      ["/components/schemas/Cat_2", "https://example.com/api/other.json", "/Cat", "component"],
+      ["/components/schemas/Dog_2", "https://example.com/api/other.json", "/Dog", "component"],
+      ["/components/schemas/Anchored_2", "https://example.com/api/other.json", "/Anchored", "component"]
+    ],
+    "left": [
+      ["/components/schemas/Hopes", "#/components/schemas/Pet", "not-found"],
+      ["/components/schemas/Animal/discriminator/mapping/cat", "#/components/schemas/Cat", "not-found"],
+      ["/components/schemas/ByAnchor", "#here", "no-anchor"],
+      ["/components/schemas/Anchored_2/$anchor", "here", "anchor"]
+    ],
+    "dialects": []
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "note": "The description has something that is no map where its schema components go. Nothing is put there, so a schema of another document is written in the place of the first reference that can hold it: one that stands alone. A reference with members beside it cannot, in 3.1, where those members are read: it names the place the first one made. And a target that no reference can hold is left, and listed.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": {
+        "get": {
+          "responses": {
+            "200": {
+              "description": "ok",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "other.json#/Pet", "description": "Beside the reference." }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/b": {
+        "get": {
+          "responses": {
+            "200": {
+              "description": "ok",
+              "content": { "application/json": { "schema": { "$ref": "other.json#/Pet" } } }
+            }
+          }
+        }
+      },
+      "/c": {
+        "get": {
+          "responses": {
+            "200": {
+              "description": "ok",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "other.json#/Owner", "description": "Beside the reference." }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": { "schemas": "not a map" }
+  },
+  "documents": { "other.json": { "Pet": { "type": "object" }, "Owner": { "type": "string" } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/paths/~1b/get/responses/200/content/application~1json/schema",
+                      "description": "Beside the reference."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/b": {
+          "get": {
+            "responses": {
+              "200": { "description": "ok", "content": { "application/json": { "schema": { "type": "object" } } } }
+            }
+          }
+        },
+        "/c": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": {
+                  "application/json": {
+                    "schema": { "$ref": "other.json#/Owner", "description": "Beside the reference." }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "components": { "schemas": "not a map" }
+    },
+    "embedded": [
+      [
+        "/paths/~1b/get/responses/200/content/application~1json/schema",
+        "https://example.com/api/other.json",
+        "/Pet",
+        "inline"
+      ]
+    ],
+    "left": [["/paths/~1c/get/responses/200/content/application~1json/schema", "other.json#/Owner", "outside"]],
+    "dialects": []
+  }
+}

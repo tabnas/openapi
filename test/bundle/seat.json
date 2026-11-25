@@ -1,0 +1,51 @@
+{
+  "note": "A schema resource has to be where the bundle reads a schema, or its identifier is not read. This one is in a member that its document's root, a schema, does not have a meaning for, so the copy of it in that schema is data there. It is brought again by itself, among the schemas, and the reference by its identifier finds that one. The copy that is data is listed: the documents read it as a schema.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Whole": { "$ref": "defs.json" }, "User": { "$ref": "user.json" } } }
+  },
+  "documents": {
+    "defs.json": {
+      "type": "object",
+      "things": { "item": { "$id": "https://schemas.example.com/item", "type": "string" } }
+    },
+    "user.json": {
+      "$id": "https://schemas.example.com/user",
+      "type": "object",
+      "properties": { "it": { "$ref": "https://example.com/api/defs.json#/things/item" } }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Whole": { "$ref": "#/components/schemas/defs" },
+          "User": { "$ref": "#/components/schemas/user" },
+          "defs": {
+            "type": "object",
+            "things": { "item": { "$id": "https://schemas.example.com/item", "type": "string" } }
+          },
+          "user": {
+            "$id": "https://schemas.example.com/user",
+            "type": "object",
+            "properties": { "it": { "$ref": "https://schemas.example.com/item" } }
+          },
+          "item": { "$id": "https://schemas.example.com/item", "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/defs", "https://example.com/api/defs.json", "", "component"],
+      ["/components/schemas/user", "https://example.com/api/user.json", "", "component"],
+      ["/components/schemas/item", "https://example.com/api/defs.json", "/things/item", "component"]
+    ],
+    "left": [["/components/schemas/defs/things/item", "https://example.com/api/defs.json#/things/item", "type"]],
+    "dialects": []
+  }
+}

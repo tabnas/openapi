@@ -1092,13 +1092,92 @@ what the code does.
     which are its operations and its code samples. It takes 3.4
     seconds.
   - Of 20,000 generated sets of documents, every bundle agrees, and
-    every bundle bundled again is itself.
+    every bundle bundled again is itself. Two more generators came
+    after, and what they found is below.
 - **What a bundle does not keep**, each said in the reference: it is
   read by the description's version; a schema that is brought in gains
   a component's name, which a discriminator may then list; an
   `operationId` is looked for in the bundle alone; a server's `url`
   with variables stands as written; and a `$dynamicRef` in content
   that moved is checked, not followed.
+- **An independent review of `bundle`**, asked for before the work was
+  put up, wrote a generator of its own and probes by hand. Its sets
+  are worse than a description is: a schema named where a Path Item
+  is, two schemas with one identifier, references to references that
+  name nothing, pointers read on through references. Under a verdict
+  that counts every disagreement and every bundle that is not its own
+  bundle, about 7 sets in 1,000 failed, and about 40 in 1,000 under
+  `slots: 'all'`. What it found, each now a case of `test/bundle/`:
+  - A target was given the name that a reference to nothing hoped
+    for, and was then what that reference named. Nothing is written
+    where a reference, a mapping value or a security requirement
+    names a place and finds none, and a name that was given before
+    the hope was met makes the bundle be written again.
+  - A value that is no map, where the components of a type go, was
+    written over. Nothing is put there, nor where that place is a
+    reference.
+  - A target was written in the place of a reference whose own
+    members are read, and in a place that reads another type.
+  - A schema resource in plain content was copied to two places, so
+    that the bundle declared its identifier twice. Of two schemas of
+    the documents that declare one identifier, each was taken for the
+    resource.
+  - A part that a reference had typed was read in the bundle as data,
+    or as another type, with nothing said. That is the `type` row of
+    `left`.
+  - The steps of each round of typing by a mapping value were counted
+    from nothing, so `maxSteps` was no bound on them.
+  - In the index, a chain of 20,000 references that each type the next
+    took 5.2 seconds, since each round looked for the pointers that
+    name nothing among all the sites. Those are kept apart, and it
+    takes 0.3.
+  - The check passed what it should not have: a string that differed
+    at a member a bundle never writes, and a locator that was found in
+    the documents and named something else in the bundle. It compares
+    a string only where a bundle writes one again, and a row of
+    `connections` now says where a locator lands when its pointer is
+    read on through a reference (`landing`).
+- **A third generator** then wrote what the second never did: a
+  reference that lands on a value the model reads as plain JSON, a
+  schema's `default` or `example`; a description of another version
+  among the documents; and a reference where the model puts an
+  operation. 2 sets in 1,000 failed, and 10 in 1,000 under
+  `slots: 'all'`. What it found, each in `test/bundle/` or
+  `test/bundle-held/`:
+  - A description of 3.0 was given schema resources, which nothing in
+    it reads, so the fragments in them named nothing. A description
+    before 3.1 has none.
+  - A reference that landed on plain JSON had its target written
+    among the schemas, where a `$ref` in an example is a reference.
+    The schema that the value is in is brought, and the value named
+    there.
+  - A part that a reference typed, where the schema above it reads
+    plain JSON, was named in that schema, where no reference types
+    it. It is brought again by itself.
+  - Under `slots: 'all'`, content with no type was written among a
+    resource's definitions, or named from a place that has a type,
+    and so gained one that the documents did not give it.
+  - A reference of the description's own, read on through a reference
+    that the bundle could not keep, named nothing in the bundle. It is
+    written by where it lands.
+  - A member named `$id` in a part that is no schema was read as an
+    identifier once a schema's reference landed on the part first.
+  - A reference that was left as written found something in the
+    bundle that the bundle of the bundle then acted on.
+  - Three were the check's: it did not know the base of a resource
+    that was brought only in part, and it did not go into a part
+    listed under `type` that it had come to first by a reference.
+- **Where that stands**, on the build that is put up. The second and
+  the third generator are each clean at 100,000 sets under the default
+  slots and 100,000 under `slots: 'all'`, and the first at 26,000:
+  every bundle agrees with its documents, and is its own bundle unless
+  it lists a part under `type`. About 2 sets in 1,000 are refused for
+  a bound. The 925 descriptions of the corpus agree as before, with
+  the figures above. The lesson is the one the second generator
+  already taught: a generator finds what it writes.
+  The third was clean of what the second found before it was run, and
+  failed at once on what it added. So a new kind of content is a
+  reason to write it into a generator.
 
 **Since acceptance**, as T4 was begun:
 

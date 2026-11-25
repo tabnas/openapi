@@ -1,0 +1,55 @@
+{
+  "note": "Plain content may be written in more places than one: among the components, and in the `$defs` of each schema resource that names it. A schema resource in it is written once, where the bundle has it, and a reference stands for it in every other copy, so that the bundle declares its identifier once.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Outer": { "$ref": "a.json#/Outer" },
+        "Mine": {
+          "$id": "https://schemas.example.com/mine",
+          "type": "object",
+          "properties": { "outer": { "$ref": "https://example.com/api/a.json#/Outer" } }
+        }
+      }
+    }
+  },
+  "documents": {
+    "a.json": {
+      "Outer": {
+        "type": "object",
+        "properties": { "inner": { "$id": "https://schemas.example.com/inner", "type": "string" } }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Outer": { "$ref": "#/components/schemas/Outer_2" },
+          "Mine": {
+            "$id": "https://schemas.example.com/mine",
+            "type": "object",
+            "properties": { "outer": { "$ref": "#/$defs/Outer" } },
+            "$defs": { "Outer": { "type": "object", "properties": { "inner": { "$ref": "inner" } } } }
+          },
+          "Outer_2": {
+            "type": "object",
+            "properties": { "inner": { "$id": "https://schemas.example.com/inner", "type": "string" } }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Outer_2", "https://example.com/api/a.json", "/Outer", "component"],
+      ["/components/schemas/Mine/$defs/Outer", "https://example.com/api/a.json", "/Outer", "defs"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

@@ -79,3 +79,44 @@ describe('bundle, from test/bundle', () => {
     })
   }
 })
+
+// The fixtures of test/bundle-held/: the sets of documents that a
+// generator of ts/test/bundle.test.ts failed on, each cut down to what
+// fails, in a file for each thing that was wrong. A file is a note, the
+// URI the entry was retrieved from, and the sets, each an entry, its
+// documents and its options if any. No set says what `bundle` gives:
+// each is held to what every bundle is held to. It resolves to what the
+// documents resolve to, and it is its own bundle unless it lists a part
+// whose type it could not keep.
+describe('bundle, from test/bundle-held', () => {
+  const HELD = join(ROOT, 'test', 'bundle-held')
+  const files = readdirSync(HELD)
+    .filter((f) => f.endsWith('.json'))
+    .sort()
+
+  test('the folder holds sets, and nothing else', () => {
+    assert.ok(0 < files.length, 'test/bundle-held has no file')
+    assert.deepEqual(readdirSync(HELD).sort(), files)
+  })
+
+  type Held = { note: string; retrievalUri: string; sets: { entry: unknown; documents: Record<string, unknown>; options?: Record<string, unknown> }[] }
+  for (const file of files) {
+    const c: Held = JSON.parse(readFileSync(join(HELD, file), 'utf8'))
+    test(`${file}: ${c.note.slice(0, 70)}`, async () => {
+      assert.ok(0 < c.sets.length, 'no set')
+      for (const [n, set] of c.sets.entries()) {
+        const raw = O.parse(JSON.stringify(set.entry))
+        const options = { retrievalUri: c.retrievalUri, documents: set.documents, ...(set.options ?? {}) }
+        const before = JSON.stringify([raw, set.documents])
+        const held = await agree(O, U, raw, options)
+        assert.ok(held.ok, `set ${n}: ${held.why.join('; ')}`)
+        assert.equal(JSON.stringify([raw, set.documents]), before, `set ${n}: a document was changed`)
+        if (held.bundle.left.some((l: any) => 'type' === l.why)) continue
+        const { documents: _given, ...alone } = options
+        const again = O.bundle(held.bundle.tree, alone)
+        assert.equal(JSON.stringify(again.tree), JSON.stringify(held.bundle.tree), `set ${n}`)
+        assert.deepEqual(again.embedded, [], `set ${n}`)
+      }
+    })
+  }
+})

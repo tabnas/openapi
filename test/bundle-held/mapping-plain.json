@@ -1,0 +1,20 @@
+{
+  "note": "A mapping value names a value that the model reads as plain JSON, through a reference of the description. It was left as written, and the bundle of the bundle wrote it as the pointer. It names the value in the schema above it, which is brought.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "X": { "discriminator": { "mapping": { "m": "openapi.json#/components/schemas/Z/default" } } },
+            "Z": { "$ref": "d.json#/components/schemas/X" }
+          }
+        }
+      },
+      "documents": { "d.json": { "components": { "schemas": { "X": { "default": {} } } } } }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "note": "Under `slots: 'all'` content that nothing gave a type is written in the place of a reference in data, and stays data there. A second reference to a part of it was one in data too, and is written where the bundle reads a response. It would make the part a response where it is written as data, so the part is brought again, among the responses, and the copy that is data is still data.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "options": { "slots": "all" },
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "x-notes": { "$ref": "kept.json#/Kept" },
+    "paths": { "/a": { "get": { "$ref": "op.json" } } }
+  },
+  "documents": {
+    "op.json": { "responses": { "200": { "$ref": "kept.json#/Kept/answer" } } },
+    "kept.json": { "Kept": { "answer": { "description": "ok" } } }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "x-notes": { "answer": { "description": "ok" } },
+      "paths": { "/a": { "get": { "responses": { "200": { "$ref": "#/components/responses/answer" } } } } },
+      "components": { "responses": { "answer": { "description": "ok" } } }
+    },
+    "embedded": [
+      ["/x-notes", "https://example.com/api/kept.json", "/Kept", "inline"],
+      ["/components/responses/answer", "https://example.com/api/kept.json", "/Kept/answer", "component"],
+      ["/paths/~1a/get", "https://example.com/api/op.json", "", "inline"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

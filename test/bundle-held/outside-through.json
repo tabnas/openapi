@@ -1,0 +1,167 @@
+{
+  "note": "Under slots: 'all' a reference inside a schema resource names, through a reference of the description, a target that the resource's definitions have no place for. In the bundle a reference stands where the target was, and the bundle of the bundle copied that in. The reference names the target in its own document.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {
+          "/p": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": {
+                          "q": {
+                            "properties": {
+                              "q": { "properties": { "r": { "$ref": "openapi.json#/components/schemas/Y" } } }
+                            },
+                            "$id": "pet.s"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/q": { "$ref": "sub/b.json#/X" }
+        },
+        "components": { "schemas": { "Y": { "$ref": "openapi.json#/x-d/X" } } },
+        "x-d": { "$ref": "sub/b.json" }
+      },
+      "documents": { "sub/b.json": { "X": {} } },
+      "options": { "slots": "all" }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {
+          "/p": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": {
+                          "q": {
+                            "properties": {
+                              "q": { "discriminator": { "mapping": { "m": "openapi.json#/components/schemas/Y" } } }
+                            },
+                            "$id": "Y.s"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "components": {
+          "schemas": {
+            "Y": {
+              "properties": { "q": { "properties": { "q": { "properties": { "r": { "$ref": "#/x-d/Y" } } } } } }
+            }
+          }
+        },
+        "x-d": { "$ref": "c.json" }
+      },
+      "documents": {
+        "c.json": { "Y": { "$ref": "d.json#/paths/~1p/get" } },
+        "d.json": { "openapi": "3.0.3", "paths": { "/p": { "get": {} } } }
+      },
+      "options": { "slots": "all" }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {
+          "/p": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": {
+                          "q": {
+                            "properties": {
+                              "q": { "properties": { "r": { "$ref": "openapi.json#/components/schemas/Y" } } }
+                            },
+                            "$id": "pet.s"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/q": { "$ref": "sub/b.json#/X" }
+        },
+        "components": {
+          "schemas": { "Y": { "$ref": "openapi.json#/x-d/X" }, "Z": { "example": { "$ref": "c.json#/A" } } }
+        },
+        "x-d": { "$ref": "sub/b.json" }
+      },
+      "documents": {
+        "sub/b.json": { "X": { "$ref": "b.json#/pet" }, "pet": { "$ref": "../c.json#/Z/properties/q/default" } },
+        "c.json": {
+          "A": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": {
+                          "q": { "properties": { "q": { "properties": { "q": { "$ref": "sub/b.json" } } } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": { "slots": "all" }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": { "schemas": { "Y": { "$ref": "a.json#/A" }, "Z": { "$ref": "sub/b.json#/Z/default/k" } } },
+        "x-d": { "$ref": "c.json" }
+      },
+      "documents": {
+        "a.json": { "A": { "$id": "A.s", "default": { "k": { "$ref": "openapi.json#/x-d/A" } } } },
+        "sub/b.json": { "Z": { "default": { "k": { "$ref": "../d.json#/paths/~1p/get" } } } },
+        "c.json": {
+          "Y": { "properties": { "q": { "properties": { "q": { "$ref": "openapi.json#/components/schemas/Z" } } } } },
+          "A": {
+            "get": {
+              "responses": {
+                "200": { "content": { "a/b": { "schema": { "properties": { "r": { "$ref": "c.json" } } } } } }
+              }
+            }
+          }
+        },
+        "d.json": { "openapi": "3.0.3", "paths": { "/p": { "get": {} } } }
+      },
+      "options": { "slots": "all" }
+    }
+  ]
+}

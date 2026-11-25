@@ -562,7 +562,9 @@ type Front = {
   index: ReturnType<typeof buildIndex>
 }
 
-function frontOf(raw: any, o: Settled, who = 'resolve'): Front {
+// `count` carries the steps of an earlier front on, where one run builds
+// more than one: the bound and the check are then those of the run.
+function frontOf(raw: any, o: Settled, who = 'resolve', count: { steps: number } = { steps: 0 }): Front {
   const detected = readVersion(raw).version
   const mv: ModelVersion =
     'auto' !== o.version ? o.version : 'unknown' === detected ? '3.2' : (detected as ModelVersion)
@@ -636,7 +638,6 @@ function frontOf(raw: any, o: Settled, who = 'resolve'): Front {
   const maxSteps = o.maxSteps ?? Infinity
   const onCheck = o.onCheck
   const checkEveryN = undefined === onCheck ? 0 : (o.checkEveryN ?? 1000)
-  const count = { steps: 0 }
   const counting = Infinity !== maxSteps || undefined !== onCheck
   const tick = () => {
     const steps = ++count.steps

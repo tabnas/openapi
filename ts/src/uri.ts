@@ -13,6 +13,14 @@ function pointer(path: readonly (string | number)[]): string {
   return out
 }
 
+// Whether an error is the stack running out. A pattern that is compiled
+// in the last frames says so as a syntax error of its own.
+function ranOut(err: unknown): boolean {
+  return (
+    (err instanceof RangeError || err instanceof SyntaxError) && /call stack|stack overflow/i.test(String(err.message))
+  )
+}
+
 // A URI fragment as JSON Pointer segments: percent-decoded whole first,
 // then split, then `~1` and `~0` (RFC 6901 section 6). Null when it is not
 // a well-formed pointer: bad percent-encoding, or a `~` not followed by 0
@@ -262,6 +270,7 @@ export {
   own,
   pointer,
   pointerParts,
+  ranOut,
   relativeTo,
   resolveUri,
   stepInto,

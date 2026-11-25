@@ -7,7 +7,8 @@
 // optional: `select`, a path into the resolved tree whose value is held
 // to `expected` in place of the whole tree; `connections`, the
 // connections report, one `kind at -> target` line each (`!why` for a
-// target not found, then any flags), with the name after `at` for the
+// target not found, then any flags, and `landing=` where a pointer is
+// read on through a reference), with the name after `at` for the
 // kinds that read a template or an expression; `provenance`, one
 // `at status -> landing` line for each reference, in the order of the
 // report (`-` for one that lands nowhere, then `through=`, `uri=`,
@@ -50,7 +51,7 @@ const NAMED = new Set(['serverVariable', 'template', 'pathClash', 'pathParameter
 // One connection as a fixture writes it.
 function line(c: any): string {
   let out = `${c.kind} ${c.at}${NAMED.has(c.kind) ? ' ' + c.name : ''} -> ${c.found ? c.target : '!' + (c.why ?? 'missing')}`
-  for (const flag of ['via', 'type', 'ambiguous', 'cycle', 'anchor', 'from']) {
+  for (const flag of ['via', 'type', 'ambiguous', 'cycle', 'anchor', 'from', 'landing', 'landingDoc']) {
     if (undefined !== c[flag]) out += ` ${flag}=${c[flag]}`
   }
   for (const list of ['targets', 'fields', 'routes']) {

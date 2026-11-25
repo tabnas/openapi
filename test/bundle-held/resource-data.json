@@ -1,0 +1,44 @@
+{
+  "note": "Under slots: 'all' a reference in data inside a schema resource names content that nothing gave a type. Among the resource's `$defs` it was read as a schema, a reference in it gave what it landed on a type, and a mapping value there was read that the documents left as data. It is written in the place of the reference.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Y": {
+              "properties": {
+                "q": { "properties": { "q": { "properties": { "r": { "$ref": "sub/b.json#/pet" } } } }, "$id": "Z.s" }
+              }
+            }
+          }
+        }
+      },
+      "documents": {
+        "a.json": {
+          "X": {
+            "properties": {
+              "q": {
+                "properties": {
+                  "q": { "discriminator": { "mapping": { "m": "openapi.json#/components/schemas/Y" } } }
+                }
+              }
+            }
+          },
+          "Z": { "$ref": "c.json#/A" },
+          "A": { "$ref": "a.json" }
+        },
+        "sub/b.json": {
+          "pet": {
+            "properties": { "q": { "properties": { "q": { "properties": { "q": { "$ref": "../a.json#/A" } } } } } }
+          }
+        },
+        "c.json": { "A": { "properties": { "q": { "$ref": "a.json#/X/properties/q" } } } }
+      },
+      "options": { "slots": "all" }
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "note": "Two schemas of the documents declare one identifier. The index gives it to the last of them, and reads every reference by it in that one, so the other is no schema resource to a bundle: its identifier is left out, and listed, and what is in it is read against the base it is in.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "First": { "$id": "https://schemas.example.com/thing", "type": "string" },
+        "Second": { "$ref": "b.json#/Holder" },
+        "ByName": { "$ref": "https://schemas.example.com/thing" }
+      }
+    }
+  },
+  "documents": {
+    "b.json": {
+      "Holder": {
+        "type": "object",
+        "properties": { "thing": { "$id": "https://schemas.example.com/thing", "type": "number" } }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "First": { "type": "string" },
+          "Second": { "$ref": "#/components/schemas/Holder" },
+          "ByName": { "$ref": "https://schemas.example.com/thing" },
+          "Holder": {
+            "type": "object",
+            "properties": { "thing": { "$id": "https://schemas.example.com/thing", "type": "number" } }
+          }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/Holder", "https://example.com/api/b.json", "/Holder", "component"]],
+    "left": [["/components/schemas/First/$id", "https://schemas.example.com/thing", "id"]],
+    "dialects": []
+  }
+}

@@ -45,6 +45,7 @@ import {
   own,
   pointer,
   pointerParts,
+  ranOut,
   resolveUri,
   stepInto,
   withoutFragment,
@@ -170,6 +171,10 @@ type Landing = {
   node?: any
   loc?: Loc
   through?: string[]
+  // Where a pointer that names nothing stopped: the document and the
+  // place it reached, and the steps it still had to take from there. A
+  // pointer that stops at a reference that itself names nothing has none.
+  miss?: { doc: DocFacts; path: Path; rest: Path }
 }
 
 // One site: a fact about the document, whatever resolving makes of it.
@@ -776,6 +781,12 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
   // ---- landings: a pointer read on the document as written ----
 
   const busy = new Set<SiteFacts>()
+  // The sites whose pointer was read and names nothing. A new site may be
+  // one that such a pointer stopped at for want of a step, so each is
+  // read again after a round, and each reading is counted. They are kept
+  // apart so that a round does not have to look at every site for them:
+  // a chain of references that each type the next has a round for each.
+  const lost = new Set<SiteFacts>()
 
   // The member of a location by name, where it is a map or a list. A
   // location with many such members keeps them by name from the first
@@ -823,7 +834,11 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
       // The step is missing here. The root is where a walk starts, and is
       // not on its way.
       const here = undefined !== loc && 0 < loc.depth ? loc.site : undefined
-      if (undefined === here || undefined !== here.why) return undefined === through ? NO_LANDING : { found: false, through }
+      if (undefined === here) {
+        const miss = { doc, path: undefined === moved ? segs.slice(0, i) : moved, rest: segs.slice(i) }
+        return undefined === through ? { found: false, miss } : { found: false, through, miss }
+      }
+      if (undefined !== here.why) return undefined === through ? NO_LANDING : { found: false, through }
       const key = here.loc.ord * (segs.length + 1) + i
       if (undefined === seen) seen = new Set()
       if (seen.has(key)) return { found: false, loop: true, through }
@@ -858,6 +873,8 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     } finally {
       busy.delete(row)
     }
+    if (out.found) lost.delete(row)
+    else lost.add(row)
     return (row.landing = out)
   }
 
@@ -944,9 +961,10 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     if (everyLanding) redo = sites
     else {
       // A new site may be one that a pointer stopped at for want of a
-      // step: every landing not found is read again.
+      // step: every pointer that was read and names nothing is read
+      // again. A site with no pointer to read names what it named.
       redo = [...fresh]
-      for (const row of sites) if (!fresh.has(row) && undefined !== row.landing && !row.landing.found) redo.push(row)
+      for (const row of lost) if (!fresh.has(row)) redo.push(row)
     }
     for (const row of redo) row.landing = undefined
     // Under `refs: 'pointer'` a site is read by the fold, as apidef reads
@@ -969,7 +987,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
       }
     }
   } catch (err: any) {
-    if (err instanceof RangeError && /call stack/i.test(String(err.message))) {
+    if (ranOut(err)) {
       refuse('openapi_depth', 'the stack ran out before maxDepth (' + maxDepth + ') was reached; lower maxDepth', '')
     }
     throw err

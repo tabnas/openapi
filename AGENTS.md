@@ -212,7 +212,7 @@ default that a shared row pins changes until porting starts.
 | T2b | reading that only `@tabnas/yaml` can repair | built in the yaml repository as tabnas/yaml#151, in every implementation there, and released as `@tabnas/yaml` 0.5.33. `make` passes the yaml option `schema: 'core'` under `reading: 'spec'`, and checks that the grammar reads it. Swept on the released packages: under `reading: 'spec'` the corpus ledger was 5 rows where it had been 190, three of them accepted and two the descriptions refused for their size, and under the base reading 235 where it had been 254. Decision 34 reads those two: under `reading: 'spec'` the ledger is 3 rows, all accepted and none open, and every one of the corpus's 5,182 descriptions parses |
 | T3 | the site index, and `resolve` on it | all five items built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. Item 3 is the dialects: a schema of 3.1 or 3.2 is read by the dialect it declares, draft-04 to 2020-12, an unknown one as 2020-12 and reported in `dialects`; URIs are compared in their normal form; and the vendored schemas are the latest published, with the model held to the 3.1.2 and 3.2.1 texts. W4 and W5 are repaired. Items 2 to 5 need what tabnas/expr#117 added to the fold, which `expr` 0.6.4 released: with it `resolve` runs on an install from the registry, and the corpus baselines are swept on the released packages. Item 4 is the three reports the audit found missing, each read from the index and none changing the resolved tree: the `implicitMapping` rows of `connections`, `conflict` on a `provenance` row whose reference lands on a type it does not expect, and `urls`, the URLs a description gives with what a relative one is relative to. Item 5 is the fixtures: every probe of the audit has a row under its number, in `test/resolve/probes.tsv` or `test/pending/parse-probes.tsv`, and `ts/test/probes.test.ts` holds the two files to the audit's list. With it, the last leniency of Decision 25 that the object model owed: a 3.0 component is read under any name, as 3.1 and 3.2 read it |
 | T4 | several documents | done, on the maintainer's word of 23 November 2026, with the bounds of Decision 36 as the maintainer took them on 24 November: the index over a set of documents and `resolve` on it, given the documents in a table (items 1 and 2); a document with no version typed by the references into it (item 3); `resolveAll`, which loads what a description names in rounds, with the two loaders of Decision 31, one for files under a directory and one for HTTP from listed hosts (item 4); the `connections` report across documents (item 5); and the specification's five examples as the first cases of `test/docs/` (item 6). Each description of the Azure sample, Redocly's starter and DigitalOcean's source under `slots: 'all'` resolves from its own file with nothing left unresolved, which `tools/corpus/documents.cjs` measures |
-| T5 | beyond references | begun on the maintainer's word of 24 November 2026, to the scope of Decision 32. Items 1 and 2 are built: the operation as the specification reads it, as the option `operations` of `resolve`, with the `ignored` report; and `readExpression`, `readTemplate` and `evaluateExpression`, with what a template or an expression names checked in `connections`. On the corpus the `ignored` report equals apidef's own `dropIgnoredHeaders` on every description, 5,238 of them, and apidef's branch drops that function. Item 3 is built too: `bundle` and `bundleAll` write a description in several documents as one, with every reference still a reference. Each bundle is held to its documents: it has to resolve to what they resolve to. That holds for the 925 descriptions of the corpus's four sources in several documents, DigitalOcean's 3,622 files among them, and for 20,000 generated sets of documents |
+| T5 | beyond references | begun on the maintainer's word of 24 November 2026, to the scope of Decision 32. Items 1 and 2 are built: the operation as the specification reads it, as the option `operations` of `resolve`, with the `ignored` report; and `readExpression`, `readTemplate` and `evaluateExpression`, with what a template or an expression names checked in `connections`. On the corpus the `ignored` report equals apidef's own `dropIgnoredHeaders` on every description, 5,238 of them, and apidef's branch drops that function. Item 3 is built too: `bundle` and `bundleAll` write a description in several documents as one, with every reference still a reference. Each bundle is held to its documents: it has to resolve to what they resolve to. That holds for the 925 descriptions of the corpus's four sources in several documents, DigitalOcean's 3,622 files among them, and for the sets of documents that three generators write: the two that came after an independent review are each clean at 100,000 sets under the default slots and 100,000 under `slots: 'all'` |
 | T6 | finish, then publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
@@ -418,13 +418,20 @@ every fact about the document:
   written (Decision 27). Where a step is missing at a site, the walk
   goes on in what that site names, and the landing lists that site in
   `through`. A pointer that comes back to a site it is being read
-  through is a loop.
+  through is a loop. A pointer that names nothing says where it
+  stopped (`miss`): the place it reached, and the steps it still had
+  to take.
 - The regions the model gives no state, typed by the first reference to
   land on each (Decision 28), in rounds: a region's own sites are of
   the next round. A round carries the index forward. It surveys only
   what the new region changes, and reads again only the sites whose
   facts moved. `incremental: false` works every round out from nothing,
-  and `ts/test/site-index.test.ts` holds the two to each other.
+  and `ts/test/site-index.test.ts` holds the two to each other. A
+  round also reads again each pointer that names nothing, since a new
+  site may be where it stopped. Those sites are kept apart (`lost`):
+  the round used to look for them among all the sites, uncounted, and
+  a chain of 20,000 references that each type the next took five
+  seconds, where it now takes a third of one.
 - A conflict, `index.conflict(site)`: the type of a landing the model
   types by where it is, when that is not the type its reference
   expects. `typeOf` reads a type off a state: an object's name,
@@ -808,14 +815,78 @@ documents with `gather`, which is the rounds of `resolveAll`.
   there. `inline` writes a target in the place of its reference where
   the version has no component for its type, and that place is then
   the target's for every later reference, unless the reference lays
-  fields of its own over it.
+  fields of its own over it. The fields they are laid over are not
+  copied (`skip`), so nothing in them gets a place.
+- **Nothing is put over what is there, and nothing is made that a
+  reference hopes for.** `holderOf` is the one place that says whether
+  a map takes targets: not where the description has a value that is
+  no map, or a reference, in that place, and not where a reference
+  names the place and finds nothing. `unique` passes over a name that
+  a reference, a mapping value or a security requirement hopes for
+  (`wished`, from the `miss` of a landing that was not found). A hope
+  may be found after its name was given, so `bundleOn` writes again
+  with every hope of the last writing, `WRITES` times at most. The
+  queue never overwrites: a name that is there is an `Error`.
+- **A target is written in a place only where that keeps its
+  meaning.** `from.inline` is false where the members beside the
+  reference are read, and `refer` leaves a target that has a type out
+  of a place that reads another (`outside`). The `around` pass names
+  it where a later reference holds it.
 - **A fragment is read in a space.** The description's own content is
   one `Space`, and each schema resource is another, since a fragment
   alone names a place in the resource it is in. `settledAt` says that a
   location is where it was written, in its own space, and a reference
-  there that is a fragment alone stands as written. A resource is
-  brought whole, with its `$id`. What a reference inside one names
-  outside it goes into the resource's own `$defs`.
+  there that is a fragment alone stands as written, where it lands in
+  its own document. One that is read on through a reference into
+  another document is written by where it lands: the bundle may not be
+  able to keep the reference on the way. A resource is brought whole,
+  with its `$id`. What a reference inside one names outside it goes
+  into the resource's own `$defs`. A description before 3.1 has no
+  resources (`isResource` asks `hasIds` of the description's version):
+  nothing in it reads an identifier, so a schema resource of a 3.1
+  document is plain content there.
+- **Data stays data, and plain JSON stays plain JSON.** `Dest.plain`
+  says that the model names a place and reads plain JSON there, an
+  `example` or a `default`, which no reference types; a place the model
+  says nothing of is typed by the first reference to land on it. Three
+  rules follow, and `refer` holds each in the description's own space
+  and in a resource's. A landing that the documents read as plain JSON
+  (`known` is `data`) is named in the object above it that has a type
+  (`typedAbove`), which is brought. A part that a reference typed in a
+  place the object above it reads as plain JSON (`isPlainPart`, which
+  asks the documents alone) is put `again` by itself, where its type is
+  read. And content that nothing typed is written in the place of a
+  reference in data, in a resource too, and is put `again` where a
+  reference that has a type from its new place alone (`from.placed`)
+  lands on it.
+- **A reference that is left has a text that the bundle of the bundle
+  leaves.** `leftAs` writes one that names the description by its URI
+  as the fragment alone, as `refer` writes one that is found there.
+  `outsideAs` writes one in a resource to name its target's own
+  document, where it named the target through a reference of the
+  description: the bundle has a reference in that place, which would
+  be taken for the target.
+- **An identifier is declared once, where it is read.** `owns` asks
+  the index which of two schemas has an identifier, and the other is
+  plain content. `below` writes a reference for a resource in plain
+  content that moved, unless the place is the resource's seat, since
+  plain content may be copied to more places than one. `seated` is
+  where the root space has a location in a place that reads it by
+  position (`destAt`), and a resource that is only in a part read as
+  data is put again by itself. The names of a resource's `$defs` are
+  kept by the place of each copy, so that two copies are given the
+  same ones.
+- **What a reference typed is read as it was only if one lands on it.**
+  A part of a target with a type from a reference, in a place the
+  bundle reads as data, is an `edge`. It is read in the bundle if a
+  reference of its type lands on it (`landings`), from a place that is
+  itself read, and listed in `left` as `type` if not, or if one of
+  another type lands on it or in it, or if its place has a type of its
+  own or is plain JSON. Under `slots: 'all'` such a part is hoisted
+  where a reference from its space can name it. An identifier in a
+  part that is no schema is a plain member, and is left out where a
+  reference might read the part as one (`Dest.edge`, and `live`): read
+  as an identifier it would take a resource's place.
 - **What moves is read again, three ways, and each has to be kept.**
   The base URI: `rebase` writes a relative URL, a reference that names
   nothing and a relative `$id` to name what they named. The schema
@@ -836,7 +907,11 @@ documents with `gather`, which is the rounds of `resolveAll`.
   as a schema with references in it that nothing has read. So
   `bundle` builds the index again with a reference to each such
   schema among the entry's components (`withTypers`), at most
-  `MAPPING_ROUNDS` times, and those components are not written.
+  `MAPPING_ROUNDS` times, and those components are not written. The
+  steps of every round are counted as one run. The result says which
+  schemas it told the index of under the symbol `TOLD`, for the check
+  alone, which reads the documents with the same said. It goes when
+  the index types what a mapping value names (the plan's T6).
 - **What waits for every place.** An `operationRef` and a reference
   left to evaluation are read after the queue is empty (`later`), and
   so is a reference to a target that was being written around it
@@ -855,7 +930,9 @@ documents with `gather`, which is the rounds of `resolveAll`.
 resolve to**, and [`tools/corpus/bundle-agree.cjs`](tools/corpus/bundle-agree.cjs)
 makes it: it resolves the documents, bundles them, resolves the bundle
 and compares the two trees, allowing only what the bundle's own reports
-account for. Every case of `test/bundle/` and `test/docs/` is held to
+account for. A reference and a locator are judged by where they land,
+which a text does not show where a pointer is read on through a
+reference. Every case of `test/bundle/` and `test/docs/` is held to
 it, and so are the generated sets of `ts/test/bundle.test.ts` and the
 corpus's descriptions in several documents. Run a change to `bundle`
 through the generated sets before trusting a case's expected tree. On
@@ -863,6 +940,28 @@ the first run they found seven defects that no case written by hand
 had: a place registered under fields that were laid over it, a schema
 that only a mapping value names, and a reference to a reference that
 names nothing among them.
+
+An independent review then wrote a generator of its own, of worse
+sets than a description is: a schema named where a Path Item is, two
+schemas with one identifier, pointers read through references. It
+found what the first one could not: a target given the name that a
+dangling reference hoped for, a value that was no map written over, a
+resource copied to two places, and a part read as another type than
+the documents gave it. That generator is in the suite too, and
+`ts/test/bundle.test.ts` holds the check itself to failing a bundle
+that is wrong. A change to the check is run against both.
+
+A third generator is the second with three things it never wrote: a
+reference that lands on plain JSON, a description of another version
+among the documents, and a reference where the model puts an
+operation. It failed 2 sets in 1,000 at first, and 10 in 1,000 under
+`slots: 'all'`: a 3.0 description given schema resources, plain JSON
+written among the schemas, and content that gained a type in the
+bundle. **A generator finds what it writes.** Each of the three was
+clean at 100,000 sets before the next was written, so a new kind of
+content in a description is a reason to write it into a generator, not
+to trust the ones there. Each set that one of them failed on is in
+`test/bundle-held/`, cut down, by what was wrong.
 
 A bundle does not keep everything, and
 [the reference](ts/doc/reference.md) lists what it does not: the
@@ -975,7 +1074,7 @@ keeps cycles.
 | [`rs/`](rs/) | Rust port, crate `tabnas-openapi`, library `tabnas_openapi`: `parse(&ParseOptions)`, `Fast`, `version`, `openapi` / `plugin()`, `make` / `make_with(&MakeOptions)`, `OpenApiOptions`, `VERSION`, `OpenApiError`. `rs/AGENTS.md` has the crate's own notes, including how raw mode works around the engine's Rust API. The README's examples run as doctests. |
 | [`test/spec/`](test/spec/) | Shared `.tsv` fixtures. All three runners discover and run every file, so a row added here covers TypeScript, Go and Rust together. See [`test/AGENTS.md`](test/AGENTS.md). |
 | [`test/petstore/`](test/petstore/) | One OpenAPI 3.1 description in YAML and the same in JSON. Every runtime's suite reads both and holds them to `JSON.parse` of the JSON form. |
-| [`test/resolve/`](test/resolve/), [`test/model/`](test/model/), [`test/pending/`](test/pending/), [`test/docs/`](test/docs/), [`test/expression/`](test/expression/), [`test/bundle/`](test/bundle/) | Fixtures only the TypeScript suite runs: the resolver's, the object model's, parse fixtures for what only the TypeScript `parse` gives yet, descriptions in several documents, a folder each, the readers of runtime expressions and templates, and bundles, a file each. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
+| [`test/resolve/`](test/resolve/), [`test/model/`](test/model/), [`test/pending/`](test/pending/), [`test/docs/`](test/docs/), [`test/expression/`](test/expression/), [`test/bundle/`](test/bundle/), [`test/bundle-held/`](test/bundle-held/) | Fixtures only the TypeScript suite runs: the resolver's, the object model's, parse fixtures for what only the TypeScript `parse` gives yet, descriptions in several documents, a folder each, the readers of runtime expressions and templates, bundles, a file each, and the sets of documents that a generator failed `bundle` on. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
 | [`test/corpus/`](test/corpus/) | `documents.json`, written by `tools/corpus/documents.cjs`: what resolving each description in several documents from its own file comes to, and what writing it as one document does. And the corpus sweep's record over real documents: `ledger.tsv`, one row per way a document fails, and `baseline.json`, the headline figures, both written by the sweep and never by hand; `ledger-spec.tsv` and `baseline-spec.json`, the same under `reading: 'spec'`; and `accepted.tsv`, written by hand, the ledger rows that are not this package's defect, each with its reason. |
 | [`docs/design/`](docs/design/) | The design notes, the plan, the prototypes, and [`apidef-swap/`](docs/design/apidef-swap/README.md): what apidef's side of T1 and T2 changes, and where it lives. Working documents, outside the prose gate. |
 | [`ts/doc/`](ts/doc/), [`go/doc/`](go/doc/) | Per-runtime Diátaxis docs: `tutorial.md`, `guide.md`, `reference.md`, `concepts.md`. Gated, with the READMEs, by [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). |
