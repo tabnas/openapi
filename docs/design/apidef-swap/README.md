@@ -130,6 +130,12 @@ say, and `resolve` now says it, in `ignored`. So the search goes:
 - `normalizeColonPathParams` says which paths it renamed, since it runs
   between the two and a row names a path as the tree had it.
 
+apidef's `main` has since gained a step of its own that follows, which
+keeps the first of a repeated parameter and records the rest. The branch
+runs it after the headers are dropped, as `main` does. A row names a
+parameter by its place in its list as written, so the rows are applied
+before any list is cut for another reason.
+
 What apidef does with them is still apidef's: that it drops them, that
 it reads eight methods, that it warns. The report also lists the ones
 under webhooks and callbacks, under `query` and `additionalOperations`,
@@ -179,7 +185,8 @@ checked out and its dependencies installed:
 
 ```bash
 git -C ../apidef fetch origin main
-node tools/apidef-gate.cjs ../apidef --base "$(git -C ../apidef merge-base HEAD origin/main)"
+node tools/apidef-gate.cjs ../apidef --base "$(git -C ../apidef merge-base HEAD origin/main)" \
+  --extra docs/design/apidef-swap/definitions/*.json
 ```
 
 The gate builds two worktrees of the apidef clone, one at the branch and
@@ -204,6 +211,23 @@ At apidef `ef123d3`, which adds the commit for the ignored headers,
 against `25f8d4b`, apidef 8.33.2, the gate passes the same: 2,691 of
 2,692 tests, one skipped as on apidef's `main`, and all 110 definitions
 byte-identical, the twelve of G2 among them.
+
+At apidef `10cdaed`, which merges apidef's `main` at `895450a`, the gate
+passes again: 2,700 of 2,701 tests, one skipped as on apidef's `main`,
+and all 110 definitions byte-identical. That `main` keeps the first of a
+repeated parameter and records the rest, in a step after the ignored
+headers are dropped, and the merge keeps the two in that order.
+
+None of the 110 definitions has a header that apidef ignores or a
+parameter that is repeated, so that comparison says nothing of either
+step. apidef's own fixture rows hold the two steps, in its suite, which
+the gate runs. [`definitions/`](definitions/) adds four descriptions
+for the comparison, which the command gives with `--extra`: ignored
+headers beside repeated parameters in one list, the same by reference,
+the same under a path that apidef renames, and repeats in a 2.0
+description, where no header is ignored. apidef drops 17 headers and
+20 repeats from them, and its output for each is byte-identical to that
+of its `main`.
 
 At apidef `3b24341`, where the change was made, the three diffs gave
 the same result on the suite and definitions apidef had then: 2,477 of

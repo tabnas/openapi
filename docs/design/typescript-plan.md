@@ -1210,6 +1210,21 @@ what the code does.
   variables that the code-quality check on the pull request found
   unread, so that the run recorded is the one made alone on the final
   build.
+- **apidef's `main` moved after that**, on 25 November, to 895450a. It
+  now keeps the first of a repeated parameter and records the rest, in
+  a step after the ignored headers are dropped. apidef's branch merges
+  it as 10cdaed, with the two steps in that order. The apidef gate
+  passes there against 895450a: 2,700 of 2,701 tests, one skipped as on
+  apidef's `main`, and 110 of 110 definitions byte-identical. None of
+  the 110 has a header that apidef ignores or a parameter that is
+  repeated, so four were written that have them, three with both and
+  one of 2.0, where no header is ignored. They are kept in
+  `docs/design/apidef-swap/definitions/` for the gate, and each is
+  byte-identical too. apidef's `main` changed one of the rows that
+  `test/resolve/apidef.tsv` copies, and the copy follows it. The
+  resolver in apidef's `main` is as it was: at 895450a it gives every
+  row of the two fixtures, as at 0f41ce1. This package's build did not
+  change, so the other gates stand as recorded.
 
 **Since acceptance**, as T4 was begun:
 

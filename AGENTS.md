@@ -1355,7 +1355,7 @@ names in `ts/package.json`:
 ```bash
 node tools/corpus/sweep.cjs --fetch    # needs the network, 1.1 GB of disk and about half an hour
 node tools/corpus/sweep.cjs --reading spec    # the same documents under the other reading, as long again
-node tools/apidef-gate.cjs ../apidef --base "$(git -C ../apidef merge-base HEAD origin/main)"    # with apidef's clone at the branch that holds its swap
+node tools/apidef-gate.cjs ../apidef --base "$(git -C ../apidef merge-base HEAD origin/main)" --extra docs/design/apidef-swap/definitions/*.json    # with apidef's clone at the branch that holds its swap
 node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows test/resolve/apidef.tsv test/resolve/apidef-extra.tsv
 ```
 
@@ -1407,11 +1407,17 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   the run proved nothing about it. The candidate is the branch, and
   `--base` names what it is compared with: the commit of apidef's `main`
   that the branch last merged, so that the two differ by the swap alone.
-  Nothing is allowed to fail. At apidef ef123d3 against 25f8d4b that is
-  2,691 of 2,692 tests passing, none failing, one skipped as on apidef's
+  Nothing is allowed to fail. At apidef 10cdaed against 895450a that is
+  2,700 of 2,701 tests passing, none failing, one skipped as on apidef's
   `main`, and every definition byte-identical: the 98 it compares by
-  itself, and the twelve of G2 below. When apidef's `main` moves, merge
-  it into the branch and run the gate again. `--patch` applies a
+  itself, the twelve of G2 below, and the four of
+  `docs/design/apidef-swap/definitions/`. None of the 110 has a header
+  that apidef ignores or a parameter that is repeated, so the
+  comparison says nothing of those two steps of apidef's parse stage
+  without the four, which have them. When apidef's `main` moves, merge
+  it into the branch and run the gate again, and where the merge
+  changes that stage, write a definition for what changed and add it
+  there. `--patch` applies a
   diff to the candidate first, for a change to apidef that is not
   committed yet, and then the base is the candidate's own commit.
   `--extra` adds descriptions to the comparison. The plan's G2 names the eleven
@@ -1423,8 +1429,11 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   `--ref` names. The swap deletes that resolver, so the reference is a
   commit of apidef's `main` from before its branch merges: 0f41ce1 in
   the latest record, where `ts/src/parse.ts` is as it was at 3b24341,
-  the reference of the earlier records, and as it still is on apidef's
-  `main`. It runs both resolvers on one
+  the reference of the earlier records. apidef's `main` has since added
+  a step to that file, which runs after resolving and keeps the first
+  of a repeated parameter. Its resolver is as it was: at 895450a it
+  gives every row of the two fixtures, as at 0f41ce1. It runs both
+  resolvers on one
   raw tree for each document of four sets: 167 hand-written edge shapes,
   documents from a seeded generator, the corpus, and the rows of the two
   apidef fixtures. It ends with 0 when every document compared is equal,
