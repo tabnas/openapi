@@ -1169,7 +1169,6 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     // description's schemas, or a URI reference to a schema.
     const mapped = (v: string, holder: Loc, space: Space, at: At): string => {
       if (isMap(named) && own(named, v)) return v
-      const settled = settledAt(holder, space)
       const where = index.locate(v, holder.base)
       const land = undefined === where.target ? undefined : index.landingAt(where.target, where.doc)
       if (undefined === land || !land.found) {
@@ -1503,7 +1502,6 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
 
       const site = loc?.site
       if (undefined === site) return out
-      const settled = settledAt(loc!, space)
       // A reference the bundle has as it was written still names what
       // it named, where it is read against another base.
       const stands = (why: string, to?: Landing) => {
