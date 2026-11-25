@@ -1407,7 +1407,7 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   the run proved nothing about it. The candidate is the branch, and
   `--base` names what it is compared with: the commit of apidef's `main`
   that the branch last merged, so that the two differ by the swap alone.
-  Nothing is allowed to fail. At apidef 2a66bb9 against 25f8d4b that is
+  Nothing is allowed to fail. At apidef ef123d3 against 25f8d4b that is
   2,691 of 2,692 tests passing, none failing, one skipped as on apidef's
   `main`, and every definition byte-identical: the 98 it compares by
   itself, and the twelve of G2 below. When apidef's `main` moves, merge
@@ -1442,7 +1442,8 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   2026-11-21, on the released packages, it found none again: 167
   shapes, 6,000 generated documents under seed 1, 8,964 corpus documents
   with the 13 that `parse` refuses unread, all 46 rows, and the nine
-  documents over 10 MB.
+  documents over 10 MB. On 2026-11-25, on the build of T5, the same
+  counts again, and no difference.
 
 **Run them by themselves.** The sweep holds each phase of a document to
 120 seconds, and each worker of the sweep and of the preset comparison

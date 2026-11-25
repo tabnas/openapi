@@ -1178,6 +1178,38 @@ what the code does.
   The third was clean of what the second found before it was run, and
   failed at once on what it added. So a new kind of content is a
   reason to write it into a generator.
+- **The default depth is at the stack's edge.** The macOS job of
+  continuous integration failed one test on the review's commit: a
+  bundle nested past the default `maxDepth` of 1,000 was refused
+  because the stack ran out first. That is `openapi_depth` too, and
+  the test had asked for the other message. A copy goes as deep as
+  the bundle nests, and the repairs had made its frames larger: a
+  fresh process on Linux held a bundle 870 deep. What decides how a
+  member is copied is now done with before the member is gone into,
+  so one frame fewer is under each level, and a fresh process holds
+  1,098. The test asserts the code and takes either message, since
+  how deep the stack goes is the machine's.
+- **Verified, on the last commit that changes the build**, 4d116c9.
+  The suite passes, 1,299 tests and the 11 of the prose gate, here and
+  on Linux, macOS and Windows in continuous integration. Both corpus
+  sweeps leave their ledgers as committed: 235 rows under the base
+  reading, and 3 under `reading: 'spec'`, every one accepted and none
+  open. No figure of either baseline moved, and each gains 26: the
+  six new kinds of row in `connections`, the `ignored` report and the
+  operations. Under the base reading that is 179,225 operations in
+  5,170 descriptions, 7,268 of them `partial`, and 3,706 header
+  parameters ignored in 118 descriptions. The sweep reads the nine
+  descriptions over 10 MB too, which the figures of the view above
+  leave out. The run of descriptions in several documents gives the
+  figures recorded. The apidef gate passes at voxgig/apidef ef123d3
+  against 25f8d4b: 2,691 of 2,692 tests, one skipped as on apidef's
+  `main`, and 110 of 110 definitions byte-identical. The preset
+  comparison finds no difference in 15,177 documents, nor in the nine
+  of the corpus over 10 MB. The gates were started three times. Twice
+  they were stopped within minutes, for the stack and for two
+  variables that the code-quality check on the pull request found
+  unread, so that the run recorded is the one made alone on the final
+  build.
 
 **Since acceptance**, as T4 was begun:
 
