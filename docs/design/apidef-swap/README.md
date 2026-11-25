@@ -236,6 +236,10 @@ the 104 the gate compares by itself, six of which apidef had added, the
 twelve of G2, and the four here. None of the six has a header that
 apidef ignores or a parameter that is repeated either.
 
+At apidef `3186c51`, which merges apidef 8.34.0 at `46c33ab`, the same
+again: 2,734 of 2,735 tests and all 120 definitions byte-identical.
+That release moved apidef's version and nothing else.
+
 At apidef `3b24341`, where the change was made, the three diffs gave
 the same result on the suite and definitions apidef had then: 2,477 of
 2,478 tests, and 57 definitions. With the first of them alone the suite

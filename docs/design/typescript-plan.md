@@ -1233,6 +1233,9 @@ what the code does.
   six of them new in apidef, the twelve of G2 and the four kept for
   it. apidef's parse stage and the fixture that
   `test/resolve/apidef.tsv` copies did not change between the two.
+  A third move that day was apidef 8.34.0, at 46c33ab, which changed
+  its version alone. The branch merges it as 3186c51, and the gate
+  gives the same figures there.
 
 **Since acceptance**, as T4 was begun:
 
