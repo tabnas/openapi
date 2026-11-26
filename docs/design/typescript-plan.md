@@ -1097,6 +1097,24 @@ what the code does.
   several documents, 5,078 documents in all, and none of those
   declares another version than its description's. 1,409 declare 2.0
   under a description of 2.0, and the other 3,669 declare none.
+- **Every hand-run gate passed on the build that T6 ends on**, on
+  26 November 2026, after the last repair and each by itself:
+  - Both sweeps of the corpus: the ledgers, of 235 rows and of 3, and
+    the baselines are as committed, and no document failed to finish.
+    Under `reading: 'spec'` all 5,182 descriptions parse and resolve,
+    none throws, and no reference is reported resolved while it holds
+    its map as written.
+  - The run over the descriptions in several documents: its figures
+    are the recorded ones, and all 925 bundles agree with their
+    documents.
+  - The apidef gate, apidef 3186c51 against 46c33ab: 2,734 of 2,735
+    tests pass, none fails, one is skipped as on apidef's `main`, and
+    120 of 120 definitions are byte-identical.
+  - The preset comparison: no difference in 15,184 documents compared,
+    with the 13 that `parse` refuses unread, and none in the nine over
+    10 MB.
+  - The suite, 1,736 tests and the 11 of the prose gate, and the
+    generators as said above.
 
 **Since acceptance**, as T5 was begun:
 
