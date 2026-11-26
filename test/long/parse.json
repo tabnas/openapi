@@ -1,5 +1,5 @@
 {
-  "note": "Texts too long to write out, each built from parts, and what `parse` makes of each. A part of `text` is a string, or a map: `of` written `repeat` times with `join` between, where in `of` `{i}` is the count from 0, `{j}` the count from 1, and `{s}` as many spaces as the count from 0. `bytes` is the size of the text as UTF-8, to check a builder by. A case has the options of `parse`, and either `error`, the code the text is refused with, or `reads`: the path of a list or a map in the tree, and how many items or members it has.",
+  "note": "Texts too long to write out, each built from parts, and what `parse` makes of each. A part of `text` is a string, or a map: `of` written `repeat` times with `join` between, where in `of` `{i}` is the count from 0, `{j}` the count from 1, and `{s}` as many spaces as the count from 0. `bytes` is the size of the text as UTF-8, to check a builder by. A case has the options of `parse`, and either `error`, the code the text is refused with, or `reads`: the path of a list or a map in the tree, how many items or members it has, and where `last` is given the last of them.",
   "cases": [
     {
       "note": "Anchors nested in flow, each holding every alias: 3,000 anchors around 3,000 aliases. The measure of what the aliases copy counts its own work, and gives up past its bound, so the text is refused for its aliases.",
@@ -40,7 +40,7 @@
       "text": [
         "openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\nl1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\nl2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\nl3: &l3 [*l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2]\n"
       ],
-      "reads": { "at": ["l3"], "length": 10 },
+      "reads": { "at": ["l3", 9, 9, 9], "length": 10, "last": "x" },
       "bytes": 231
     },
     {
@@ -49,7 +49,7 @@
         "openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\nl1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\nl2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\nl3: &l3 [*l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2]\n"
       ],
       "options": { "aliasBudget": 44451 },
-      "reads": { "at": ["l3"], "length": 10 },
+      "reads": { "at": ["l3", 9, 9, 9], "length": 10, "last": "x" },
       "bytes": 231
     },
     {
@@ -69,7 +69,7 @@
         "x]\n",
         { "repeat": 8, "of": "u{i}: *b\n" }
       ],
-      "reads": { "at": ["u7"], "length": 50001 },
+      "reads": { "at": ["u7"], "length": 50001, "last": "x" },
       "bytes": 150084
     },
     {
@@ -94,7 +94,7 @@
       "note": "A text of very many small values is held to the work it takes: a limit of a megabyte or less gives a text 100,000 rule passes. 20,000 items in a flow list are read.",
       "text": ["a: [", { "repeat": 20000, "of": "x," }, "x]\n"],
       "options": { "maxBytes": 1000000 },
-      "reads": { "at": ["a"], "length": 20001 },
+      "reads": { "at": ["a"], "length": 20001, "last": "x" },
       "bytes": 40007
     },
     {
@@ -115,7 +115,7 @@
       "note": "20,000 empty items of a block list are read.",
       "text": ["l:\n", { "repeat": 20000, "of": "-\n" }],
       "options": { "maxBytes": 1000000 },
-      "reads": { "at": ["l"], "length": 20000 },
+      "reads": { "at": ["l"], "length": 20000, "last": null },
       "bytes": 40003
     },
     {
@@ -136,7 +136,7 @@
       "note": "8,000 small maps in a block list are read.",
       "text": ["base:\n", { "repeat": 8000, "of": "  - {a: x}\n" }],
       "options": { "maxBytes": 1000000 },
-      "reads": { "at": ["base"], "length": 8000 },
+      "reads": { "at": ["base"], "length": 8000, "last": { "a": "x" } },
       "bytes": 88006
     },
     {
@@ -157,7 +157,7 @@
       "note": "20,000 members of a block map are read.",
       "text": [{ "repeat": 20000, "of": "k{i}: v\n" }],
       "options": { "maxBytes": 1000000 },
-      "reads": { "at": [], "length": 20000 },
+      "reads": { "at": [], "length": 20000, "last": "v" },
       "bytes": 188890
     },
     {
@@ -178,7 +178,7 @@
       "note": "JSON text that the fast path reads takes none of the grammar's work: 30,000 items are read.",
       "text": ["{\"openapi\":\"3.1.0\",\"a\":[", { "repeat": 30000, "of": "1," }, "1]}"],
       "options": { "maxBytes": 1000000 },
-      "reads": { "at": ["a"], "length": 30001 },
+      "reads": { "at": ["a"], "length": 30001, "last": 1 },
       "bytes": 60027
     },
     {
@@ -192,14 +192,14 @@
       "note": "And 20,000 items are read there.",
       "text": ["{\"openapi\":\"3.1.0\",\"a\":[", { "repeat": 20000, "of": "1," }, "1]}"],
       "options": { "maxBytes": 1000000, "fast": false },
-      "reads": { "at": ["a"], "length": 20001 },
+      "reads": { "at": ["a"], "length": 20001, "last": 1 },
       "bytes": 40027
     },
     {
       "note": "A smaller limit gives the same 100,000 passes: 5,000 small maps are read under a limit of 200,000 bytes, and 17,272 are stopped.",
       "text": ["base:\n", { "repeat": 5000, "of": "  - {a: x}\n" }],
       "options": { "maxBytes": 200000 },
-      "reads": { "at": ["base"], "length": 5000 },
+      "reads": { "at": ["base"], "length": 5000, "last": { "a": "x" } },
       "bytes": 55006
     },
     {

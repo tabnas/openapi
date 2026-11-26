@@ -338,12 +338,10 @@ the same loader, and holds the bundle to its documents with
 resolve to. That module resolves the documents, bundles them, resolves
 the bundle and compares the two trees from the root, allowing only
 what the bundle's own reports account for. Its header lists each
-allowance. It judges a reference and a locator by where they land,
-and it reads the documents as the bundle does in one thing: a schema
-that only a mapping value names is read as a schema. It reads the
-identifiers that the documents declare, each document as it is loaded,
-to know every base that a text may have been written against. A bundle that
-does not agree ends the run with 1, as a
+allowance. It judges a reference and a locator by where they land. It
+reads the identifiers that the documents declare, each document as it
+is loaded, to know every base that a text may have been written
+against. A bundle that does not agree ends the run with 1, as a
 description that throws does. The figures under `bundle` count the
 bundles that agree, the targets by how each was brought in, and what
 was left. The record,

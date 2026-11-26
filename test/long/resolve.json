@@ -1,5 +1,5 @@
 {
-  "note": "Descriptions too long to write out, each built from parts, and what `resolve` makes of each once `parse` has read it. A part of `text` is a string, or a map: `of` written `repeat` times with `join` between, where in `of` `{i}` is the count from 0, `{j}` the count from 1, and `{s}` as many spaces as the count from 0. `bytes` is the size of the text as UTF-8, to check a builder by. A case may have `documents`, the description's other documents by URI, each a text built from parts in the same way and given to `resolve` as text; `bytes` then counts them too. A case has the options of `resolve`, and either `error`, the code it refuses the description with, or `reads`: the path of a list or a map in the resolved tree, and how many items or members it has.",
+  "note": "Descriptions too long to write out, each built from parts, and what `resolve` makes of each once `parse` has read it. A part of `text` is a string, or a map: `of` written `repeat` times with `join` between, where in `of` `{i}` is the count from 0, `{j}` the count from 1, and `{s}` as many spaces as the count from 0. `bytes` is the size of the text as UTF-8, to check a builder by. A case may have `documents`, the description's other documents by URI, each a text built from parts in the same way and given to `resolve` as text; `bytes` then counts them too. A case has the options of `resolve`, and either `error`, the code it refuses the description with, or `reads`: the path of a list or a map in the resolved tree, how many items or members it has, and where `last` is given the last of them.",
   "cases": [
     {
       "note": "Each reference followed is a visit of the walk that reads the operations. A chain of 900 references, and a list of 6,000 parameters that each lead into its start, is 5,400,000 of them, which is past sixteen times the work of reading the document once: refused, with no option given.",
@@ -22,7 +22,11 @@
         { "repeat": 899, "of": ",\"A{j}\":{\"$ref\":\"#/components/parameters/A{i}\"}" },
         "}}}"
       ],
-      "reads": { "at": ["paths", "/a", "get", "parameters"], "length": 50 },
+      "reads": {
+        "at": ["paths", "/a", "get", "parameters"],
+        "length": 50,
+        "last": { "name": "q", "in": "query" }
+      },
       "bytes": 44170
     },
     {
@@ -34,7 +38,7 @@
       ],
       "documents": { "n0.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"] },
       "options": { "retrievalUri": "https://example.com/api/openapi.yaml", "parse": { "maxBytes": 1000000 } },
-      "reads": { "at": ["components", "schemas", "S0", "enum"], "length": 12001 },
+      "reads": { "at": ["components", "schemas", "S0", "enum"], "length": 12001, "last": "x" },
       "bytes": 24130
     },
     {
@@ -96,7 +100,7 @@
         ]
       },
       "options": { "retrievalUri": "https://example.com/api/openapi.yaml" },
-      "reads": { "at": ["components", "schemas", "S3", "b"], "length": 1501 },
+      "reads": { "at": ["components", "schemas", "S3", "b", 1500], "length": 41, "last": "x" },
       "bytes": 18584
     },
     {
@@ -405,7 +409,7 @@
         "retrievalUri": "https://example.com/api/openapi.yaml",
         "parse": { "aliasBudget": 1000000 }
       },
-      "reads": { "at": ["components", "schemas", "S19", "b"], "length": 1501 },
+      "reads": { "at": ["components", "schemas", "S19", "b", 1500], "length": 41, "last": "x" },
       "bytes": 92556
     }
   ]

@@ -1561,6 +1561,12 @@ function bundleOn(raw: any, front: Front, all: boolean): BundleResult {
             const rest: [string, any][] = Object.keys(out).filter((k) => '$ref' !== k && 'allOf' !== k).map((k) => [k, out[k]])
             const first = Object.create(null)
             define(first, '$ref', out.$ref)
+            // An `allOf` there that is no list is nothing that resolving
+            // reads beside a `$ref`, and the list has no place for it:
+            // it is left out, and said.
+            if (own(out, 'allOf') && !Array.isArray(out.allOf)) {
+              left.push({ at: pointerAt(down(at, 'allOf')), ref: out.allOf, why: 'sibling' })
+            }
             const all = [first, ...(Array.isArray(out.allOf) ? out.allOf : [])]
             for (const k of Object.keys(out)) delete out[k]
             define(out, 'allOf', all)

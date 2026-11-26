@@ -761,6 +761,32 @@ outside its choices throws a `TypeError`, and so does `inline-once` or
 `copy` with `cycles: 'keep'`. Every `at`, `target` and cut path is an
 RFC 6901 pointer.
 
+#### Positions
+
+A row of `provenance` says where in the tree its reference is. It says
+where in the text as well when the parse recorded positions and
+`resolve` is given them: `row` and `col` are then the line and the
+column of the map that holds the reference, each counted from 1.
+`recordPositions` is from `@tabnas/expr`, and takes the parser the
+text is read with.
+
+```js
+const { make, parse, resolve } = require('@tabnas/openapi')
+const { recordPositions } = require('@tabnas/expr')
+
+const reader = make()
+const positions = recordPositions(reader)
+const raw = parse('openapi: 3.1.0\ncomponents:\n  schemas:\n    A: {$ref: "#/components/schemas/B"}\n    B: {type: string}\n', { instance: reader })
+
+const [site] = resolve(raw, { positions }).provenance
+site.at // => '/components/schemas/A'
+site.row // => 4
+site.col // => 8
+```
+
+JSON text that the fast path reads has no positions, since no grammar
+ran. Give `parse` `fast: false` to have them.
+
 #### Connections
 
 ```ts
@@ -1498,7 +1524,7 @@ are these:
 | `anchor` | an anchor that was left out, because the place it moved to has one of that name, or has a reference that names one and finds none |
 | `id` | an identifier that was left out. It named the resource it was already in, or another schema has it, or the description's version reads none, or it was not read, and in its place in the bundle it would start a resource |
 | `type` | a part of a target that the documents read as one type, where the bundle may read it as another, or as data |
-| `sibling` | a member beside a reference, in a document of an earlier version than the description's, that was left out |
+| `sibling` | a member beside a reference, in a document of another version than the description's, that was left out |
 | `version` | a field beside a reference, in a document of a later version than the description's, that stands unread |
 
 A `type` row is for a part that has its type from a reference, and not
@@ -1531,7 +1557,9 @@ it meant:
 - What is beside the `$ref` of a schema, where its own version applied
   it and the description's does not, is written as that version read it:
   the reference becomes the first of an `allOf`, ahead of the ones
-  the schema has, and the other members stand.
+  the schema has, and the other members stand. An `allOf` there that
+  is no list is left out, as a `sibling` row: `resolve` reads nothing
+  in one beside a `$ref`.
 - A field that its own version read in the place of its target's own,
   where the description's has no such rule, cannot be written to mean
   that. It stands where it is, unread. It is a `version` row, with the

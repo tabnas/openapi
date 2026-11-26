@@ -60,6 +60,11 @@ read by; `dataSlots`, how many `$ref` maps were data; `order`, where
 writes them in, which the comparison of a row does not otherwise see;
 and `sites`, one `at kind:type "ref" -> target` line for each
 reference, which is what was made of it before anything was resolved.
+The target is `-` where the reference names no place: a `$ref` that is
+no string, an anchor that nothing declares, or a document that was not
+given. A site in another document than the description is written with
+its document, as `uri#pointer`, and so is a target in another document
+than its site.
 
 Two more columns are optional there: `operations`, one line for each
 operation of the view that the row's options ask for, and `ignored`,
@@ -117,8 +122,11 @@ between, where in `of` `{i}` is the count from 0, `{j}` the count from
 the built text as UTF-8, which holds a builder to the recipe. A case
 of `resolve.json` may have `documents`, the description's other
 documents by URI, each a text built from parts in the same way. A case
-says `error`, the code the text is refused with, or `reads`, a path
-into the tree and how many items or members are there. These are the
+says `error`, the code the text is refused with, or `reads`: a path
+into the tree, how many items or members are there, and where it is
+given `last`, the last of them. Give `last` wherever it is short: a
+count alone does not say that what was read is what was written.
+These are the
 shapes that `ts/test/hostile.test.ts` holds to a time, which no fixture
 can carry: the alias measure's worst texts, and texts of very many
 small values on each side of the bound on work. Keep a pair of cases
@@ -224,7 +232,9 @@ document's text, `null` is a loader that answers `null`, and anything
 else is a document's tree; for a URI that is not there the loader
 answers nothing. `asked` is what the loader was asked for, in order,
 which is part of what a case pins: a loader is asked for one document
-at a time, and a text is read before the next is asked for. The case
+at a time, and a text is read before the next is asked for. A runner's
+loader answers on a later turn, and fails a case that asks it for a
+document while it has one to answer for. The case
 then says what `resolveAll` gives, in the members a case of `docs/`
 has, or the `error` it raises: its code, and the `at` and the `file`
 it names where the case has them. `bundle`, when present, is what

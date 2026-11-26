@@ -39,8 +39,11 @@
 //   - A part that a `left` row says may be read as another type than
 //     the documents read it as, or as data (`type`), is not compared.
 //   - A field beside a reference that a `left` row says stands unread
-//     (`version`) is not compared, where the reference is: a document
-//     of a later version read it in the place of its target's own.
+//     (`version`) is taken out of the documents, where it was written,
+//     and they are resolved again: a document of a later version read
+//     it in the place of its target's own, and the bundle resolves to
+//     the target's own. The trees are then compared with nothing
+//     allowed for it, at the reference or at what it names.
 //
 // Beside the trees:
 //
@@ -134,7 +137,7 @@ const spot = (doc, parts) => (0 === parts.length ? doc : doc + '#' + JSON.string
 // it lands on the same thing in both. `sites` is where each reference
 // of the documents lands, by its document and place: a pointer that
 // passes one is read on in what it names.
-function allowances(U, bundle, home, loose, unread, urls, vouched, sites, declared = [], fields = new Map()) {
+function allowances(U, bundle, home, loose, unread, urls, vouched, sites, declared = []) {
   const lastOf = (at) => {
     const parts = stepsOf(at)
     return 0 === parts.length ? '' : parts[parts.length - 1]
@@ -250,7 +253,7 @@ function allowances(U, bundle, home, loose, unread, urls, vouched, sites, declar
     const k = path[path.length - 1]
     return WRITTEN.has(k) || urls.has(k) || 'mapping' === path[path.length - 2]
   }
-  return { defs, dialects, gone, explained, rewrites, originsOf, loose, unread, fields }
+  return { defs, dialects, gone, explained, rewrites, originsOf, loose, unread }
 }
 
 // Two graphs, member by member and in order, each pair of objects once.
@@ -288,12 +291,6 @@ function same(a, b, path, allow, seen, why) {
       (DEFS.has(k) && isObj(b[k]) && Object.keys(b[k]).every((name) => allow.defs.has(name)))
     kb = kb.filter((k) => own(a, k) || !more(k))
     ka = ka.filter((k) => own(b, k) || 'string' !== typeof a[k] || !allow.gone.has(k + '\0' + a[k]))
-    // The fields that stand unread beside the reference this came from.
-    const unreadHere = allow.fields.get(b)
-    if (undefined !== unreadHere) {
-      ka = ka.filter((k) => !unreadHere.has(k))
-      kb = kb.filter((k) => !unreadHere.has(k))
-    }
   }
   if (ka.length !== kb.length || ka.some((k, i) => k !== kb[i])) {
     why.push(`${path.join('/')}: members ${ka.join(',').slice(0, 100)} / ${kb.join(',').slice(0, 100)}`)
@@ -301,6 +298,26 @@ function same(a, b, path, allow, seen, why) {
   }
   for (const k of ka) if (!same(a[k], b[k], [...path, k], allow, seen, why)) return false
   return true
+}
+
+// A tree with one member less at a place. The maps and lists on the way
+// to it are copied, and nothing else is, so the tree given is not
+// changed. A place that is not there takes nothing out.
+function without(tree, parts, field) {
+  const copied = (node) =>
+    Array.isArray(node) ? node.slice() : Object.defineProperties(Object.create(Object.getPrototypeOf(node)), Object.getOwnPropertyDescriptors(node))
+  if (!isObj(tree)) return tree
+  const root = copied(tree)
+  let node = root
+  for (const seg of parts) {
+    if (!own(node, seg) || !isObj(node[seg])) return tree
+    const next = copied(node[seg])
+    Object.defineProperty(node, seg, { value: next, enumerable: true, writable: true, configurable: true })
+    node = next
+  }
+  if (Array.isArray(node) || !own(node, field)) return tree
+  delete node[field]
+  return root
 }
 
 // Resolve, bundle, resolve the bundle, and compare. `options` are those
@@ -429,17 +446,52 @@ async function agree(O, U, raw, options) {
     if ('string' === typeof doc) scan(doc, uri)
     else gather(doc, uri, new Set())
   }
-  // The fields that the bundle says stand unread beside a reference, by
-  // the object its resolved tree has where the reference is.
-  const fields = new Map()
-  for (const l of bundle.left) {
-    if ('version' !== l.why) continue
-    const steps = stepsOf(l.at)
-    const held = valueAt(after.tree, l.at.slice(0, l.at.lastIndexOf('/')))
-    if (isObj(held)) fields.set(held, (fields.get(held) ?? new Set()).add(steps[steps.length - 1]))
-  }
-  const allow = allowances(U, bundle, home, objects(loosely), partsOf(unread), urls, vouched, passes, [...declared], fields)
+  const allow = allowances(U, bundle, home, objects(loosely), partsOf(unread), urls, vouched, passes, [...declared])
   const why = []
+
+  // A field that the bundle says stands unread beside a reference. The
+  // documents read it, in the place of its target's own, and the bundle
+  // resolves to the target's own. So the bundle is held to what the
+  // documents resolve to without the field: it is taken out where it
+  // was written, in a copy of its document, and the documents are
+  // resolved again. To allow the field where the bundle's tree has the
+  // reference would allow it at the target too, since the tree has the
+  // target's own object in both places.
+  let expected = before
+  const standing = bundle.left.filter((l) => 'version' === l.why)
+  if (0 < standing.length) {
+    const changed = new Map()
+    const treeOf = (uri) => {
+      if (changed.has(uri)) return changed.get(uri)
+      const doc = texts.get(uri)
+      // A document that declares a version is a description, which
+      // `parse` reads as `resolve` read it.
+      return 'string' === typeof doc || doc instanceof Uint8Array ? O.parse(doc, { ...(rest.parse ?? {}) }) : doc
+    }
+    for (const l of standing) {
+      const parts = stepsOf(l.at)
+      const field = parts.pop()
+      // Where the reference was written: in what was brought to the
+      // place nearest above it. A place further up is another target's,
+      // which had a reference where this one was written in.
+      const above = bundle.embedded
+        .map((e) => ({ e, at: stepsOf(e.at) }))
+        .filter(({ at }) => at.length <= parts.length && at.every((seg, i) => seg === parts[i]))
+      const nearest = Math.max(...above.map(({ at }) => at.length))
+      for (const { e, at } of above) {
+        if (at.length !== nearest) continue
+        changed.set(e.doc, without(treeOf(e.doc), [...stepsOf(e.from), ...parts.slice(at.length)], field))
+      }
+    }
+    const again = { ...rest, cycles: 'keep' }
+    if (undefined !== rest.documents) {
+      again.documents = {}
+      for (const [name, doc] of Object.entries(rest.documents)) again.documents[name] = changed.get(absolute(retrieved, name)) ?? doc
+    }
+    expected = loading
+      ? await O.resolveAll(raw, { ...again, load: async (uri) => changed.get(uri) ?? texts.get(uri), maxDocuments, maxRounds })
+      : O.resolve(raw, again)
+  }
 
   // A locator is found where the bundle has it, if it was found, and
   // lands on what it landed on: at its own place in the description,
@@ -503,7 +555,7 @@ async function agree(O, U, raw, options) {
     }
   }
 
-  same(before.tree, after.tree, [], allow, new Map(), why)
+  same(expected.tree, after.tree, [], allow, new Map(), why)
 
   // The description's own places are where they were. What was brought
   // in is under the place an `embedded` row gives.

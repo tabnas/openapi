@@ -454,6 +454,25 @@ describe('several documents', () => {
       assert.deepEqual([without[0], without[without.length - 1]], ['ok', 'openapi_depth'])
     }
 
+    // A refusal says the bound the caller gave. The fold's own is one
+    // more where it starts from the document that reads the description.
+    const hops = (n: number) => {
+      const schemas: Record<string, unknown> = { Pet: pet({ dog: 'dog.yaml' }) }
+      for (let i = 0; i < n; i++) schemas['S' + i] = { properties: { n: { $ref: '#/components/schemas/S' + (i + 1) } } }
+      schemas['S' + n] = { type: 'string' }
+      return entry(schemas)
+    }
+    const said = (documents: Record<string, unknown>) => {
+      try {
+        resolve(hops(12), { retrievalUri: HERE, documents, maxDepth: 10 })
+      } catch (e: any) {
+        return e.message as string
+      }
+      return 'no refusal'
+    }
+    assert.match(said(far), /deeper than 10 at /)
+    assert.equal(said(far), said({}))
+
     // The steps are counted, and held to `maxSteps`, to the step.
     let steps = 0
     resolve(chain(5), { retrievalUri: HERE, documents: far, checkEveryN: 1, onCheck: (n) => ((steps = n), true) })
@@ -462,6 +481,26 @@ describe('several documents', () => {
     assert.equal(outcome(chain(5), far, { maxSteps: steps - 1 }), 'openapi_work')
     assert.equal(outcome(chain(5), far, { checkEveryN: 1, onCheck: (n: number) => n < steps }), 'openapi_cancel')
     assert.equal(outcome(chain(5), far, { cycles: 'keep', maxSteps: 10 }), 'openapi_work')
+
+    // Starting from the document that reads the description costs the
+    // description no step. A mapping value in a document that it never
+    // reads names a schema of another document, or one of the
+    // description's own: the same reading for the index, and for the
+    // fold only the first has such a start. The count is one count.
+    const aside = (value: string) => ({
+      'a.yaml': entry({ P: pet({ q: value }) }),
+      'b.yaml': entry({ Q: { type: 'object' } }),
+    })
+    const counted = (documents: Record<string, unknown>, cycles: 'cut' | 'keep') => {
+      let n = 0
+      resolve(entry({ A: { type: 'string' } }), { retrievalUri: HERE, documents, cycles, checkEveryN: 1, onCheck: (s) => ((n = s), true) })
+      return n
+    }
+    for (const cycles of ['cut', 'keep'] as const) {
+      const there = counted(aside('b.yaml#/components/schemas/Q'), cycles)
+      assert.ok(0 < there)
+      assert.equal(there, counted(aside('openapi.yaml#/components/schemas/A'), cycles))
+    }
 
     // A member named as the start of such a fold is, in the description
     // and in the document, is a member like any other.

@@ -14,8 +14,9 @@
 // `documents`, the description's other documents by URI: each is a text
 // built from parts in the same way, and is given to `resolve` as text,
 // and `bytes` then counts them too. A case says `error`, the code it is
-// refused with, or `reads`: a path into the tree, and how many items the
-// list there has, or how many members the map.
+// refused with, or `reads`: a path into the tree, how many items the
+// list there has, or how many members the map, and where it is given
+// `last`, the last of them.
 //
 // These are the shapes that ts/test/hostile.test.ts holds to a time,
 // which no fixture can carry. What a case carries is that the shape is
@@ -38,7 +39,7 @@ type Case = {
   documents?: Record<string, Part[]>
   options?: Record<string, unknown>
   error?: string
-  reads?: { at: (string | number)[]; length: number }
+  reads?: { at: (string | number)[]; length: number; last?: unknown }
   bytes: number
 }
 
@@ -96,7 +97,11 @@ describe('long texts, from test/long', () => {
         }
         let value: any = read(text, options)
         for (const key of c.reads!.at) value = value[key]
-        assert.equal(Array.isArray(value) ? value.length : Object.keys(value).length, c.reads!.length)
+        const items: unknown[] = Array.isArray(value) ? value : Object.values(value)
+        assert.equal(items.length, c.reads!.length)
+        if ('last' in c.reads!) {
+          assert.deepStrictEqual(JSON.parse(JSON.stringify(items[items.length - 1] ?? null)), c.reads!.last, 'the last of them')
+        }
       })
     }
   }

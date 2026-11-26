@@ -485,8 +485,8 @@ describe('the check of a bundle', () => {
 
   // A document of a later version than the description's, with a field
   // beside a reference that its own version read and the description's
-  // does not. The bundle says so, and the check allows that field there
-  // and no other difference.
+  // does not. The bundle says so, and the check holds the bundle to the
+  // documents without that field, and to all else of them.
   const later = () => description({ paths: { '/a': { get: { responses: { 200: { $ref: 'new.json#/components/responses/R' } } } } } }, { openapi: '3.0.3' })
   const newer = {
     'new.json': {
@@ -522,6 +522,14 @@ describe('the check of a bundle', () => {
     // And another field of the same response is one still.
     const other = await versioned((b) => (b.tree.components.responses.S.headers = {}))
     assert.equal(other.ok, false)
+    // So is the same field of the response that the reference names. The
+    // bundle's tree has that response's own object where the reference
+    // is, and what is allowed is the field beside the reference alone.
+    const named = await versioned((b) => (b.tree.components.responses.S.description = 'wrong'))
+    assert.equal(named.ok, false)
+    assert.ok(named.why.some((line: string) => /description: "theirs" \/ "wrong"$/.test(line)), named.why.join('; '))
+    // The documents are as they were given.
+    assert.deepEqual(newer['new.json'].components.responses.R, { $ref: '#/components/responses/S', description: 'mine' })
   })
 
   test('checks a bundle that was written elsewhere, as it is given', async () => {
@@ -750,11 +758,10 @@ describe('bundle, on sets of documents that are generated', () => {
     }
   })
 
-  // A mapping value says that what it names is a schema, and the bundle
-  // reads it as one, where `resolve` reads the same content as data when
-  // nothing but a reference in data names it. The check reads the
-  // documents as the bundle does there, so these sets have mapping
-  // values too.
+  // A mapping value says that what it names is a schema, and the index
+  // types it as one. So `resolve` and the bundle read such a schema
+  // alike, where nothing else but a reference in data names it. These
+  // sets have mapping values, and references in an extension.
   test("and under slots: 'all', where a reference in data is one", async () => {
     for (let seed = 301; seed <= 400; seed++) {
       const { entry, documents } = set(seed)

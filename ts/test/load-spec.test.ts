@@ -73,10 +73,22 @@ type Case = {
   }
 }
 
-// A loader over a table, which says what it was asked for.
+// A loader over a table, which says what it was asked for. It answers
+// on a later turn, as a loader that reads a file or a network does, and
+// fails if it is asked for a document while it has one to answer for:
+// a loader is asked for one document at a time.
 function loader(table: Record<string, unknown>) {
   const asked: string[] = []
-  return { asked, load: (uri: string) => (asked.push(uri), Object.prototype.hasOwnProperty.call(table, uri) ? table[uri] : undefined) }
+  let open = 0
+  const load = async (uri: string) => {
+    asked.push(uri)
+    assert.equal(open, 0, 'the loader was asked for ' + uri + ' before it had answered for the one before')
+    open++
+    await new Promise((done) => setImmediate(done))
+    open--
+    return Object.prototype.hasOwnProperty.call(table, uri) ? table[uri] : undefined
+  }
+  return { asked, load }
 }
 
 // Whether an error is the one a case says.

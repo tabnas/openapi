@@ -31,8 +31,12 @@
 // how many `$ref` maps were data; `order`, where `yes` holds the members
 // of the expected value to the order the row writes them in; and
 // `sites`, one `at kind:type "ref" -> target` line for each reference,
-// which is what the index made of it before anything was resolved (`-`
-// for a target that is in another document or is none). These fixtures live outside
+// which is what the index made of it before anything was resolved. The
+// target is `-` where the reference names no place: a `$ref` that is no
+// string, an anchor that nothing declares, or a document that was not
+// given. A site in another document than the description is written
+// with its document, as `uri#pointer`, and so is a target in another
+// document than its site. These fixtures live outside
 // test/spec/ because the parity runners there read a parse, and because
 // the Go and Rust ports do not carry the resolver yet.
 
@@ -77,9 +81,13 @@ function where(p: any): string {
   return out
 }
 
-// One reference as the index read it, as a fixture writes it.
+// One reference as the index read it, as a fixture writes it. A row has
+// a site's document where that is not the description, and a target's
+// where that is not the site's.
 function sited(p: any): string {
-  return `${p.at} ${p.kind}${null == p.type ? '' : ':' + p.type} ${JSON.stringify(p.ref)} -> ${p.target ?? '-'}`
+  const placed = (doc: unknown, at: string) => (null == doc ? at : doc + '#' + at)
+  const target = null == p.target ? '-' : placed(p.targetDoc, p.target)
+  return `${placed(p.doc, p.at)} ${p.kind}${null == p.type ? '' : ':' + p.type} ${JSON.stringify(p.ref)} -> ${target}`
 }
 
 // One declared dialect as a fixture writes it.

@@ -1031,7 +1031,10 @@ Beside what that change broke, the third found a set under
 operation written in the place of a Path Item's reference
 (`operation-in-a-path-item.json`). Run a change under a seed that has
 not been run, and say which. With the repairs, the three are clean at
-100,000 sets each way under those seeds: 500,000 sets.
+100,000 sets each way under those seeds: 500,000 sets. Before a review
+of the change, the build was run again under seeds 13 and 14, with the
+first generator's seeds 50,001 to 100,000: 500,000 more, and none
+failing.
 
 A bundle does not keep everything, and
 [the reference](ts/doc/reference.md) lists what it does not: the
@@ -1049,12 +1052,22 @@ description's would, is left out, with a `sibling` row of `left`. What
 is beside a schema's `$ref`, where its own version applied it and the
 description's does not, is written as the first of an `allOf`, which
 is how resolving reads it, in that order of members: the check
-compares order. A field beside any other reference that only its own
-version reads cannot be written to mean that, so it stands, with a
-`version` row, and the check allows that field at that reference and
-nothing else (`fields`). `readBeside` is the one statement of what a
-version reads beside a reference, and `OVERRIDE` in `resolve.ts` is
-its table for a Reference Object.
+compares order. An `allOf` there that is no list is left out, with a
+`sibling` row, since resolving reads nothing in one beside a `$ref`. A
+field beside any other reference that only its own version reads
+cannot be written to mean that, so it stands, with a `version` row.
+`readBeside` is the one statement of what a version reads beside a
+reference, and `OVERRIDE` in `resolve.ts` is its table for a Reference
+Object.
+
+The check holds a `version` row by taking the field out of its
+document, where it was written, and resolving the documents again
+(`without`, and `expected` in `agree`). It first allowed the field
+where the bundle's resolved tree has the reference, and a review found
+the hole in that: the tree has the target's own object there, so the
+field was allowed at the target too, and a bundle with the target's
+own field wrong passed. An allowance that is keyed by an object of a
+resolved tree reaches every place that shares the object.
 
 That is one part of a wider gap, which is open: the two versions'
 object models read some places differently. A schema in `prefixItems`
@@ -1063,12 +1076,20 @@ reference in it is not followed in the bundle. A `$ref` map in such a
 member of a 3.0 document was data, and is a reference in a 3.1
 description. `copy` steps a target by the model of its own version
 (`keeps`), which is how its document read it, and the bundle is read
-by the description's. Nothing in the bundle says so, the check fails
-such a set, and no generator writes one: the third writes a document
-of another version, with nothing in it that the two versions read
+by the description's. A component may itself be a reference in 3.0
+and later, and among the definitions of a 2.0 description a `$ref` in
+that place is none: a response of a 3.1 document that is a reference
+to another is brought to `responses` of a 2.0 bundle, where the chain
+is not followed. Nothing in the bundle says so, the check fails such a
+set, and no generator writes one: the third writes a document of
+another version, with nothing in it that the two versions read
 differently. The repair is to treat a place that the two models read
 differently as the `type` rows treat a part that a reference typed. It
 is the plan's Decision 37, and the reference says what is not kept.
+One thing of the kind the bundle does say, in `dialects`, and the
+check allows: a schema of a 3.1 document is given its `$schema` in a
+bundle of 3.0 or 2.0, a member that those versions do not have and
+that this package does not read there.
 
 `test/resolve/*.tsv` pins the resolver, with
 `ts/test/resolve-spec.test.ts` as the runner (optional `select`,
@@ -1314,6 +1335,13 @@ file. CI does the linked model with the siblings `ci.yml` names.
   tab of indentation is accepted. Where the yaml ports disagree with each
   other, `DIVERGENCE.md` has the measurement and each runtime's suite
   pins its own side (Go: `goDivergent` in `go/parity_test.go`).
+- **Under the base reading, a flow collection after a `/*` comment that
+  runs over a line break is misread** (W14 of the plan, found in T6 and
+  not repaired): `l0: /* a`, then `b */ [x, x, x]`, gives a list of the
+  one string `x, x, x]`. It is the yaml grammar's, and the TypeScript
+  reader's as measured. Cases 9 and 10 of `test/long/parse.json` have
+  such a comment, to hide an alias chain, and so they hold a count and
+  not what is counted.
 - **Values JSON cannot carry are pinned in-language.** `.inf`, `-.inf`,
   `.nan`, `1e400` and lone surrogates differ across runtimes or vanish in
   the fixtures' JSON round trip, so each runtime's package tests assert
@@ -1544,7 +1572,9 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   shapes, 6,000 generated documents under seed 1, 8,964 corpus documents
   with the 13 that `parse` refuses unread, all 46 rows, and the nine
   documents over 10 MB. On 2026-11-25, on the build of T5, the same
-  counts again, and no difference.
+  counts again, and no difference. On 2026-11-26, on the build of T6,
+  the same counts but for the rows, which are 53 since the hand-off
+  added seven, and no difference.
 
 **Run them by themselves.** The sweep holds each phase of a document to
 120 seconds, and each worker of the sweep and of the preset comparison

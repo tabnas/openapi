@@ -329,6 +329,18 @@ written, counted as data and reported nowhere, which is the audit's
 probe 3.7. It is read as any other component now, as 3.1 and 3.2 read
 it, which Decision 25 chose.
 
+**Found in T6: W14.** It is the base reading's alone: the yaml
+grammar's, where jsonic's `/*` comment runs over a line break. A flow
+collection that follows such a comment is not read as one. `l0: /* a`,
+then `b */ [x, x, x]` on the next line, gives a list of the one string
+`x, x, x]`. Below `components: /*`, a line of `|` and a line of `*/`,
+every flow list of the block is read so, and a flow map `{a: 1, b: 2}`
+as the map of `a` to a map of one member. The ledger of the base
+reading has no row of it, and under `reading: 'spec'` there is no such
+comment: the text is refused. It is not repaired. It was found when
+two cases of `test/long/` were made to read deeper than a count, and
+they read as deep as they did.
+
 **Found in T2b.** Four shapes were read, each wrongly, and are refused
 by that change. No document of the corpus has one. The first three are
 not YAML, and the reference parser refuses them as well. The fourth is
@@ -953,7 +965,9 @@ what the code does.
   such a schema, a reference there that was read as data is a
   schema's, and what follows from either, an identifier that is now
   read or a place that a mapping value types before a reference does.
-  Under `refs: 'pointer'`, where a mapping value types nothing, no set
+  Under `strict` a reference in such a schema that names nothing is a
+  refusal, where it was data and was passed over. Under
+  `refs: 'pointer'`, where a mapping value types nothing, no set
   moves.
 - **The generators, under seeds they had not had.** After the repairs
   the three are clean at 100,000 sets each way under seeds 7 and 8,
@@ -965,7 +979,7 @@ what the code does.
   function that says which addresses are public, and the reasons of a
   bundle's `left` rows. It said the size limit was 16 MiB by default,
   which Decision 34 made the limit for a parser the caller gives: it
-  is 128 MiB. The prose gate is green at 655 alerts, none an error.
+  is 128 MiB. The prose gate is green at 658 alerts, none an error.
 - **The conformance statement** (item 2) is
   [`docs/conformance.md`](../conformance.md). Its prose says what each
   measurement is, and its figures are written by
@@ -1022,6 +1036,47 @@ what the code does.
     map's members would be. The dialect rows of `dialects.tsv` hold
     only the shapes the model's own test speaks of, and leave that
     one unpinned.
+- **An independent review, once the pull request was open.** Two
+  reviewers read the change against `main`, one the index and
+  `resolve`, the other `bundle`, its check and the new runners. Neither
+  found a defect in what `resolve` gives. What they found, each
+  repaired here:
+  - **The check of a bundle allowed too much for a `version` row.** It
+    allowed the unread field where the bundle's resolved tree has the
+    reference. That tree has the target's own object there, so the
+    field was allowed at the target too: a bundle with the target's
+    own field wrong passed. The check now takes the field out of its
+    document, where it was written, and resolves the documents again,
+    so nothing is allowed for it anywhere.
+  - **An `allOf` that is no list was dropped with nothing said**,
+    where a schema's `$ref` of a later version is written as the first
+    of an `allOf`. It is a `sibling` row now.
+    `test/bundle/version-allof.json` holds it.
+  - **Where the fold starts from the document that reads the
+    description**, as it does for a mapping value that lands in
+    another document, a refusal for depth said a bound one more than
+    the caller's, and the count of steps was two more than the
+    description's own. Both are the caller's now.
+    `ts/test/documents.test.ts` holds each.
+  - **Three runners held less than their formats say.** A `sites` line
+    named no document, so it could not tell a site in one document
+    from a site at the same pointer in another: it names each now, and
+    a row of `documents.tsv` has sites in two. A `reads` of
+    `test/long/` held a count alone, so a description whose references
+    were all left as written passed: it may give the `last` of what it
+    counts, and fourteen cases do. And the loader of `test/load/`
+    answered at once, so it could not see two documents asked for
+    together, which the format says does not happen: it answers on a
+    later turn, and fails a case that asks again before it has.
+  - **Two more shapes of Decision 37's gap**, which stand. A
+    component that is itself a reference is brought to the definitions
+    of a 2.0 description, where a `$ref` in that place is none, and
+    the check fails the set. And a schema of a 3.1 document is given
+    its `$schema` in a bundle of 3.0 or 2.0, which those versions do
+    not have: the bundle says so in `dialects`, and the check allows
+    it.
+  - **W14**, of section 2.3, is the base reading's and is not
+    repaired.
 
 **Since acceptance**, as T5 was begun:
 

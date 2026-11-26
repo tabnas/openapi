@@ -1103,12 +1103,17 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   }
   if (counting) {
     // The fold's steps follow the index's, and are held to the same bound
-    // and the same check: it reports each step before it takes it.
+    // and the same check: it reports each step before it takes it. From
+    // the start document it takes two before the description's first:
+    // the start's own map, and the asking for the description. They are
+    // no work of the description's, and are not counted.
     const before = count.steps
+    const lead = undefined === startKey ? 0 : 2
     opts.budget = {
       checkEveryN: 1,
       onCheck: (n: number) => {
-        count.steps = before + n - 1
+        if (n <= lead) return
+        count.steps = before + n - lead - 1
         tick()
       },
     }
@@ -1321,7 +1326,13 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     const code = err instanceof FoldError ? FOLD_CODES[err.code] : undefined
     if (undefined === code) throw err
     const at = 'string' === typeof (err as any).at ? (err as any).at : ''
-    throw new ResolveError(code, 'resolve: ' + String(err.message).replace(/^expr fold: /, ''), at)
+    let said = String(err.message).replace(/^expr fold: /, '')
+    // From the start document the fold's bound is one more than the
+    // caller's, and the message says the caller's.
+    if (undefined !== startKey && 'openapi_depth' === code) {
+      said = said.replace(`deeper than ${limit + 1} `, `deeper than ${limit} `).replace(`maxDepth (${limit + 1})`, `maxDepth (${limit})`)
+    }
+    throw new ResolveError(code, 'resolve: ' + said, at)
   }
   if (asApidef && o.xref) orderAsWalked(tree)
 
