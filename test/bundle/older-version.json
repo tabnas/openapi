@@ -1,0 +1,50 @@
+{
+  "note": "A description of 3.0 names a schema of a 3.1 description that declares an identifier. Nothing in a 3.0 description reads an identifier, so the bundle has no schema resource: the schema is plain content among the schemas, the fragment in it that was read in the resource is written as a pointer from the root, and the identifier is left out, and listed. The schema says which dialect it was read under.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Pet": { "$ref": "new.json#/components/schemas/Pet" } } }
+  },
+  "documents": {
+    "new.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "$id": "https://schemas.example.com/pet",
+            "type": "object",
+            "properties": { "tag": { "$ref": "#/$defs/tag" } },
+            "$defs": { "tag": { "type": "string" } }
+          }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "$ref": "#/components/schemas/Pet_2" },
+          "Pet_2": {
+            "$schema": "https://spec.openapis.org/oas/3.1/dialect/base",
+            "type": "object",
+            "properties": { "tag": { "$ref": "#/components/schemas/Pet_2/$defs/tag" } },
+            "$defs": { "tag": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Pet_2", "https://example.com/api/new.json", "/components/schemas/Pet", "component"]
+    ],
+    "left": [["/components/schemas/Pet_2/$id", "https://schemas.example.com/pet", "id"]],
+    "dialects": [["/components/schemas/Pet_2", "https://spec.openapis.org/oas/3.1/dialect/base"]]
+  }
+}

@@ -177,9 +177,24 @@
         "count": 1,
         "notFound": 1
       },
+      "expression": {
+        "count": 11,
+        "notFound": 3,
+        "why": {
+          "malformed": 1,
+          "missing": 2
+        }
+      },
       "implicitMapping": {
         "count": 11063,
         "notFound": 0
+      },
+      "linkParameter": {
+        "count": 83,
+        "notFound": 4,
+        "why": {
+          "missing": 4
+        }
       },
       "mapping": {
         "count": 7810,
@@ -193,9 +208,25 @@
         "count": 19,
         "notFound": 19
       },
+      "pathClash": {
+        "count": 135,
+        "notFound": 0
+      },
+      "pathParameter": {
+        "count": 294601,
+        "notFound": 11634,
+        "why": {
+          "no-parameter": 94,
+          "unresolved": 11540
+        }
+      },
       "securityScheme": {
         "count": 65566,
         "notFound": 1
+      },
+      "serverVariable": {
+        "count": 1850,
+        "notFound": 0
       },
       "tag": {
         "count": 151852,
@@ -204,6 +235,13 @@
       "tagParent": {
         "count": 197,
         "notFound": 0
+      },
+      "template": {
+        "count": 2,
+        "notFound": 2,
+        "why": {
+          "repeated": 2
+        }
       }
     },
     "cuts": 2123,
@@ -216,12 +254,28 @@
     "documentsWithCuts": 603,
     "documentsWithDataSlots": 886,
     "heldAsWritten": 0,
+    "ignored": {
+      "byWhat": {
+        "parameter": 3706,
+        "responseHeader": 48
+      },
+      "documents": 118
+    },
     "kinds": {
       "pathItem": 13,
       "reference": 543474,
       "schema": 753392
     },
     "notRun": 0,
+    "operations": {
+      "byKind": {
+        "callback": 105,
+        "path": 178458,
+        "webhook": 662
+      },
+      "count": 179225,
+      "partial": 7268
+    },
     "resolved": 5170,
     "sites": 1296879,
     "skipped": {

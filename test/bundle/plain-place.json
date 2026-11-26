@@ -1,0 +1,47 @@
+{
+  "note": "A reference lands in a document before anything reads the schema above the place: on the schema's `default`, which is then read as a schema. In the bundle the schema is among the schemas, and its `default` is plain JSON by where it is, which no reference changes. That is listed. The part is brought again by itself, among the schemas, and the reference names that one.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Start": { "$ref": "a.json#/Thing/default" } } }
+  },
+  "documents": {
+    "a.json": {
+      "Thing": {
+        "type": "object",
+        "default": { "$ref": "#/Thing", "description": "Read as a schema, since a reference landed here first." }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Start": { "$ref": "#/components/schemas/default" },
+          "Thing": {
+            "type": "object",
+            "default": {
+              "$ref": "#/components/schemas/Thing",
+              "description": "Read as a schema, since a reference landed here first."
+            }
+          },
+          "default": {
+            "$ref": "#/components/schemas/Thing",
+            "description": "Read as a schema, since a reference landed here first."
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Thing", "https://example.com/api/a.json", "/Thing", "component"],
+      ["/components/schemas/default", "https://example.com/api/a.json", "/Thing/default", "component"]
+    ],
+    "left": [["/components/schemas/Thing/default", "https://example.com/api/a.json#/Thing/default", "type"]],
+    "dialects": []
+  }
+}

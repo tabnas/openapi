@@ -1,0 +1,72 @@
+{
+  "note": "A relative URL in content of another document is read against that document where it was written. Where it is brought to, it is written to name what it named. A URL that is not relative to the description stands.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "externalDocs": { "url": "docs/index.html" },
+    "paths": { "/a": { "$ref": "parts/a.json" } }
+  },
+  "documents": {
+    "parts/a.json": {
+      "servers": [{ "url": "v2" }, { "url": "{scheme}://{host}/v2" }, { "url": "/root" }],
+      "get": {
+        "externalDocs": { "url": "a.html" },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "../schemas/thing.json" },
+                "examples": {
+                  "one": { "externalValue": "./one.json" },
+                  "two": { "externalValue": "https://other.example.com/two.json" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas/thing.json": { "type": "object", "externalDocs": { "url": "../docs/thing.html" } }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "externalDocs": { "url": "docs/index.html" },
+      "paths": { "/a": { "$ref": "#/components/pathItems/a" } },
+      "components": {
+        "pathItems": {
+          "a": {
+            "servers": [{ "url": "parts/v2" }, { "url": "{scheme}://{host}/v2" }, { "url": "/root" }],
+            "get": {
+              "externalDocs": { "url": "parts/a.html" },
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": { "$ref": "#/components/schemas/thing" },
+                      "examples": {
+                        "one": { "externalValue": "parts/one.json" },
+                        "two": { "externalValue": "https://other.example.com/two.json" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "schemas": { "thing": { "type": "object", "externalDocs": { "url": "docs/thing.html" } } }
+      }
+    },
+    "embedded": [
+      ["/components/pathItems/a", "https://example.com/api/parts/a.json", "", "component"],
+      ["/components/schemas/thing", "https://example.com/api/schemas/thing.json", "", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

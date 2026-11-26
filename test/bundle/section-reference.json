@@ -1,0 +1,58 @@
+{
+  "note": "Under `slots: 'all'` the schema components may themselves be a reference to a document. That place is then the document's, and nothing else is put in it: its members are those of what it names. A schema of another document is written in the place of the first reference to it.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "options": { "slots": "all" },
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": {
+        "get": {
+          "responses": {
+            "200": {
+              "description": "ok",
+              "content": { "application/json": { "schema": { "$ref": "other.json#/Thing" } } }
+            }
+          }
+        }
+      }
+    },
+    "components": { "schemas": { "$ref": "schemas.json" } }
+  },
+  "documents": {
+    "schemas.json": { "Thing": { "type": "string" }, "Uses": { "$ref": "other.json#/Thing" } },
+    "other.json": { "Thing": { "type": "number" } }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": {
+            "responses": {
+              "200": { "description": "ok", "content": { "application/json": { "schema": { "type": "number" } } } }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "Thing": { "type": "string" },
+          "Uses": { "$ref": "#/paths/~1a/get/responses/200/content/application~1json/schema" }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/paths/~1a/get/responses/200/content/application~1json/schema",
+        "https://example.com/api/other.json",
+        "/Thing",
+        "inline"
+      ],
+      ["/components/schemas", "https://example.com/api/schemas.json", "", "inline"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

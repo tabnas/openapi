@@ -1,0 +1,37 @@
+{
+  "note": "Two schemas in two documents that name each other. Each is brought once, and each names the other in the bundle.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Start": { "$ref": "a.json#/A" } } }
+  },
+  "documents": {
+    "a.json": { "A": { "type": "object", "properties": { "b": { "$ref": "b.json#/B" } } } },
+    "b.json": { "B": { "type": "object", "properties": { "a": { "$ref": "a.json#/A" }, "self": { "$ref": "#/B" } } } }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Start": { "$ref": "#/components/schemas/A" },
+          "A": { "type": "object", "properties": { "b": { "$ref": "#/components/schemas/B" } } },
+          "B": {
+            "type": "object",
+            "properties": { "a": { "$ref": "#/components/schemas/A" }, "self": { "$ref": "#/components/schemas/B" } }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/A", "https://example.com/api/a.json", "/A", "component"],
+      ["/components/schemas/B", "https://example.com/api/b.json", "/B", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

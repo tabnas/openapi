@@ -33,5 +33,44 @@
     ["", "/paths/~1foo/get/requestBody", "https://git.example.com/shared/blob/main/shared/foo.yaml", "/components/requestBodies/Foo", "resolved"],
     ["https://git.example.com/shared/blob/main/shared/foo.yaml", "/components/requestBodies/Foo/content/application~1json/schema", "", "/components/schemas/Foo", "resolved"],
     ["https://git.example.com/shared/blob/main/shared/foo.yaml", "/components/schemas/Foo/properties/bar", "", "/components/schemas/Bar", "resolved"]
-  ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.2.0",
+      "$self": "https://example.com/api/openapi",
+      "info": { "title": "Example API", "version": 1 },
+      "paths": { "/foo": { "get": { "requestBody": { "$ref": "#/components/requestBodies/Foo" } } } },
+      "components": {
+        "requestBodies": {
+          "Foo": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Foo" } } } }
+        },
+        "schemas": {
+          "Foo": { "$id": "https://example.com/api/schemas/foo", "properties": { "bar": { "$ref": "bar" } } },
+          "Bar": { "$id": "https://example.com/api/schemas/bar", "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/requestBodies/Foo",
+        "https://git.example.com/shared/blob/main/shared/foo.yaml",
+        "/components/requestBodies/Foo",
+        "component"
+      ],
+      [
+        "/components/schemas/Foo",
+        "https://git.example.com/shared/blob/main/shared/foo.yaml",
+        "/components/schemas/Foo",
+        "component"
+      ],
+      [
+        "/components/schemas/Bar",
+        "https://git.example.com/shared/blob/main/shared/foo.yaml",
+        "/components/schemas/Bar",
+        "component"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
 }

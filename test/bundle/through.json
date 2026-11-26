@@ -1,0 +1,40 @@
+{
+  "note": "A pointer that is read on through a reference, where a step is missing as written, lands where that reference names. The bundle names the landing.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Deep": { "$ref": "far.json#/components/schemas/alias/properties/name" } } }
+  },
+  "documents": {
+    "far.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "components": {
+        "schemas": {
+          "alias": { "$ref": "#/components/schemas/real" },
+          "real": { "type": "object", "properties": { "name": { "type": "string" } } }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": { "schemas": { "Deep": { "$ref": "#/components/schemas/name" }, "name": { "type": "string" } } }
+    },
+    "embedded": [
+      [
+        "/components/schemas/name",
+        "https://example.com/api/far.json",
+        "/components/schemas/real/properties/name",
+        "component"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

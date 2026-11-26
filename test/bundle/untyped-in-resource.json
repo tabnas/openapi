@@ -1,0 +1,47 @@
+{
+  "note": "Under `slots: 'all'` a reference in data inside a schema resource names content that nothing gave a type. Among the resource's `$defs` it would be read as a schema, and a reference in it would give what it lands on a type that the documents do not. It is written in the place of the reference, where it stays data, as in the description's own content.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "options": { "slots": "all" },
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Record": {
+          "$id": "https://schemas.example.com/record",
+          "type": "object",
+          "x-notes": { "$ref": "https://example.com/api/notes.json#/first" }
+        }
+      }
+    }
+  },
+  "documents": {
+    "notes.json": {
+      "first": { "text": "Plain data.", "see": { "$ref": "#/second" } },
+      "second": { "text": "More of it." }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Record": {
+            "$id": "https://schemas.example.com/record",
+            "type": "object",
+            "x-notes": { "text": "Plain data.", "see": { "text": "More of it." } }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Record/x-notes/see", "https://example.com/api/notes.json", "/second", "inline"],
+      ["/components/schemas/Record/x-notes", "https://example.com/api/notes.json", "/first", "inline"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

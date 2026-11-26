@@ -1,0 +1,59 @@
+{
+  "note": "A reference lands on a value that the model reads as plain JSON: a schema's example, in another description. Among the schemas it would be read as one, and the `$ref` in it would be a reference. So the schema that the example is in is brought, and the reference names the example in it, where it is plain JSON as it was.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Sample": { "$ref": "other.json#/components/schemas/Thing/example" },
+        "Name": { "type": "number" }
+      }
+    }
+  },
+  "documents": {
+    "other.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Thing": {
+            "type": "object",
+            "example": {
+              "$ref": "#/components/schemas/Name",
+              "note": "An example is plain data, and this is no reference."
+            }
+          },
+          "Name": { "type": "string" }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Sample": { "$ref": "#/components/schemas/Thing/example" },
+          "Name": { "type": "number" },
+          "Thing": {
+            "type": "object",
+            "example": {
+              "$ref": "#/components/schemas/Name",
+              "note": "An example is plain data, and this is no reference."
+            }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Thing", "https://example.com/api/other.json", "/components/schemas/Thing", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

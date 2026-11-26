@@ -1,0 +1,31 @@
+{
+  "note": "A reference in another document names a place of the description that is not there. It is left, and listed, and it is written as the fragment alone, as a reference of the description's own to a place in it is: the bundle is then the same wherever it is read from, and its own bundle.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Pet": { "$ref": "pets.json#/Pet" } } }
+  },
+  "documents": {
+    "pets.json": {
+      "Pet": { "type": "object", "properties": { "owner": { "$ref": "openapi.json#/components/schemas/Owner" } } }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "$ref": "#/components/schemas/Pet_2" },
+          "Pet_2": { "type": "object", "properties": { "owner": { "$ref": "#/components/schemas/Owner" } } }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/Pet_2", "https://example.com/api/pets.json", "/Pet", "component"]],
+    "left": [["/components/schemas/Pet_2/properties/owner", "openapi.json#/components/schemas/Owner", "not-found"]],
+    "dialects": []
+  }
+}

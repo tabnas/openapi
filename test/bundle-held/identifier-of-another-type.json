@@ -1,0 +1,34 @@
+{
+  "note": "A part that the documents read as a Path Item has a member named `$id`, which is a plain member there. In the bundle a schema's reference lands on the part first, and the member was read as an identifier, which took the place of the resource it is in. It is left out, and listed.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": { "/q": { "$ref": "a.json#/Y" } },
+        "components": {
+          "schemas": {
+            "Z": {
+              "properties": { "q": { "properties": { "q": { "properties": { "q": { "$ref": "c.json#/X" } } } } } },
+              "$id": "X.s"
+            }
+          }
+        }
+      },
+      "documents": {
+        "a.json": { "Y": { "properties": { "q": { "properties": { "q": { "$id": "X.s" } } } }, "$id": "A.s" } },
+        "c.json": {
+          "X": {
+            "properties": {
+              "q": {
+                "properties": { "q": { "properties": { "q": { "$ref": "a.json" } } }, "r": { "$ref": "a.json#/Y" } }
+              }
+            }
+          }
+        }
+      },
+      "options": { "slots": "all" }
+    }
+  ]
+}

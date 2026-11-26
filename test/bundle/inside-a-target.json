@@ -1,0 +1,46 @@
+{
+  "note": "A Path Item of 3.0 has no component, so it is written in the place of its reference. But this one is in a document that is itself brought in whole, as a schema. It is then in the bundle once, inside that schema, and its reference names it there: the reference is what makes it a Path Item there, as it was in the documents.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/q": { "$ref": "both.json#/item" } }
+  },
+  "documents": {
+    "both.json": {
+      "item": {
+        "get": {
+          "responses": {
+            "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "both.json" } } } }
+          }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/q": { "$ref": "#/components/schemas/both/item" } },
+      "components": {
+        "schemas": {
+          "both": {
+            "item": {
+              "get": {
+                "responses": {
+                  "200": {
+                    "description": "ok",
+                    "content": { "application/json": { "schema": { "$ref": "#/components/schemas/both" } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/both", "https://example.com/api/both.json", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

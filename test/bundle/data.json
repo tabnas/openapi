@@ -1,0 +1,46 @@
+{
+  "note": "Under slots: 'all' a reference in data is one, and what it names stands in its place. A part of that which another reference reads as a schema would be data there, so it goes among the schemas, and a reference to it stands where it was.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "options": { "slots": "all" },
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "x-samples": { "first": { "$ref": "data.json#/sample" }, "second": { "$ref": "data.json#/sample" } },
+    "components": { "schemas": { "Name": { "$ref": "data.json#/sample/shape/name" } } }
+  },
+  "documents": {
+    "data.json": {
+      "sample": {
+        "note": "plain data",
+        "shape": { "name": { "$ref": "#/kinds/text", "description": "A name." }, "size": 3 }
+      },
+      "kinds": { "text": { "type": "string" } }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "x-samples": {
+        "first": { "note": "plain data", "shape": { "name": { "$ref": "#/components/schemas/name" }, "size": 3 } },
+        "second": { "$ref": "#/x-samples/first" }
+      },
+      "components": {
+        "schemas": {
+          "Name": { "$ref": "#/components/schemas/name" },
+          "name": { "$ref": "#/components/schemas/text", "description": "A name." },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/name", "https://example.com/api/data.json", "/sample/shape/name", "component"],
+      ["/x-samples/first", "https://example.com/api/data.json", "/sample", "inline"],
+      ["/components/schemas/text", "https://example.com/api/data.json", "/kinds/text", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

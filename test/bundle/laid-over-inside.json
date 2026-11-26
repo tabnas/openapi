@@ -1,0 +1,43 @@
+{
+  "note": "A Path Item of 3.0 is written in the place of its reference with the reference's own fields laid over it. The fields of the Path Item that they are laid over are not written at all: nothing of them is in the bundle, so a target that only they hold has no place there, and gets one where another reference names it.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": { "$ref": "p.json#/P", "post": { "responses": { "201": { "description": "Mine" } } } },
+      "/b": { "$ref": "p.json#/Q" }
+    }
+  },
+  "documents": {
+    "p.json": {
+      "P": {
+        "get": { "responses": { "200": { "description": "ok" } } },
+        "post": {
+          "callbacks": { "cb": { "{$url}": { "$ref": "#/Q" } } },
+          "responses": { "200": { "description": "ok" } }
+        }
+      },
+      "Q": { "get": { "responses": { "200": { "description": "ok" } } } }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": { "responses": { "200": { "description": "ok" } } },
+          "post": { "responses": { "201": { "description": "Mine" } } }
+        },
+        "/b": { "get": { "responses": { "200": { "description": "ok" } } } }
+      }
+    },
+    "embedded": [
+      ["/paths/~1a", "https://example.com/api/p.json", "/P", "inline"],
+      ["/paths/~1b", "https://example.com/api/p.json", "/Q", "inline"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

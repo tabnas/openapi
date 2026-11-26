@@ -1,0 +1,46 @@
+{
+  "note": "An identifier that names the resource it is already in is no resource of its own. Brought to another document it would start one, so it is left out.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "A": { "$ref": "doc.json#/components/schemas/Odd" } } }
+  },
+  "documents": {
+    "doc.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "components": {
+        "schemas": {
+          "Odd": {
+            "$id": "doc.json",
+            "type": "object",
+            "properties": { "p": { "$ref": "#/components/schemas/Other" } }
+          },
+          "Other": { "type": "string" }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": { "$ref": "#/components/schemas/Odd" },
+          "Odd": { "type": "object", "properties": { "p": { "$ref": "#/components/schemas/Other" } } },
+          "Other": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Odd", "https://example.com/api/doc.json", "/components/schemas/Odd", "component"],
+      ["/components/schemas/Other", "https://example.com/api/doc.json", "/components/schemas/Other", "component"]
+    ],
+    "left": [["/components/schemas/Odd/$id", "doc.json", "id"]],
+    "dialects": []
+  }
+}

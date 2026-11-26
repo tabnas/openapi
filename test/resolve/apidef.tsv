@@ -1,13 +1,13 @@
 input	expected	unresolved	cuts	opts	select
-# Rows 2 to 25 of @voxgig/apidef's ts/test/parse-resolve.tsv (at
-# 69fd2e5), its reference rows, under compat: 'apidef'. Each row's
+# Rows 2 to 25 of @voxgig/apidef's test/parse-resolve.tsv (at
+# 895450a), its reference rows, under compat: 'apidef'. Each row's
 # input, select path and expected value are apidef's own; the
 # unresolved and cuts columns are this resolver's report. The whole
 # file stays apidef's gate, run through its own parse.
 # index into allOf
 {"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"X":{"allOf":[{"type":"object","properties":{"id":{"type":"string"}}}]},"R":{"$ref":"#/components/schemas/X/allOf/0"}}}}	{"type":"object","properties":{"id":{"type":"string"}},"x-ref":"#/components/schemas/X/allOf/0"}	[]	[]	{"compat":"apidef"}	["components","schemas","R"]
 # index into a parameter list
-{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{"/a":{"get":{"parameters":[{"name":"q","in":"query"},{"$ref":"#/paths/~1a/get/parameters/0"}],"responses":{}}}}}	{"name":"q","in":"query","x-ref":"#/paths/~1a/get/parameters/0"}	[]	[]	{"compat":"apidef"}	["paths","/a","get","parameters","1"]
+{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{"/a":{"get":{"parameters":[{"name":"q","in":"query"}],"responses":{}}},"/b":{"get":{"parameters":[{"$ref":"#/paths/~1a/get/parameters/0"}],"responses":{}}}}}	{"name":"q","in":"query","x-ref":"#/paths/~1a/get/parameters/0"}	[]	[]	{"compat":"apidef"}	["paths","/b","get","parameters","0"]
 # escaped key then index
 {"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"a/b~c":{"oneOf":[{"type":"string"}]},"R":{"$ref":"#/components/schemas/a~1b~0c/oneOf/0"}}}}	{"type":"string","x-ref":"#/components/schemas/a~1b~0c/oneOf/0"}	[]	[]	{"compat":"apidef"}	["components","schemas","R"]
 # index with a leading zero

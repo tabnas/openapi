@@ -128,6 +128,37 @@ may. `resolveAll` counts the documents it asks for as well, and the
 rounds it takes to find them, since each round reads the index of every
 document again.
 
+## One document from several
+
+A description in several documents is easy to edit and awkward to
+hand on: a tool that takes one file cannot take forty. `bundle` writes
+the documents as one, and it does so without resolving anything. A
+reference stays a reference, so a schema that fifty operations use is
+still written once.
+
+What it moves has to mean in its new place what it meant in its old
+one, and three things about a place decide what its content means. The
+base URI decides what a relative URL names. The schema dialect in
+force decides how a schema is read. And the object model decides what
+each value is: a response, a schema, or plain data. So a bundle is
+more than a copy with the references renamed. A relative URL in a
+schema that moves is written again. A schema that was read as
+draft-07 says so where it arrives. A schema with an `$id` keeps the
+`$id` and moves whole, because the references inside it are read
+against it. A value that a reference names inside an example comes
+with the schema that holds the example, so that it is still plain
+data, and a `$ref` in it is still no reference.
+
+The check on all of this is one sentence: the bundle resolves to what
+the documents resolve to. The test suite holds every case to it, and
+the corpus's descriptions in several documents as well. Where a bundle
+cannot keep a meaning it says so, in `left`: a reference that it had
+no place for, or a part that has its type from a reference and not
+from where it is.
+
+A bundle cannot keep the absence of a name. A schema in a file of its
+own has no component name, and in the bundle it has one.
+
 ## What is a reference
 
 Not every map that owns `$ref` is a reference. An example payload can
@@ -191,6 +222,55 @@ one operation however many paths reach it. A 3.2 Security Requirement may
 name a scheme by URI as well as by name, and a name that is also a URI
 to another scheme is flagged, since which reading a tool takes decides
 who may call the operation.
+
+## What an operation inherits
+
+An Operation Object is not the whole of its operation. The Path Item it
+is in gives it parameters, which it may replace one at a time by
+declaring a parameter of the same name and location. Its servers are
+its own, or its Path Item's, or the root's. Its security is its own or
+the root's, and an empty list of its own is how it has none. A tool
+that reads the Operation Object alone has an operation with parameters
+missing and, often, the wrong servers.
+
+None of that is a reference, so resolving does not apply it, and the
+resolved tree still has each list where the document has it. The
+`operations` option gives the reading instead, as a view beside the
+tree, with one entry for each operation. An entry says what applies to
+its operation and where each part came from. The values in an entry
+are the objects of the tree, so the view costs a list of entries and no
+copy of the description.
+
+The same reading has an exception that the specification states in a
+sentence a reader can miss. A header parameter named `Accept`,
+`Content-Type` or `Authorization` is to be ignored, since the request
+body, the responses, and the security schemes say those. Such a
+parameter is in no entry of the view, and the `ignored` report lists
+each one, so a tool that drops them can say what it dropped.
+
+## Templates and runtime expressions
+
+Two small languages live inside the strings of a description. A
+template has names between braces: a path names its path parameters
+that way, and a server's URL its variables. A runtime expression, such
+as `$request.path.id` or `$response.body#/id`, names a value of one
+request and its response. A Link holds them, and a callback's key is
+one.
+
+Both are read as the specification's own grammars have them, which are
+lexical: a name is every character up to the closing brace, or to the
+end of the expression. A grammar of operators reads the skeleton of an
+expression and then splits the names, so a query parameter named `a.b`
+comes out as two parts. `readExpression` and `readTemplate` do not
+split them.
+
+What a template or an expression names can be checked without a
+request, and `connections` checks it: that a path's names are path
+parameters of each operation under it, that a server's variables are
+declared, and that an expression's parameter is one its operation
+declares. What an expression is worth cannot be known without a
+request. `resolve` gives it no value, and `evaluateExpression` gives
+one to a caller who has the request and the response in hand.
 
 ## Matching another resolver
 

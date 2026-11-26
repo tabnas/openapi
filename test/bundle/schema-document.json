@@ -1,0 +1,59 @@
+{
+  "note": "A JSON Schema document that names itself with $id is a schema resource, and is brought whole with its identifier. What names a part of it names the part there, and a reference inside it stands as written.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Whole": { "$ref": "schemas/user.json" },
+        "Part": { "$ref": "schemas/user.json#/$defs/address" },
+        "ById": { "$ref": "https://example.com/api/schemas/user.json#/$defs/address" },
+        "Other": { "$ref": "schemas/plain.json#/$defs/code" }
+      }
+    }
+  },
+  "documents": {
+    "schemas/user.json": {
+      "$id": "https://example.com/api/schemas/user.json",
+      "type": "object",
+      "properties": { "home": { "$ref": "#/$defs/address" }, "code": { "$ref": "plain.json#/$defs/code" } },
+      "$defs": { "address": { "type": "object" } }
+    },
+    "schemas/plain.json": {
+      "type": "object",
+      "properties": { "code": { "$ref": "#/$defs/code" } },
+      "$defs": { "code": { "type": "string" } }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Whole": { "$ref": "#/components/schemas/user" },
+          "Part": { "$ref": "#/components/schemas/user/$defs/address" },
+          "ById": { "$ref": "https://example.com/api/schemas/user.json#/$defs/address" },
+          "Other": { "$ref": "#/components/schemas/code" },
+          "user": {
+            "$id": "https://example.com/api/schemas/user.json",
+            "type": "object",
+            "properties": { "home": { "$ref": "#/$defs/address" }, "code": { "$ref": "#/$defs/code" } },
+            "$defs": { "address": { "type": "object" }, "code": { "type": "string" } }
+          },
+          "code": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/user", "https://example.com/api/schemas/user.json", "", "component"],
+      ["/components/schemas/code", "https://example.com/api/schemas/plain.json", "/$defs/code", "component"],
+      ["/components/schemas/user/$defs/code", "https://example.com/api/schemas/plain.json", "/$defs/code", "defs"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

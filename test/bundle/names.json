@@ -1,0 +1,63 @@
+{
+  "note": "Names are kept apart. A target takes the last step of its pointer as its name, or the name of its file where it is a whole document, and a number after it where the name is taken: by a component of the entry, or by another target. One target is brought once, however many references name it, and a target inside one that is already there is named through it.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": { "type": "string" },
+        "A": { "$ref": "one.json#/schemas/Pet" },
+        "B": { "$ref": "two.json#/schemas/Pet" },
+        "C": { "$ref": "one.json#/schemas/Pet" },
+        "D": { "$ref": "one.json#/schemas/Pet/properties/tag" },
+        "E": { "$ref": "pet.json" },
+        "F": { "$ref": "odd.json#/schemas/a%20b~1c" },
+        "G": { "$ref": "chain.json#/first" }
+      }
+    }
+  },
+  "documents": {
+    "one.json": { "schemas": { "Pet": { "type": "object", "properties": { "tag": { "type": "string" } } } } },
+    "two.json": { "schemas": { "Pet": { "type": "integer" } } },
+    "pet.json": { "type": "object", "title": "A whole document" },
+    "odd.json": { "schemas": { "a b/c": { "type": "boolean" } } },
+    "chain.json": { "first": { "$ref": "#/second" }, "second": { "$ref": "two.json#/schemas/Pet" } }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "type": "string" },
+          "A": { "$ref": "#/components/schemas/Pet_2" },
+          "B": { "$ref": "#/components/schemas/Pet_3" },
+          "C": { "$ref": "#/components/schemas/Pet_2" },
+          "D": { "$ref": "#/components/schemas/Pet_2/properties/tag" },
+          "E": { "$ref": "#/components/schemas/pet" },
+          "F": { "$ref": "#/components/schemas/a_b_c" },
+          "G": { "$ref": "#/components/schemas/first" },
+          "Pet_2": { "type": "object", "properties": { "tag": { "type": "string" } } },
+          "Pet_3": { "type": "integer" },
+          "pet": { "type": "object", "title": "A whole document" },
+          "a_b_c": { "type": "boolean" },
+          "first": { "$ref": "#/components/schemas/second" },
+          "second": { "$ref": "#/components/schemas/Pet_3" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Pet_2", "https://example.com/api/one.json", "/schemas/Pet", "component"],
+      ["/components/schemas/Pet_3", "https://example.com/api/two.json", "/schemas/Pet", "component"],
+      ["/components/schemas/pet", "https://example.com/api/pet.json", "", "component"],
+      ["/components/schemas/a_b_c", "https://example.com/api/odd.json", "/schemas/a b~1c", "component"],
+      ["/components/schemas/first", "https://example.com/api/chain.json", "/first", "component"],
+      ["/components/schemas/second", "https://example.com/api/chain.json", "/second", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "note": "A reference of the description's own is a fragment alone, and its pointer is read on through another reference, into another document. A reader that takes a pointer by the letter reads on through no reference, and the bundle may not be able to keep the one on the way. So it is written to name where the bundle has what it named.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": { "$ref": "pets.json#/Pet" },
+        "Name": { "$ref": "#/components/schemas/Pet/properties/name" }
+      }
+    }
+  },
+  "documents": { "pets.json": { "Pet": { "type": "object", "properties": { "name": { "type": "string" } } } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "$ref": "#/components/schemas/Pet_2" },
+          "Name": { "$ref": "#/components/schemas/Pet_2/properties/name" },
+          "Pet_2": { "type": "object", "properties": { "name": { "type": "string" } } }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/Pet_2", "https://example.com/api/pets.json", "/Pet", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

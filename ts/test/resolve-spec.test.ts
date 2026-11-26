@@ -7,14 +7,25 @@
 // optional: `select`, a path into the resolved tree whose value is held
 // to `expected` in place of the whole tree; `connections`, the
 // connections report, one `kind at -> target` line each (`!why` for a
-// target not found, then any flags); `provenance`, one
+// target not found, then any flags, and `landing=` where a pointer is
+// read on through a reference), with the name after `at` for the
+// kinds that read a template or an expression; `provenance`, one
 // `at status -> landing` line for each reference, in the order of the
 // report (`-` for one that lands nowhere, then `through=`, `uri=`,
 // `fragment=` and `conflict=` where the row has them); `dialects`, one
 // `at dialect as name` line for each dialect the description declares
-// (then ` unknown` for one this package does not know); and `urls`, one
+// (then ` unknown` for one this package does not know); `urls`, one
 // `at base value -> uri` line for each URL the description gives (`-`
-// for one with no absolute form). These fixtures live outside
+// for one with no absolute form); `operations`, one line for each
+// operation of the view, which the row's options ask for:
+// `at METHOD path`, or `kind:name` in the path's place for a webhook or
+// a callback, then `on expression of at` for a callback, `additional`,
+// `partial`, `id=`, `params=` with `in:name@at` for each parameter, and `servers=`,
+// `security=`, `consumes=`, `produces=` and `schemes=` as `from@at`; and
+// `ignored`, one `what at name` line for each thing the specification
+// says to ignore, then its kind, `path=`, `method=`, `index=` and
+// `additional` where it has them. Every value the view gives is held to
+// the resolved tree at its place. These fixtures live outside
 // test/spec/ because the parity runners there read a parse, and because
 // the Go and Rust ports do not carry the resolver yet.
 
@@ -33,10 +44,14 @@ const DIR = join(__dirname, '..', '..', 'test', 'resolve')
 
 const C = (x: any) => JSON.parse(JSON.stringify(x))
 
+// The kinds whose rows say the name too: several of them may be at one
+// place.
+const NAMED = new Set(['serverVariable', 'template', 'pathClash', 'pathParameter', 'expression', 'linkParameter'])
+
 // One connection as a fixture writes it.
 function line(c: any): string {
-  let out = `${c.kind} ${c.at} -> ${c.found ? c.target : '!' + (c.why ?? 'missing')}`
-  for (const flag of ['via', 'type', 'ambiguous', 'cycle', 'anchor', 'from']) {
+  let out = `${c.kind} ${c.at}${NAMED.has(c.kind) ? ' ' + c.name : ''} -> ${c.found ? c.target : '!' + (c.why ?? 'missing')}`
+  for (const flag of ['via', 'type', 'ambiguous', 'cycle', 'anchor', 'from', 'landing', 'landingDoc']) {
     if (undefined !== c[flag]) out += ` ${flag}=${c[flag]}`
   }
   for (const list of ['targets', 'fields', 'routes']) {
@@ -63,6 +78,64 @@ function spoken(d: any): string {
 // One URL as a fixture writes it.
 function located(u: any): string {
   return `${u.at} ${u.base} ${u.value} -> ${u.uri ?? '-'}`
+}
+
+// One operation of the view as a fixture writes it.
+function reached(op: any): string {
+  let out = `${op.at} ${op.method} ${'path' === op.kind ? op.path : op.kind + ':' + op.name}`
+  if (undefined !== op.expression) out += ` on ${op.expression} of ${op.of}`
+  if (op.additional) out += ' additional'
+  if (op.partial) out += ' partial'
+  if (undefined !== op.operationId) out += ' id=' + op.operationId
+  out += ' params=' + (op.parameters.map((p: any) => `${p.in}:${p.name}@${p.at}`).join(',') || '-')
+  for (const k of ['servers', 'security', 'consumes', 'produces', 'schemes']) {
+    if (undefined !== op[k]) out += ` ${k}=${op[k].from}` + (null === op[k].at ? '' : '@' + op[k].at)
+  }
+  return out
+}
+
+// One thing to ignore as a fixture writes it.
+function passed(i: any): string {
+  let out = `${i.what} ${i.at} ${i.name}`
+  if (undefined !== i.kind) out += ' ' + i.kind
+  if (undefined !== i.path) out += ' path=' + i.path
+  if (undefined !== i.method) out += ' method=' + i.method
+  if (undefined !== i.index) out += ' index=' + i.index
+  if (i.additional) out += ' additional'
+  return out
+}
+
+// The value a tree has at a pointer, or undefined.
+function valueAt(tree: any, at: string): any {
+  let node = tree
+  for (const seg of '' === at ? [] : at.slice(1).split('/')) {
+    const key = seg.replace(/~1/g, '/').replace(/~0/g, '~')
+    if (null == node || 'object' !== typeof node || !Object.prototype.hasOwnProperty.call(node, key)) return undefined
+    node = node[key]
+  }
+  return node
+}
+
+// What an operation of the view gives is what the resolved tree has at
+// the place it says, the same object, and a parameter is the
+// operation's own where it is in the operation's list.
+function heldToTree(op: any, tree: any, where: string): void {
+  assert.strictEqual(op.operation, valueAt(tree, op.at), `${where} ${op.at}: operation`)
+  for (const p of op.parameters) {
+    assert.strictEqual(p.parameter, valueAt(tree, p.at), `${where} ${p.at}: parameter`)
+    assert.equal(p.from, p.at.startsWith(op.at + '/parameters/') ? 'operation' : 'pathItem', `${where} ${p.at}: from`)
+  }
+  for (const k of ['servers', 'security', 'consumes', 'produces', 'schemes']) {
+    const lot = op[k]
+    if (undefined === lot) continue
+    assert.ok(Array.isArray(lot.value), `${where} ${op.at}: ${k} is a list`)
+    if (null === lot.at) {
+      assert.deepStrictEqual(lot.value, 'default' === lot.from ? [{ url: '/' }] : [], `${where} ${op.at}: ${k}`)
+    } else {
+      const held = valueAt(tree, lot.at)
+      if (Array.isArray(held)) assert.strictEqual(lot.value, held, `${where} ${op.at}: ${k}`)
+    }
+  }
 }
 
 const files = readdirSync(DIR).filter((f) => f.endsWith('.tsv')).sort()
@@ -122,6 +195,16 @@ for (const file of files) {
         const urls = row.named('urls').trim()
         if ('' !== urls) {
           assert.deepStrictEqual(out.urls.map(located), JSON.parse(urls), `${file}:${row.line} urls`)
+        }
+        const ops = row.named('operations').trim()
+        if ('' !== ops) {
+          assert.ok(Array.isArray(out.operations), `${file}:${row.line} asks for operations`)
+          assert.deepStrictEqual(out.operations!.map(reached), JSON.parse(ops), `${file}:${row.line} operations`)
+        }
+        for (const op of out.operations ?? []) heldToTree(op, out.tree, `${file}:${row.line}`)
+        const ignored = row.named('ignored').trim()
+        if ('' !== ignored) {
+          assert.deepStrictEqual(out.ignored.map(passed), JSON.parse(ignored), `${file}:${row.line} ignored`)
         }
       })
     }

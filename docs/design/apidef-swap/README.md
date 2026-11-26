@@ -1,8 +1,8 @@
 # apidef's swap
 
 What `voxgig/apidef` changes so that it reads and resolves an OpenAPI
-description with this package. This is apidef's side of T1 and T2 in
-[`../typescript-plan.md`](../typescript-plan.md).
+description with this package. This is apidef's side of T1, T2 and the
+first item of T5 in [`../typescript-plan.md`](../typescript-plan.md).
 
 The change lives in apidef, on its branch `claude/jolly-maxwell-jhjgus`,
 as the pull request voxgig/apidef#230. That is the plan's Decision 20,
@@ -18,6 +18,7 @@ apidef's `main`, the second at `00778c4`, which is apidef 8.33.1.
 | `Say syntax for a syntax error, and prefix apidef's own parse errors once` | The two faults in how apidef's parse stage wraps an error. It needs nothing from this package, so it can go to apidef's `main` by itself |
 | `Read and resolve OpenAPI definitions with @tabnas/openapi` | `parse` and `resolve` from `@tabnas/openapi` in place of apidef's own reader and resolver. Every other step of its parse stage stays |
 | `Take the source checks, the alias limit and the surrogate repair from @tabnas/openapi` | The checks apidef made on the text before reading it, and its repair of lone surrogates, taken from this package in place of apidef's own |
+| `Drop the ignored headers the reader lists` | Which header parameters OpenAPI says to ignore is read from the `ignored` report of `resolve`, in place of apidef's own search of the paths. It follows the merges of apidef's `main` |
 
 Against apidef's `main` the branch changes five files of source and
 fixtures: `ts/src/parse.ts`, `ts/src/yamlalias.ts`, which goes,
@@ -112,8 +113,41 @@ implementations of the scan are still held to one table. One comment in
 the other implementation named the file this commit deletes, and is
 reworded.
 
-Two sources read differently after this commit, both of them texts with
-nothing in them:
+**The ignored headers.** From 3.0 a header parameter named `Accept`,
+`Content-Type` or `Authorization` is to be ignored. apidef's
+`dropIgnoredHeaders` searched the resolved tree for them, in each path's
+own list and in the lists of eight methods, dropped each, and recorded
+it for a warning. Which parameters those are is the specification's to
+say, and `resolve` now says it, in `ignored`. So the search goes:
+
+- `resolve(parsed, { compat: 'apidef' })` gives the tree and `ignored`.
+- `dropIgnoredHeaders` applies the rows that are apidef's to act on: a
+  parameter, under `paths`, in a Path Item's own list or in the list of
+  one of the eight methods apidef reads. It drops each by its place in
+  its list, and records the path, the method and the name, sorted as
+  the search found them: by path, a path's own list first, then the
+  methods in apidef's order.
+- `normalizeColonPathParams` says which paths it renamed, since it runs
+  between the two and a row names a path as the tree had it.
+
+apidef's `main` has since gained a step of its own that follows, which
+keeps the first of a repeated parameter and records the rest. The branch
+runs it after the headers are dropped, as `main` does. A row names a
+parameter by its place in its list as written, so the rows are applied
+before any list is cut for another reason.
+
+What apidef does with them is still apidef's: that it drops them, that
+it reads eight methods, that it warns. The report also lists the ones
+under webhooks and callbacks, under `query` and `additionalOperations`,
+and a `Content-Type` header of a response or of an encoding. apidef
+passes those by, as its search did.
+
+On the corpus the two agree on every description: 5,238 of them, read
+as apidef reads them, give the same list and the same tree. 95 have
+such a parameter, 2,388 in all.
+
+Two sources read differently after the third commit, both of them texts
+with nothing in them:
 
 | Source | Before | After |
 |---|---|---|
@@ -151,7 +185,8 @@ checked out and its dependencies installed:
 
 ```bash
 git -C ../apidef fetch origin main
-node tools/apidef-gate.cjs ../apidef --base "$(git -C ../apidef merge-base HEAD origin/main)"
+node tools/apidef-gate.cjs ../apidef --base "$(git -C ../apidef merge-base HEAD origin/main)" \
+  --extra docs/design/apidef-swap/definitions/*.json
 ```
 
 The gate builds two worktrees of the apidef clone, one at the branch and
@@ -171,6 +206,39 @@ two, and for the twelve more that the plan's G2 names, given with
 `--extra`. That run was on this checkout's build, with its
 dependencies as the registry serves them: `@tabnas/expr` 0.6.4, yaml
 0.5.34 and parser 0.12.21.
+
+At apidef `ef123d3`, which adds the commit for the ignored headers,
+against `25f8d4b`, apidef 8.33.2, the gate passes the same: 2,691 of
+2,692 tests, one skipped as on apidef's `main`, and all 110 definitions
+byte-identical, the twelve of G2 among them.
+
+At apidef `10cdaed`, which merges apidef's `main` at `895450a`, the gate
+passes again: 2,700 of 2,701 tests, one skipped as on apidef's `main`,
+and all 110 definitions byte-identical. That `main` keeps the first of a
+repeated parameter and records the rest, in a step after the ignored
+headers are dropped, and the merge keeps the two in that order.
+
+None of the 110 definitions has a header that apidef ignores or a
+parameter that is repeated, so that comparison says nothing of either
+step. apidef's own fixture rows hold the two steps, in its suite, which
+the gate runs. [`definitions/`](definitions/) adds four descriptions
+for the comparison, which the command gives with `--extra`: ignored
+headers beside repeated parameters in one list, the same by reference,
+the same under a path that apidef renames, and repeats in a 2.0
+description, where no header is ignored. apidef drops 17 headers and
+20 repeats from them, and its output for each is byte-identical to that
+of its `main`.
+
+At apidef `9bceec8`, which merges apidef's `main` at `2ffac75`, apidef
+8.33.3, the gate passes the same: 2,734 of 2,735 tests, one skipped as
+on apidef's `main`, and all 120 definitions byte-identical. Those are
+the 104 the gate compares by itself, six of which apidef had added, the
+twelve of G2, and the four here. None of the six has a header that
+apidef ignores or a parameter that is repeated either.
+
+At apidef `3186c51`, which merges apidef 8.34.0 at `46c33ab`, the same
+again: 2,734 of 2,735 tests and all 120 definitions byte-identical.
+That release moved apidef's version and nothing else.
 
 At apidef `3b24341`, where the change was made, the three diffs gave
 the same result on the suite and definitions apidef had then: 2,477 of

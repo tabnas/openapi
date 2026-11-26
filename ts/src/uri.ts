@@ -13,6 +13,14 @@ function pointer(path: readonly (string | number)[]): string {
   return out
 }
 
+// Whether an error is the stack running out. A pattern that is compiled
+// in the last frames says so as a syntax error of its own.
+function ranOut(err: unknown): boolean {
+  return (
+    (err instanceof RangeError || err instanceof SyntaxError) && /call stack|stack overflow/i.test(String(err.message))
+  )
+}
+
 // A URI fragment as JSON Pointer segments: percent-decoded whole first,
 // then split, then `~1` and `~0` (RFC 6901 section 6). Null when it is not
 // a well-formed pointer: bad percent-encoding, or a `~` not followed by 0
@@ -181,6 +189,33 @@ function hierarchical(u: string): boolean {
 
 const withoutFragment = (u: string) => u.replace(/#.*$/s, '')
 
+// The reference that names `target` when it is read against `base`: a
+// relative one, where the two have one scheme and one authority and the
+// base can have a relative reference read against it, and else `target`
+// as it is. What it gives always resolves to `target`.
+function relativeTo(base: string, target: string): string {
+  const b = parseUri(base)
+  const t = parseUri(target)
+  if (!hierarchical(base) || undefined === t.scheme || b.scheme !== t.scheme || b.authority !== t.authority) return target
+  let rel: string
+  if (b.path === t.path && b.query === t.query && undefined !== t.fragment) rel = ''
+  else {
+    const from = b.path.split('/')
+    from.pop()
+    const to = t.path.split('/')
+    const name = to.pop()!
+    let i = 0
+    while (i < from.length && i < to.length && from[i] === to[i]) i++
+    rel = '../'.repeat(from.length - i) + to.slice(i).map((seg) => seg + '/').join('') + name
+    // A first segment with a colon would be read as a scheme, an empty
+    // one as an authority or a root, and no path at all as the base.
+    if ('' === rel || rel.startsWith('/') || /^[^/]*:/.test(rel)) rel = './' + rel
+    if (undefined !== t.query) rel += '?' + t.query
+  }
+  if (undefined !== t.fragment) rel += '#' + t.fragment
+  return resolveUri(base, rel) === target ? rel : target
+}
+
 function fragmentOf(u: string): string | undefined {
   const i = u.indexOf('#')
   return -1 === i ? undefined : u.slice(i + 1)
@@ -235,6 +270,8 @@ export {
   own,
   pointer,
   pointerParts,
+  ranOut,
+  relativeTo,
   resolveUri,
   stepInto,
   withoutFragment,

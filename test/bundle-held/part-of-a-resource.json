@@ -1,0 +1,205 @@
+{
+  "note": "A part of a schema resource is brought without the schema that declares the identifier. A reference in it that names nothing is written to name what it named, read against that identifier. The bundle was right, and the check did not know the base: it reads the identifiers that the documents declare.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "X": {
+              "properties": {
+                "q": { "properties": { "q": { "$ref": "d.json#/components/schemas/Y/properties/q" } } }
+              }
+            }
+          }
+        }
+      },
+      "documents": {
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Y": {
+                "properties": { "q": { "properties": { "q": { "$ref": "sub/b.json#/Z" } } } },
+                "$id": "https://e.org/Z"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Y": {
+              "properties": {
+                "q": {
+                  "properties": {
+                    "q": { "properties": { "q": { "$ref": "d.json#/components/schemas/A/properties/q" } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "documents": {
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "A": {
+                "properties": {
+                  "q": {
+                    "properties": {
+                      "q": { "properties": { "q": { "$ref": "#/components/schemas/X" } }, "$id": "pet.s" }
+                    },
+                    "$id": "https://e.org/Z"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {
+          "/p": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": {
+                          "q": {
+                            "properties": {
+                              "q": { "properties": { "q": { "$ref": "d.json#/components/schemas/A/properties/q" } } }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "documents": {
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "A": {
+                "properties": { "q": { "discriminator": { "mapping": { "m": "a.json#/Z" } } } },
+                "$id": "https://e.org/Y"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {
+          "/p": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": { "properties": { "q": { "$ref": "d.json#/components/schemas/pet/properties/q" } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "documents": {
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "pet": {
+                "properties": { "q": { "properties": { "q": { "$ref": "#/components/schemas/Y" } } } },
+                "$id": "https://e.org/Y"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": { "schemas": { "Z": { "$ref": "d.json#/components/schemas/Y/properties/q" } } }
+      },
+      "documents": {
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Y": { "$ref": "d.json#/components/schemas/pet" },
+              "pet": {
+                "properties": { "q": { "properties": { "q": { "properties": { "r": { "$ref": "a.json" } } } } } },
+                "$id": "https://e.org/Z"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": { "title": "t", "version": "1" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "X": {
+              "properties": {
+                "q": {
+                  "properties": {
+                    "q": { "properties": { "q": { "$ref": "d.json#/components/schemas/Z/properties/q" } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "documents": {
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Z": {
+                "properties": { "q": { "properties": { "q": { "$ref": "#/components/schemas/X" } } } },
+                "$id": "https://e.org/X"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

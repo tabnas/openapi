@@ -1,0 +1,92 @@
+{
+  "note": "A mapping value that names a schema in another document brings that schema among the components and names it there. A value that is a name of the description stands, and so does one that reads as a name and names nothing.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Cat": { "type": "object" },
+        "Pet": {
+          "oneOf": [{ "$ref": "pets/dog.json" }, { "$ref": "#/components/schemas/Cat" }],
+          "discriminator": {
+            "propertyName": "kind",
+            "mapping": {
+              "dog": "pets/dog.json",
+              "cat": "Cat",
+              "lizard": "pets/lizard.json#/Lizard",
+              "fish": "Fish",
+              "gone": "pets/gone.json"
+            }
+          }
+        },
+        "Far": { "$ref": "pets/more.json#/Animal" }
+      }
+    }
+  },
+  "documents": {
+    "pets/dog.json": { "type": "object", "title": "Dog" },
+    "pets/lizard.json": { "Lizard": { "type": "object", "title": "Lizard" } },
+    "pets/more.json": {
+      "Animal": {
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": { "dog": "dog.json", "cat": "Cat", "bird": "more.json#/Bird", "nope": "nope.json#/x" }
+        }
+      },
+      "Bird": { "type": "object" }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Cat": { "type": "object" },
+          "Pet": {
+            "oneOf": [{ "$ref": "#/components/schemas/dog" }, { "$ref": "#/components/schemas/Cat" }],
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "dog": "#/components/schemas/dog",
+                "cat": "Cat",
+                "lizard": "#/components/schemas/Lizard",
+                "fish": "Fish",
+                "gone": "pets/gone.json"
+              }
+            }
+          },
+          "Far": { "$ref": "#/components/schemas/Animal" },
+          "dog": { "type": "object", "title": "Dog" },
+          "Lizard": { "type": "object", "title": "Lizard" },
+          "Animal": {
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "dog": "#/components/schemas/dog",
+                "cat": "Cat",
+                "bird": "#/components/schemas/Bird",
+                "nope": "pets/nope.json#/x"
+              }
+            }
+          },
+          "Bird": { "type": "object" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/dog", "https://example.com/api/pets/dog.json", "", "component"],
+      ["/components/schemas/Lizard", "https://example.com/api/pets/lizard.json", "/Lizard", "component"],
+      ["/components/schemas/Animal", "https://example.com/api/pets/more.json", "/Animal", "component"],
+      ["/components/schemas/Bird", "https://example.com/api/pets/more.json", "/Bird", "component"]
+    ],
+    "left": [
+      ["/components/schemas/Pet/discriminator/mapping/gone", "pets/gone.json", "external"],
+      ["/components/schemas/Animal/discriminator/mapping/nope", "nope.json#/x", "external"]
+    ],
+    "dialects": []
+  }
+}

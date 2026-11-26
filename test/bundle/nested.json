@@ -1,0 +1,55 @@
+{
+  "note": "A target inside another target is brought once, as part of the outer one, whichever of the two is met first.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Inner": { "$ref": "lib.json#/defs/Outer/properties/inner" },
+        "Deep": { "$ref": "lib.json#/defs/Outer/properties/inner/properties/leaf" },
+        "Outer": { "$ref": "lib.json#/defs/Outer" },
+        "Value": { "$ref": "lib.json#/defs/Outer/properties/flag" }
+      }
+    }
+  },
+  "documents": {
+    "lib.json": {
+      "defs": {
+        "Outer": {
+          "type": "object",
+          "properties": {
+            "inner": { "type": "object", "properties": { "leaf": { "type": "string" } } },
+            "flag": true
+          }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Inner": { "$ref": "#/components/schemas/Outer_2/properties/inner" },
+          "Deep": { "$ref": "#/components/schemas/Outer_2/properties/inner/properties/leaf" },
+          "Outer": { "$ref": "#/components/schemas/Outer_2" },
+          "Value": { "$ref": "#/components/schemas/Outer_2/properties/flag" },
+          "Outer_2": {
+            "type": "object",
+            "properties": {
+              "inner": { "type": "object", "properties": { "leaf": { "type": "string" } } },
+              "flag": true
+            }
+          }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/Outer_2", "https://example.com/api/lib.json", "/defs/Outer", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

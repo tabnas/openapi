@@ -1,0 +1,36 @@
+{
+  "note": "A Path Item of 3.0 that names itself, and that nothing names without a field of its own beside the reference: it has no place where it stands alone, and it cannot be written inside itself, so the reference in it is left.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/a": { "$ref": "item.json", "summary": "Mine" } }
+  },
+  "documents": {
+    "item.json": {
+      "summary": "Theirs",
+      "post": {
+        "responses": { "200": { "description": "ok" } },
+        "callbacks": { "again": { "{$url}": { "$ref": "item.json" } } }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "summary": "Mine",
+          "post": {
+            "responses": { "200": { "description": "ok" } },
+            "callbacks": { "again": { "{$url}": { "$ref": "item.json" } } }
+          }
+        }
+      }
+    },
+    "embedded": [["/paths/~1a", "https://example.com/api/item.json", "", "inline"]],
+    "left": [["/paths/~1a/post/callbacks/again/{$url}", "item.json", "cycle"]],
+    "dialects": []
+  }
+}

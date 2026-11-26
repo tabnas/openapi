@@ -1,0 +1,87 @@
+input	expected
+# A runtime expression, read by readExpression. expected is what it
+# gives, as JSON, or ERROR:openapi_expression for text that is no
+# expression. The grammar is the ABNF of the specification's "Runtime
+# Expressions" section, read as it is written: what follows `query.` or
+# `path.` is the name, to the end.
+#
+# Every expression of the specification's tables and examples, 3.0.4,
+# 3.1.2 and 3.2.1.
+$url	{"expression":"$url","source":"url"}
+$method	{"expression":"$method","source":"method"}
+$statusCode	{"expression":"$statusCode","source":"statusCode"}
+$request.path.id	{"expression":"$request.path.id","source":"request","kind":"path","name":"id"}
+$request.path.eventType	{"expression":"$request.path.eventType","source":"request","kind":"path","name":"eventType"}
+$request.query.queryUrl	{"expression":"$request.query.queryUrl","source":"request","kind":"query","name":"queryUrl"}
+$request.header.accept	{"expression":"$request.header.accept","source":"request","kind":"header","name":"accept"}
+$request.header.content-type	{"expression":"$request.header.content-type","source":"request","kind":"header","name":"content-type"}
+$request.body#/url	{"expression":"$request.body#/url","source":"request","kind":"body","pointer":"/url","tokens":["url"]}
+$request.body#/user/uuid	{"expression":"$request.body#/user/uuid","source":"request","kind":"body","pointer":"/user/uuid","tokens":["user","uuid"]}
+$request.body#/failedUrl	{"expression":"$request.body#/failedUrl","source":"request","kind":"body","pointer":"/failedUrl","tokens":["failedUrl"]}
+$request.body#/successUrls/1	{"expression":"$request.body#/successUrls/1","source":"request","kind":"body","pointer":"/successUrls/1","tokens":["successUrls","1"]}
+$request.body#/id	{"expression":"$request.body#/id","source":"request","kind":"body","pointer":"/id","tokens":["id"]}
+$request.body#/email	{"expression":"$request.body#/email","source":"request","kind":"body","pointer":"/email","tokens":["email"]}
+$response.body#/status	{"expression":"$response.body#/status","source":"response","kind":"body","pointer":"/status","tokens":["status"]}
+$response.body#/uuid	{"expression":"$response.body#/uuid","source":"response","kind":"body","pointer":"/uuid","tokens":["uuid"]}
+$response.body#/username	{"expression":"$response.body#/username","source":"response","kind":"body","pointer":"/username","tokens":["username"]}
+$response.header.Server	{"expression":"$response.header.Server","source":"response","kind":"header","name":"Server"}
+$response.header.Location	{"expression":"$response.header.Location","source":"response","kind":"header","name":"Location"}
+# The whole body, with and without an empty pointer.
+$request.body	{"expression":"$request.body","source":"request","kind":"body"}
+$response.body	{"expression":"$response.body","source":"response","kind":"body"}
+$request.body#	{"expression":"$request.body#","source":"request","kind":"body","pointer":"","tokens":[]}
+# Names that an operator grammar splits, and the ABNF does not. A name
+# is any characters, a header's name a token of RFC 9110, which has `.`
+# and `#` in it, and a pointer's token whatever is between two slashes.
+$request.query.a.b	{"expression":"$request.query.a.b","source":"request","kind":"query","name":"a.b"}
+$request.path.a/b	{"expression":"$request.path.a/b","source":"request","kind":"path","name":"a/b"}
+$request.query.a#b	{"expression":"$request.query.a#b","source":"request","kind":"query","name":"a#b"}
+$request.query.a b	{"expression":"$request.query.a b","source":"request","kind":"query","name":"a b"}
+$request.query.{x}	{"expression":"$request.query.{x}","source":"request","kind":"query","name":"{x}"}
+$request.header.X.Y	{"expression":"$request.header.X.Y","source":"request","kind":"header","name":"X.Y"}
+$request.header.X#Y	{"expression":"$request.header.X#Y","source":"request","kind":"header","name":"X#Y"}
+$request.header.!#$%&'*+-.^_`|~09aZ	{"expression":"$request.header.!#$%&'*+-.^_`|~09aZ","source":"request","kind":"header","name":"!#$%&'*+-.^_`|~09aZ"}
+$request.body#/user.name	{"expression":"$request.body#/user.name","source":"request","kind":"body","pointer":"/user.name","tokens":["user.name"]}
+$request.body#/a//b	{"expression":"$request.body#/a//b","source":"request","kind":"body","pointer":"/a//b","tokens":["a","","b"]}
+$request.body#/a,b	{"expression":"$request.body#/a,b","source":"request","kind":"body","pointer":"/a,b","tokens":["a,b"]}
+$request.body#/	{"expression":"$request.body#/","source":"request","kind":"body","pointer":"/","tokens":[""]}
+# A name may be empty, since the ABNF has `name = *char`.
+$request.query.	{"expression":"$request.query.","source":"request","kind":"query","name":""}
+$request.path.	{"expression":"$request.path.","source":"request","kind":"path","name":""}
+# The pointer is no URI fragment, so it is not percent-decoded. `~1`
+# and `~0` are read in its tokens.
+$request.body#/a%2Fb	{"expression":"$request.body#/a%2Fb","source":"request","kind":"body","pointer":"/a%2Fb","tokens":["a%2Fb"]}
+$request.body#/a~1b/~0c	{"expression":"$request.body#/a~1b/~0c","source":"request","kind":"body","pointer":"/a~1b/~0c","tokens":["a/b","~c"]}
+$request.body#/~01	{"expression":"$request.body#/~01","source":"request","kind":"body","pointer":"/~01","tokens":["~1"]}
+# A literal of an ABNF grammar matches without regard to case (RFC
+# 5234). The name keeps its case.
+$URL	{"expression":"$URL","source":"url"}
+$Method	{"expression":"$Method","source":"method"}
+$STATUSCODE	{"expression":"$STATUSCODE","source":"statusCode"}
+$Request.Path.Id	{"expression":"$Request.Path.Id","source":"request","kind":"path","name":"Id"}
+$RESPONSE.HEADER.Location	{"expression":"$RESPONSE.HEADER.Location","source":"response","kind":"header","name":"Location"}
+$request.BODY#/A	{"expression":"$request.BODY#/A","source":"request","kind":"body","pointer":"/A","tokens":["A"]}
+# The grammar lets a response have a query and a path, though no
+# response has either.
+$response.query.x	{"expression":"$response.query.x","source":"response","kind":"query","name":"x"}
+$response.path.x	{"expression":"$response.path.x","source":"response","kind":"path","name":"x"}
+# What is no expression.
+$request.header.	ERROR:openapi_expression
+$request.header.a b	ERROR:openapi_expression
+$request.header.a:b	ERROR:openapi_expression
+$request.header.café	ERROR:openapi_expression
+$request.body.x	ERROR:openapi_expression
+$request.bodyx	ERROR:openapi_expression
+$request.body#x	ERROR:openapi_expression
+$request.body#/a~2	ERROR:openapi_expression
+$request.body#/a~	ERROR:openapi_expression
+$request.cookie.x	ERROR:openapi_expression
+$request.	ERROR:openapi_expression
+$request	ERROR:openapi_expression
+$response.status	ERROR:openapi_expression
+$urls	ERROR:openapi_expression
+$url 	ERROR:openapi_expression
+ $url	ERROR:openapi_expression
+$foo	ERROR:openapi_expression
+request.path.id	ERROR:openapi_expression
+{$url}	ERROR:openapi_expression

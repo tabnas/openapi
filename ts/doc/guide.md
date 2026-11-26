@@ -474,6 +474,77 @@ description you trust that needs more. It sets no deadline: give the
 loader a `signal`, and return `false` from `onCheck` when your time is
 up.
 
+## Write a description in several files as one
+
+`bundle` writes a description and the documents it names as one
+document. What the others hold goes among the description's
+components, and each reference then names its target there. It takes
+the documents as `resolve` takes them:
+
+```js
+const { parse, bundle } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+info: { title: Pets, version: "1" }
+paths:
+  /pets:
+    $ref: "paths/pets.yaml"
+`)
+const out = bundle(raw, {
+  retrievalUri: 'https://example.com/api/openapi.yaml',
+  documents: {
+    'paths/pets.yaml': 'get:\n  responses:\n    "200": {$ref: "../responses.yaml#/Ok"}\n',
+    'responses.yaml': 'Ok: {description: ok}\n',
+  },
+})
+out.tree.paths['/pets'] // => { $ref: '#/components/pathItems/pets' }
+out.tree.components.pathItems.pets.get.responses['200'] // => { $ref: '#/components/responses/Ok' }
+out.tree.components.responses.Ok // => { description: 'ok' }
+out.left // => []
+```
+
+Nothing is resolved, so the bundle is as large as the documents, and
+no larger. To have the documents found and read, use `bundleAll` with
+a loader, and write the tree as JSON:
+
+```js
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { pathToFileURL } = require('node:url')
+const { parse, bundleAll } = require('@tabnas/openapi')
+const { fileLoader } = require('@tabnas/openapi/dist/loaders')
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-'))
+fs.writeFileSync(path.join(dir, 'openapi.yaml'), 'openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Pet: {$ref: "Pet.yaml"}\n')
+fs.writeFileSync(path.join(dir, 'Pet.yaml'), 'type: object\n')
+
+const entry = path.join(dir, 'openapi.yaml')
+const written = bundleAll(parse(fs.readFileSync(entry)), {
+  retrievalUri: pathToFileURL(entry).href,
+  load: fileLoader({ root: dir }),
+}).then((b) => fs.writeFileSync(path.join(dir, 'bundle.json'), JSON.stringify(b.tree, null, 2)))
+written instanceof Promise // => true
+// bundle.json then holds one description, with Pet_2 among its schemas.
+```
+
+Read `left` before you use the bundle. It lists each reference that
+names nothing, as `unresolved` does for `resolve`, and whatever else
+the bundle could not make whole. An empty list means that every
+reference of the bundle names a place in it.
+
+A name in the bundle is the last step of the pointer to its target, or
+the name of the target's file. Where the name is taken, as `Pet` is in
+the example, a number follows it. `embedded` says where each target
+went and where it came from.
+
+Some descriptions keep each operation in a file of its own and name it
+with a `$ref`, where the specification has no reference. Bundle such
+a description under `slots: 'all'`, as you would resolve it. The
+operation is then written where its `$ref` was, and what it names goes
+among the components.
+
 ## Check what the names in a description reach
 
 Tags, `operationId` values, security requirements, and discriminator
@@ -559,6 +630,193 @@ out.urls.map((u) => u.uri) // => ['https://example.com/api/LICENSE.txt', 'https:
 Nothing is loaded. Without `retrievalUri` the two rows are the same
 but for `uri`, which neither has. The
 [reference](reference.md#urls) has which field has which base.
+
+## List the operations with what applies to each
+
+An Operation Object does not say everything about its operation. Its
+Path Item gives it parameters, and its servers and security may come
+from the root. Ask `resolve` for `operations` to have each operation
+with what applies to it:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+servers:
+  - url: https://api.example.com
+security:
+  - key: []
+paths:
+  /pets/{petId}:
+    parameters:
+      - {name: petId, in: path, required: true}
+      - {name: limit, in: query}
+    get:
+      parameters:
+        - {name: limit, in: query, description: At most this many}
+      responses: {}
+    delete:
+      security: []
+      responses: {}
+`)
+const [get, del] = resolve(raw, { operations: true }).operations
+get.method // => 'GET'
+get.path // => '/pets/{petId}'
+get.parameters.map((p) => p.name + ' from ' + p.from) // => ['petId from pathItem', 'limit from operation']
+get.parameters[1].parameter.description // => 'At most this many'
+get.servers.from // => 'root'
+get.servers.value[0].url // => 'https://api.example.com'
+get.security.from // => 'root'
+del.parameters.map((p) => p.at) // => ['/paths/~1pets~1{petId}/parameters/0', '/paths/~1pets~1{petId}/parameters/1']
+del.security.from // => 'operation'
+del.security.value // => []
+```
+
+The `GET` operation has its own `limit` in the place of its Path
+Item's. The `DELETE` operation has both of its Path Item's parameters,
+and its empty `security` list removes the root's. Each value is the
+object that the resolved tree has at `at`, so a parameter given by
+`$ref` is the Parameter Object itself. The
+[reference](reference.md#operations) has the rules, and what a webhook
+and a callback give.
+
+## Find the headers the specification says to ignore
+
+From 3.0 a header parameter named `Accept`, `Content-Type` or
+`Authorization` is to be ignored: the request body, the responses, and
+the security schemes describe those. `ignored` lists each one, and no
+operation of the view has it among its parameters:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+paths:
+  /pets:
+    parameters:
+      - {name: Accept, in: header}
+    post:
+      parameters:
+        - {name: content-type, in: header}
+        - {name: X-Trace, in: header}
+      responses: {}
+`)
+const out = resolve(raw, { operations: true })
+out.ignored.map((i) => i.name) // => ['Accept', 'content-type']
+out.ignored.map((i) => i.at) // => ['/paths/~1pets/parameters/0', '/paths/~1pets/post/parameters/0']
+out.ignored.map((i) => i.method) // => [undefined, 'POST']
+out.operations[0].parameters.map((p) => p.name) // => ['X-Trace']
+```
+
+The report is given with or without `operations`. It also lists a
+header named `Content-Type` among the headers of a response or of an
+encoding, which the specification says to ignore too.
+
+## Check the paths, the servers, and the links of a description
+
+A path and a server's URL are templates, with names between braces. A
+name of a path is a path parameter, and a name of a server's URL is one
+of its variables. A Link and a callback hold runtime expressions, which
+name parameters of a request. `connections` says what each of those
+names reaches. List the ones that reach nothing:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+servers:
+  - url: https://{region}.example.com
+paths:
+  /pets/{petId}:
+    get:
+      operationId: getPet
+      parameters:
+        - {name: id, in: path, required: true}
+      responses:
+        '200':
+          description: A pet
+          links:
+            owner:
+              operationId: getPet
+              parameters:
+                id: $request.path.petId
+`)
+const missing = resolve(raw).connections.filter((c) => !c.found)
+missing.map((c) => c.kind + ' ' + c.name)
+// => ['serverVariable region', 'pathParameter petId', 'pathParameter id', 'expression $request.path.petId']
+missing.map((c) => c.why)
+// => [undefined, 'no-parameter', 'no-expression', undefined]
+```
+
+The server's URL names a variable that the Server Object does not
+declare. The path names `petId`, and the operation declares `id`, so
+each lacks the other. The Link's expression names a path parameter that
+its operation does not declare. The Link's own parameter name, `id`, is
+found: the operation it names has that parameter.
+
+A template that is not well made has a row of kind `template`, and two
+paths that differ only in the names between their braces have a
+`pathClash` row. The [reference](reference.md#connections) has every
+kind.
+
+## Read a runtime expression, and give it a value
+
+A runtime expression names a value of one request and its response.
+`readExpression` reads one into its parts, and `evaluateExpression`
+gives its value, from a request and a response that the caller has:
+
+```js
+const { readExpression, readTemplate, evaluateExpression } = require('@tabnas/openapi')
+
+readExpression('$request.query.a.b').name // => 'a.b'
+readExpression('$response.body#/items/0/id').tokens // => ['items', '0', 'id']
+
+const exchange = {
+  request: {
+    method: 'POST',
+    url: 'https://example.org/subscribe?queryUrl=https://client.example.com/hook',
+    headers: { 'Content-Type': 'application/json' },
+    query: { queryUrl: 'https://client.example.com/hook' },
+    body: { ids: [7, 8] },
+  },
+  response: { statusCode: 201, headers: { Location: 'https://example.org/subscription/1' } },
+}
+evaluateExpression('$request.header.content-type', exchange) // => 'application/json'
+evaluateExpression('$request.body#/ids/1', exchange) // => 8
+evaluateExpression('$response.header.Location', exchange) // => 'https://example.org/subscription/1'
+evaluateExpression('$request.query.missing', exchange) // => undefined
+```
+
+A callback's key is a runtime expression. It may stand alone, or
+between braces in a URL. Read it as a template of kind `'runtime'`, and
+evaluate that for the URL to call:
+
+```js
+const { readTemplate, evaluateExpression } = require('@tabnas/openapi')
+
+const key = readTemplate('{$request.query.queryUrl}?status={$statusCode}', 'runtime')
+key.parts.length // => 3
+const exchange = {
+  request: { query: { queryUrl: 'https://client.example.com/hook' } },
+  response: { statusCode: 201 },
+}
+evaluateExpression(key, exchange) // => 'https://client.example.com/hook?status=201'
+```
+
+Text that is no expression, or braces that are no template's, raise an
+`ExpressionError` with the code `openapi_expression`:
+
+```js
+const { readExpression, readTemplate } = require('@tabnas/openapi')
+
+let code
+try { readExpression('$request.body.x') } catch (err) { code = err.code }
+code // => 'openapi_expression'
+readTemplate('/pets/{petId}/photos/{photoId}').parts.filter((p) => 'name' in p).map((p) => p.name) // => ['petId', 'photoId']
+```
 
 ## Resolve the references inside an extension
 

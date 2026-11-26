@@ -180,7 +180,12 @@ Each document runs in its own process (`worker.cjs`), through
    document. It also counts the sites reported resolved while the tree
    still holds, at the site, the very map the document has there: said to
    be resolved, and left as written. That figure is `heldAsWritten` in
-   the baseline, and the plan's T3 holds it to zero.
+   the baseline, and the plan's T3 holds it to zero. It asks for the
+   operation view, and counts the operations by how each is reached,
+   the ones whose list of parameters lacks one behind a reference left
+   as written, and what the `ignored` report lists. For the connections
+   that read a template or a runtime expression, it counts why each
+   name was not found.
 
 A phase that ends sends its result to the sweep at once, so a document
 that runs out of memory or time keeps the phases it finished.
@@ -316,13 +321,29 @@ resolves it with `resolveAll` and the file loader, confined to the
 source's folder, and counts what it loaded and what is left as written:
 `azure`, `redocly-starter`, `oai-learn`, and `digitalocean` under
 `slots: 'all'`, since its entry names a file for each operation, where
-3.0 has no Reference Object. It takes about half a minute.
+3.0 has no Reference Object. It takes about a minute.
 
 A reference that is left as external is looked for on disk. One whose
 document is there and was not read is the failure this run exists to
 find, and so is a description that throws. Either ends the run with 1,
 and `--write` then writes nothing. A figure that moved ends it with 1
-too, and says which. The record,
+too, and says which.
+
+It then writes each description as one document, with `bundleAll` and
+the same loader, and holds the bundle to its documents with
+`bundle-agree.cjs`: the bundle has to resolve to what the documents
+resolve to. That module resolves the documents, bundles them, resolves
+the bundle and compares the two trees from the root, allowing only
+what the bundle's own reports account for. Its header lists each
+allowance. It judges a reference and a locator by where they land,
+and it reads the documents as the bundle does in one thing: a schema
+that only a mapping value names is read as a schema. It reads the
+identifiers that the documents declare, each document as it is loaded,
+to know every base that a text may have been written against. A bundle that
+does not agree ends the run with 1, as a
+description that throws does. The figures under `bundle` count the
+bundles that agree, the targets by how each was brought in, and what
+was left. The record,
 [`test/corpus/documents.json`](../../test/corpus/documents.json), is
 written by the tool and never by hand.
 
@@ -337,6 +358,7 @@ written by the tool and never by hand.
 | `parse-only.cjs <file>` | the time and peak memory of one document, with the package alone in the process |
 | `target-check.cjs [n] [seed]` | for a sample of described documents, checks that every resolved local pointer lands where it says |
 | `ref-census.cjs` | every `$ref` naming another document, in every document, by form and by what it names |
+| `bundle-agree.cjs` | a module: whether a bundle resolves to what its documents resolve to. `documents.cjs` and the suite's bundle tests call it |
 
 Everything in the corpus is data. Nothing in it is run, and no reference
 in it is followed beyond the files already fetched.

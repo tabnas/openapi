@@ -39,6 +39,10 @@ function load() {
 // The phases of a record, in the order examine sends them.
 const PHASES = ['meta', 'ref', 'parse', 'compare', 'grammar', 'strict', 'resolve', 'done']
 
+// The kinds of connection that read a template or a runtime expression,
+// whose rows say why a name was not found.
+const TEMPLATE_KINDS = new Set(['serverVariable', 'template', 'pathClash', 'pathParameter', 'expression', 'linkParameter'])
+
 const firstLine = (s) => String(s ?? '').replace(/\x1b\[[0-9;]*m/g, '').split('\n')[0].slice(0, 300)
 const trunc = (v) => {
   if ('string' === typeof v) return v.length > 120 ? v.slice(0, 117) + '...' : v
@@ -429,13 +433,21 @@ function examine(text, { ext = '', fast = true, reading = 'base', send = () => {
   if (parsed && 'unknown' !== O.version(tree).version) {
     t = now()
     let r
-    try { r = O.resolve(tree) } catch (e) { emit('resolve', { ok: false, ms: now() - t, err: errInfo(e), rssKiB: rss() }); r = null }
+    try { r = O.resolve(tree, { operations: true }) } catch (e) { emit('resolve', { ok: false, ms: now() - t, err: errInfo(e), rssKiB: rss() }); r = null }
     if (r) {
       const ms = now() - t
-      const status = {}, kinds = {}, why = {}, conn = {}, connMissing = {}
+      const status = {}, kinds = {}, why = {}, conn = {}, connMissing = {}, connWhy = {}, opKinds = {}, ignored = {}
       for (const p of r.provenance) { status[p.status] = (status[p.status] ?? 0) + 1; kinds[p.kind] = (kinds[p.kind] ?? 0) + 1 }
       for (const u of r.unresolved) why[u.why] = (why[u.why] ?? 0) + 1
-      for (const c of r.connections) { conn[c.kind] = (conn[c.kind] ?? 0) + 1; if (!c.found) connMissing[c.kind] = (connMissing[c.kind] ?? 0) + 1 }
+      for (const c of r.connections) {
+        conn[c.kind] = (conn[c.kind] ?? 0) + 1
+        if (c.found) continue
+        connMissing[c.kind] = (connMissing[c.kind] ?? 0) + 1
+        // The kinds that read a template or an expression say why a name was not found.
+        if (TEMPLATE_KINDS.has(c.kind)) { const k = c.kind + ':' + (c.why ?? 'missing'); connWhy[k] = (connWhy[k] ?? 0) + 1 }
+      }
+      for (const op of r.operations) opKinds[op.kind] = (opKinds[op.kind] ?? 0) + 1
+      for (const i of r.ignored) ignored[i.what] = (ignored[i.what] ?? 0) + 1
       const checks = {}
       let anchors = null
       const ext = { forms: {}, refs: {} }
@@ -467,7 +479,7 @@ function examine(text, { ext = '', fast = true, reading = 'base', send = () => {
         if (g.samples.length < 6) g.samples.push({ at: u.at.slice(0, 200), ref: trunc(u.ref), verdict })
       }
       const held = heldAsWritten(tree, r)
-      emit('resolve', { ok: true, ms, version: r.version, sites: r.provenance.length, status, kinds, why, cuts: r.cuts.length, cutSamples: r.cuts.slice(0, 2), held: held.length, heldSamples: held.slice(0, 2).map((at) => at.slice(0, 200)), dataSlots: r.dataSlots, connections: conn, connMissing, checks, ext, rssKiB: rss() })
+      emit('resolve', { ok: true, ms, version: r.version, sites: r.provenance.length, status, kinds, why, cuts: r.cuts.length, cutSamples: r.cuts.slice(0, 2), held: held.length, heldSamples: held.slice(0, 2).map((at) => at.slice(0, 200)), dataSlots: r.dataSlots, connections: conn, connMissing, connWhy, operations: r.operations.length, opKinds, partial: r.operations.filter((op) => op.partial).length, ignored, checks, ext, rssKiB: rss() })
     }
   } else if (parsed) emit('resolve', { skipped: 'no-version' })
   emit('done', { rssKiB: rss() })

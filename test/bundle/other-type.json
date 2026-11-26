@@ -1,0 +1,22 @@
+{
+  "note": "A target that the documents read as a Path Item, which 3.0 has no component for, and a reference to it from a place where a schema is. Written there it would be read as a schema, and what is in it with it. Nothing holds the Path Item alone, since the reference in `paths` lays a field of its own over it, so the reference from the schema is left, and listed.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/q": { "$ref": "a.json#/item", "summary": "Mine" } },
+    "components": { "schemas": { "Odd": { "type": "object", "properties": { "it": { "$ref": "a.json#/item" } } } } }
+  },
+  "documents": { "a.json": { "item": { "get": { "responses": { "200": { "description": "ok" } } } } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/q": { "get": { "responses": { "200": { "description": "ok" } } }, "summary": "Mine" } },
+      "components": { "schemas": { "Odd": { "type": "object", "properties": { "it": { "$ref": "a.json#/item" } } } } }
+    },
+    "embedded": [["/paths/~1q", "https://example.com/api/a.json", "/item", "inline"]],
+    "left": [["/components/schemas/Odd/properties/it", "a.json#/item", "outside"]],
+    "dialects": []
+  }
+}

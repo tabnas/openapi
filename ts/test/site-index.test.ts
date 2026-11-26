@@ -782,6 +782,26 @@ describe('site index, several documents', () => {
     assert.equal(lands(all, defs + ' /Other'), 'external')
   })
 
+  test('a chain of references that each type the next has a round for each, and a round costs what it types', () => {
+    // Each schema here is typed by the reference in the one before it,
+    // so the index takes a round for each. A round reads again the
+    // pointers that name nothing, and it kept them among all the sites:
+    // every round looked at every site, uncounted, and a chain of
+    // 20,000 took five seconds where one of 40,000 now takes one. The
+    // limit is loose: with the old search this chain takes far longer
+    // than it allows on any machine.
+    const length = 40000
+    const chain: Record<string, unknown> = {}
+    for (let i = 0; i < length; i++) chain['S' + i] = { type: 'object', properties: { next: { $ref: '#/S' + (i + 1) } } }
+    chain['S' + length] = {}
+    const started = process.hrtime.bigint()
+    const index = setOf(entry({ First: 'chain.json#/S0' }), { 'chain.json': chain })
+    const ms = Number(process.hrtime.bigint() - started) / 1e6
+    assert.equal(index.sites.length, length + 1)
+    assert.equal(site(index, HERE + 'chain.json /S' + (length - 1) + '/properties/next').round, length)
+    assert.ok(ms < 12000, `${Math.round(ms)} ms`)
+  })
+
   test('a pointer is read on through a reference into another document', () => {
     const index = setOf(
       entry({ A: 'shared.yaml#/components/schemas/Pet', deep: '#/components/schemas/A/properties/tag', gone: '#/components/schemas/A/properties/none' }),

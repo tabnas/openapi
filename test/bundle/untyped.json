@@ -1,0 +1,38 @@
+{
+  "note": "Under `slots: 'all'` a reference in data is read, and what it names has no type. It may be written where the bundle gives it one: an operation in the place of an operation, and a response among the responses. What was a plain member is then read. A reference in data has nothing beside it that is read, so it is written alone where it has a type. And an identifier that was not read would start a schema resource, so it is left out, and listed.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "options": { "slots": "all" },
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/a": { "get": { "$ref": "op.json" } } }
+  },
+  "documents": {
+    "op.json": { "responses": { "200": { "$ref": "ok.json", "description": "Beside a reference in data." } } },
+    "ok.json": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "thing.json" } } } },
+    "thing.json": { "$id": "https://schemas.example.com/thing", "type": "object" }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/a": { "get": { "responses": { "200": { "$ref": "#/components/responses/ok" } } } } },
+      "components": {
+        "responses": {
+          "ok": {
+            "description": "ok",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/thing" } } }
+          }
+        },
+        "schemas": { "thing": { "type": "object" } }
+      }
+    },
+    "embedded": [
+      ["/components/responses/ok", "https://example.com/api/ok.json", "", "component"],
+      ["/paths/~1a/get", "https://example.com/api/op.json", "", "inline"],
+      ["/components/schemas/thing", "https://example.com/api/thing.json", "", "component"]
+    ],
+    "left": [["/components/schemas/thing/$id", "https://schemas.example.com/thing", "id"]],
+    "dialects": []
+  }
+}

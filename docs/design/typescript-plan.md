@@ -722,7 +722,8 @@ sample, Redocly's starter and DigitalOcean's source under
 which `tools/corpus/documents.cjs` measures; a reference outside the
 HTTP loader's list is refused with `openapi_load`; and the walk stops
 at `maxDocuments`, `maxRounds` and `maxSteps`, and at the limits of one
-text for the texts of the set, which is Decision 36.
+text for the texts of the set, which is Decision 36. It merged on
+24 November 2026, as tabnas/openapi#12.
 
 ### T5: beyond references (M each, to the scope of Decision 32)
 
@@ -740,6 +741,15 @@ text for the texts of the set, which is Decision 36.
 3. **Bundling.** Several documents written as one: outside references
    rewritten to components or `$defs`, names kept apart, `$id`
    resources kept. JSON out.
+
+Begun on the maintainer's word of 24 November 2026, and section 11 has
+the record. All three items are built. The view is the option
+`operations` of `resolve`, with the `ignored` report beside it, and
+the apidef branch drops `dropIgnoredHeaders`. The readers are
+`readExpression`, `readTemplate` and `evaluateExpression`, and their
+static checks are six kinds of row in `connections`. Bundling is
+`bundle` and `bundleAll`, each held to one check: the bundle resolves
+to what its documents resolve to.
 
 ### T6: finish, then publish (S to M)
 
@@ -760,6 +770,15 @@ text for the texts of the set, which is Decision 36.
    apidef's install can take the `@tabnas/expr` this package needs.
    Today aontu's exact pins give apidef 0.5.10, where `fold` first
    shipped in 0.5.20.
+6. **A mapping value types what it names, in the index.** T5 found
+   that the index types a place by the references that land on it,
+   and that a discriminator's mapping value is none. So a schema in a
+   document with no version, which only a mapping value names, is
+   plain data to `resolve`: the mapping is reported as found, and the
+   references in the schema are not read. `bundle` works round it
+   with rounds of its own. The repair is in the typing rounds of the
+   site index, and it moves what `resolve` reports, so it is swept
+   like any change there.
 
 ## 5. Keeping the repository consistent meanwhile
 
@@ -811,8 +830,8 @@ Numbered from 16, after the earlier plan's fifteen.
 | 32 | What "handle" covers beyond references | the operation view, the embedded languages and bundling to JSON are in; writing YAML back with its layout is out. **Taken, 23 November 2026** | T5 |
 | 33 | Peer ranges of this package, as a standing rule | each floor at the first release that has what the package calls: `@tabnas/expr` 0.5.20 for `fold`, and so on. **Taken, 23 November 2026: a standing rule, set now and not at the release, and moved whenever the package comes to call something newer** | T6 |
 | 34 | The engine's rule history on this package's parser. Bounded at 3 it reads every YAML document of the corpus that is read at all to the same tree, in under half the memory, under a third for the largest, and three times the time (section 11) | bounded for a text past the present limit of 16 MiB, and the limit raised to what the bound then allows, measured as T2 measured the present one; unbounded below it, where nothing changes. That reads both Microsoft Graph descriptions, the last two the sweep refuses. The other courses are a bound for every text, or none. **Taken, 22 November 2026: bounded past 16 MiB, and the limit raised.** Built with the turn on work as well as on size, and the limit at 128 MiB (section 11) | T2b item 5 |
-| 35 | The rate of the bound on work. The grammar is given a step for each ten bytes of `maxBytes`, set when descriptions were thought to take one for each eight to eleven. Measured, they take one for each seven to nine, so a description meets the bound on its work at seven to nine tenths of the limit on its size (section 11) | ten, as it is: the limit is a guard, and a caller with a denser description raises `maxBytes`. The other course is seven, which makes the size limit the one a description meets, and gives every `maxBytes` a caller sets 43% more steps | T6 |
-| 36 | What a description in several documents may cost with no option given. A description names its documents, so each limit on one text is met once for every document: a floor of 100,000 steps, and of 1,000,000 bytes that aliases copy out. Twenty documents of 50 kB of small values took four seconds to read, and a chain of 800 documents that each name the next took 2.6 seconds to find, the square of its length (section 11) | as built: the texts of a description's other documents are held together to the limits of one text, `parse.maxBytes` in size, its steps in work and one alias budget; `load` is asked for 10,000 documents at most, counting the ones it does not have; and the documents are found in 64 rounds at most, where the corpus's deepest description takes 7. The other courses are the limits of each document alone, which leave a set unbounded, or an index carried from round to round, which would lift the bound on rounds and is the larger work | T4 |
+| 35 | The rate of the bound on work. The grammar is given a step for each ten bytes of `maxBytes`, set when descriptions were thought to take one for each eight to eleven. Measured, they take one for each seven to nine, so a description meets the bound on its work at seven to nine tenths of the limit on its size (section 11) | ten, as it is: the limit is a guard, and a caller with a denser description raises `maxBytes`. The other course is seven, which makes the size limit the one a description meets, and gives every `maxBytes` a caller sets 43% more steps. **Taken, 24 November 2026: ten, as it is** | T6 |
+| 36 | What a description in several documents may cost with no option given. A description names its documents, so each limit on one text is met once for every document: a floor of 100,000 steps, and of 1,000,000 bytes that aliases copy out. Twenty documents of 50 kB of small values took four seconds to read, and a chain of 800 documents that each name the next took 2.6 seconds to find, the square of its length (section 11) | as built: the texts of a description's other documents are held together to the limits of one text, `parse.maxBytes` in size, its steps in work and one alias budget; `load` is asked for 10,000 documents at most, counting the ones it does not have; and the documents are found in 64 rounds at most, where the corpus's deepest description takes 7. The other courses are the limits of each document alone, which leave a set unbounded, or an index carried from round to round, which would lift the bound on rounds and is the larger work. **Taken, 24 November 2026: as built** | T4 |
 
 ## 7. Work in other repositories
 
@@ -883,6 +902,340 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T5 was begun:
+
+- **Decisions 35 and 36 are taken, and T4 is on `main`.** On
+  24 November 2026 the maintainer took both as the plan had them. The
+  bound on work stays at a step for each ten bytes of `maxBytes`, and
+  the bounds over a set of documents stand as built. T4 merged the same
+  day, as tabnas/openapi#12, and T5 was begun on the maintainer's word,
+  to the scope Decision 32 gives it.
+- **The operation view is read on the document as written, and its
+  values off the tree** (item 1). The first design walked the resolved
+  tree, where a reference is already what it names. It was put aside
+  for one reason: a row of `connections` would then depend on the
+  shape asked for, since under `sharing: 'inline-once'` the tree has
+  most references as written. So `operationsOf` walks the routes as
+  `reuseOf` does, on the site index, a reference standing for its
+  landing, and reads the facts there: which parameters apply, and which
+  object gave the servers and the security. Each value is then read
+  off the finished tree at the row's route, so it is the tree's own
+  object, and is undefined where the tree keeps a reference on the way
+  as written.
+- **What the view takes as the specification's reading**, where the
+  text leaves room:
+  - A header parameter's name is compared without regard to case, when
+    an operation's parameter stands in the place of its Path Item's.
+    The specification says a parameter is one by its name and
+    location, and notes that header names are case-insensitive.
+  - A `servers` list with nothing in it is no list, at any of the
+    three levels, as the text has it for the root's. An operation's
+    empty `security` is its own, as the text says, and so are the
+    three lists of 2.0, an empty one of which clears the root's.
+  - The operations of a webhook and of a callback inherit servers and
+    security as any other. The text does not say whether the root's
+    apply to a request that the API sends, so the view says where each
+    came from.
+  - The Path Item's parameters that are left come first, then the
+    operation's own. The text gives no order.
+- **The `ignored` report is always given**, since a walk of the routes
+  is made for `connections` either way. Beside the header parameters
+  the plan names, it lists a header named `Content-Type` among the
+  headers of a response and of an Encoding Object, which the
+  specification says to ignore in the same words. The rule is in 3.0
+  and later, and the report is empty for 2.0.
+- **The readers are lexical** (item 2), as the earlier plan's Phase 4
+  has them. One thing is read more widely than that plan said: the
+  words of the grammar match without regard to case, as the literals
+  of an ABNF grammar do, so `$URL` is `$url`. `evaluateExpression`
+  also takes a template of runtime expressions, which is what a
+  callback's key is, and gives the URL.
+- **Six kinds of row in `connections`.** Read where a template is
+  written: `serverVariable`, `template` for one that is not well made,
+  and `pathClash` for paths that are one template under other names,
+  which is the last sentence of item 1. Read for each operation, on
+  its route: `pathParameter`, `expression` and `linkParameter`. A
+  constant in a Link is no expression, and has no row. A header that a
+  parameter may not describe has no declaration, so an expression that
+  names one is held to none.
+- **A reference that could not be followed is said.** Read file by
+  file, the corpus's Azure descriptions have their common parameters
+  in other documents. The first build said of 12,287 path expressions,
+  in 374 descriptions, that the operation has no such parameter, which
+  was untrue of nearly all of them. Where an operation has a parameter
+  by a reference that is left as written, its view now has `partial`,
+  and a name not found among its parameters has `why` set to
+  `unresolved`. A `$ref` where the object model puts an operation is a
+  data slot, and no operation is read there.
+- **On the corpus**, 5,238 descriptions read with `duplicates: 'merge'`
+  and no limit on size, the nine over 10 MB left out:
+  - 138,219 operations: 138,000 under `paths`, 112 webhooks and 107
+    callbacks. They have 709,217 parameters, 273,914 of them from the
+    Path Item.
+  - Servers come from the root for 83,167 operations, from the Path
+    Item for 1,482 and from the operation for 289, and 1,209 have the
+    default. Security comes from the root for 70,092 and from the
+    operation for 28,800, and 39,327 have none.
+  - These figures were first written 915 operations higher, from a run
+    made before the last change of the item: the 915 are DigitalOcean's
+    source, read as one file, where each operation is a `$ref` in data
+    that is not read. The run was made again after the review below.
+  - 2,388 header parameters are ignored, in 95 descriptions, and 44
+    response headers in 32. No encoding has one.
+  - **The preset's `ignored` report is what apidef's own
+    `dropIgnoredHeaders` drops**, on every one of the 5,238: the same
+    list, and the same tree once each is applied.
+  - The view's routes are those of `operationIdReuse`, on every one.
+  - No description has a path parameter that its path does not name.
+  - The longest walk takes 2.8% of its allowance
+    (`digitalocean.com/2.0`), and resolving the whole corpus takes 51
+    seconds in all, with the view asked for.
+- **Five things a review of the view found**, on tabnas/openapi#13,
+  each shown by a probe and repaired with a test:
+  - A reference followed was not a visit. Many parameters that each
+    lead into one long chain of references cost the list's length
+    times the chain's, and the walk's bound counted the list alone. A
+    chain of 900 that 6,000 entries lead into was 5.4 million steps
+    for 67,000 counted. Each reference followed is now a visit, and
+    that document is refused.
+  - A parameter reference that could not be followed, with `name` and
+    `in` written beside it, was taken for the parameter those name. A
+    Reference Object's other members are not what it names, so it is
+    now the unknown parameter that any other such reference is.
+  - An operation that no route reaches, which a Link names, was read
+    without its Path Item's own reference, so a parameter of the Path
+    Item that one names was not found.
+  - The rules that depend on the version were those of the
+    description for every document. A 2.0 operation named from a 3.1
+    description had its `Authorization` header left out and was given
+    servers, and a 3.1 operation named from a 2.0 description had no
+    callbacks read. Each operation is now read by the version of the
+    document it is in. The lists that the root gives are still the
+    description's own.
+  - Encodings nested deeper than 64 were left out of the `ignored`
+    report with nothing said. They are read as deep as they nest, and
+    one that a reference in data leads back to itself is refused at
+    `maxDepth`.
+- **A bundle is written on the site index, and nothing in it is
+  resolved** (item 3). `bundle` copies the description, and at each
+  reference asks the index where it lands. A target in another
+  document is given a place, and the reference is written to name it
+  there. So an identifier, an anchor and a pointer that is read on
+  through another reference are all followed as `resolve` follows
+  them, and all come out as pointers. `bundleAll` finds the documents
+  first, in the rounds of `resolveAll`.
+- **Where a target goes**, as item 3 has it, and where the item left
+  room:
+  - Among the components of its type, under the last step of its
+    pointer or the name of its file, with a number after a name that
+    is taken. Its type is its own where the index gives it one, and
+    else the type the reference expects.
+  - A schema with an `$id` of its own is a resource: it moves whole
+    and keeps the `$id`, and what a reference inside it names outside
+    is copied into its own `$defs`, since a fragment there is read in
+    the resource. A JSON Schema document whose `$id` is its own URI
+    is one, which the index does not count as a new resource.
+  - Where the version has no component for the type, in the place of
+    the first reference, which every later reference then names: a
+    Path Item of 3.0 and 2.0, and what a reference in data names under
+    `slots: 'all'`. That is how a description that keeps each
+    operation in a file of its own is bundled.
+  - A target inside another target would be in the bundle twice, and
+    which of the two a reference named would follow the order the
+    references are met in. Where that is so the bundle is written a
+    second time, bringing the outer ones only.
+- **What moves is read again**, and three things decide what content
+  means in a place. Each is kept:
+  - The base URI. A relative URL, a reference that names nothing and
+    a relative `$id` are written to name what they named.
+  - The schema dialect. A schema that was read under another dialect
+    than its new place is given its own as `$schema`. OpenAPI reads
+    `$schema` at a Schema Object that is not inside another, and JSON
+    Schema only at the root of a resource, so the result lists each
+    one.
+  - The object model. An operation in a file of its own is plain data
+    to the index, and where it is written the model reads it as an
+    operation. What it names is then placed by what the model reads
+    there, so a response it names is a response. The other way round,
+    a part that a reference typed, inside content that goes where the
+    model reads data, goes among the components under `slots: 'all'`,
+    with a reference in its place.
+- **A mapping value is no reference to the index**, which types a
+  place by the references that land on it. A schema that only a
+  mapping value names was first brought in as a schema, with the
+  references in it unread, and one of them was left naming another
+  document. `bundle` now builds the index again with a reference to
+  each such schema, eight times at most, and writes the bundle on
+  that. Typing by a mapping value belongs in the index, where
+  `resolve` would have it too: it is the sixth item of T6.
+- **The check is one sentence: the bundle resolves to what the
+  documents resolve to.** `tools/corpus/bundle-agree.cjs` makes it. It
+  resolves the documents, bundles them, resolves the bundle, and
+  compares the two trees from the root, allowing only what the
+  bundle's own reports account for. It was built before most of
+  `bundle`, and on sets of documents that a generator writes it found
+  seven defects that no case written by hand had. Among them: a place
+  taken for a target's own when the reference had fields laid over
+  it; a reference to a reference that names nothing, written over
+  where `resolve` leaves it; and a loop of references taken for one
+  that names nothing.
+- **Bundling on the corpus**, with `tools/corpus/documents.cjs`:
+  - Each of the 5,167 descriptions in one document, the nine over
+    10 MB left out, is its own bundle, text for text.
+  - Each of the 925 descriptions of the four sources in several
+    documents agrees with its documents. 8,491 targets go among the
+    components, 6,224 of them Azure's.
+  - DigitalOcean's description, 3,622 files under `slots: 'all'`, is
+    one document of 3.5 MB: 2,218 targets among its components, 1,382
+    of them schemas, and 2,551 written in the place of a reference,
+    which are its operations and its code samples. It takes 3.4
+    seconds.
+  - Of 20,000 generated sets of documents, every bundle agrees, and
+    every bundle bundled again is itself. Two more generators came
+    after, and what they found is below.
+- **What a bundle does not keep**, each said in the reference: it is
+  read by the description's version; a schema that is brought in gains
+  a component's name, which a discriminator may then list; an
+  `operationId` is looked for in the bundle alone; a server's `url`
+  with variables stands as written; and a `$dynamicRef` in content
+  that moved is checked, not followed.
+- **An independent review of `bundle`**, asked for before the work was
+  put up, wrote a generator of its own and probes by hand. Its sets
+  are worse than a description is: a schema named where a Path Item
+  is, two schemas with one identifier, references to references that
+  name nothing, pointers read on through references. Under a verdict
+  that counts every disagreement and every bundle that is not its own
+  bundle, about 7 sets in 1,000 failed, and about 40 in 1,000 under
+  `slots: 'all'`. What it found, each now a case of `test/bundle/`:
+  - A target was given the name that a reference to nothing hoped
+    for, and was then what that reference named. Nothing is written
+    where a reference, a mapping value or a security requirement
+    names a place and finds none, and a name that was given before
+    the hope was met makes the bundle be written again.
+  - A value that is no map, where the components of a type go, was
+    written over. Nothing is put there, nor where that place is a
+    reference.
+  - A target was written in the place of a reference whose own
+    members are read, and in a place that reads another type.
+  - A schema resource in plain content was copied to two places, so
+    that the bundle declared its identifier twice. Of two schemas of
+    the documents that declare one identifier, each was taken for the
+    resource.
+  - A part that a reference had typed was read in the bundle as data,
+    or as another type, with nothing said. That is the `type` row of
+    `left`.
+  - The steps of each round of typing by a mapping value were counted
+    from nothing, so `maxSteps` was no bound on them.
+  - In the index, a chain of 20,000 references that each type the next
+    took 5.2 seconds, since each round looked for the pointers that
+    name nothing among all the sites. Those are kept apart, and it
+    takes 0.3.
+  - The check passed what it should not have: a string that differed
+    at a member a bundle never writes, and a locator that was found in
+    the documents and named something else in the bundle. It compares
+    a string only where a bundle writes one again, and a row of
+    `connections` now says where a locator lands when its pointer is
+    read on through a reference (`landing`).
+- **A third generator** then wrote what the second never did: a
+  reference that lands on a value the model reads as plain JSON, a
+  schema's `default` or `example`; a description of another version
+  among the documents; and a reference where the model puts an
+  operation. 2 sets in 1,000 failed, and 10 in 1,000 under
+  `slots: 'all'`. What it found, each in `test/bundle/` or
+  `test/bundle-held/`:
+  - A description of 3.0 was given schema resources, which nothing in
+    it reads, so the fragments in them named nothing. A description
+    before 3.1 has none.
+  - A reference that landed on plain JSON had its target written
+    among the schemas, where a `$ref` in an example is a reference.
+    The schema that the value is in is brought, and the value named
+    there.
+  - A part that a reference typed, where the schema above it reads
+    plain JSON, was named in that schema, where no reference types
+    it. It is brought again by itself.
+  - Under `slots: 'all'`, content with no type was written among a
+    resource's definitions, or named from a place that has a type,
+    and so gained one that the documents did not give it.
+  - A reference of the description's own, read on through a reference
+    that the bundle could not keep, named nothing in the bundle. It is
+    written by where it lands.
+  - A member named `$id` in a part that is no schema was read as an
+    identifier once a schema's reference landed on the part first.
+  - A reference that was left as written found something in the
+    bundle that the bundle of the bundle then acted on.
+  - Two were the check's: it did not know the base of a resource
+    that was brought only in part, and it did not go into a part
+    listed under `type` that it had come to first by a reference.
+- **Where that stands**, on the build that is put up. The second and
+  the third generator are each clean at 100,000 sets under the default
+  slots and 100,000 under `slots: 'all'`, and the first at 26,000:
+  every bundle agrees with its documents, and is its own bundle unless
+  it lists a part under `type`. About 2 sets in 1,000 are refused for
+  a bound. The 925 descriptions of the corpus agree as before, with
+  the figures above. The lesson is the one the second generator
+  already taught: a generator finds what it writes.
+  The third was clean of what the second found before it was run, and
+  failed at once on what it added. So a new kind of content is a
+  reason to write it into a generator.
+- **The default depth is at the stack's edge.** The macOS job of
+  continuous integration failed one test on the review's commit: a
+  bundle nested past the default `maxDepth` of 1,000 was refused
+  because the stack ran out first. That is `openapi_depth` too, and
+  the test had asked for the other message. A copy goes as deep as
+  the bundle nests, and the repairs had made its frames larger: a
+  fresh process on Linux held a bundle 870 deep. What decides how a
+  member is copied is now done with before the member is gone into,
+  so one frame fewer is under each level, and a fresh process holds
+  1,098. The test asserts the code and takes either message, since
+  how deep the stack goes is the machine's.
+- **Verified, on the last commit that changes the build**, 4d116c9.
+  The suite passes, 1,299 tests and the 11 of the prose gate, here and
+  on Linux, macOS and Windows in continuous integration. Both corpus
+  sweeps leave their ledgers as committed: 235 rows under the base
+  reading, and 3 under `reading: 'spec'`, every one accepted and none
+  open. No figure of either baseline moved, and each gains 26: the
+  six new kinds of row in `connections`, the `ignored` report and the
+  operations. Under the base reading that is 179,225 operations in
+  5,170 descriptions, 7,268 of them `partial`, and 3,706 header
+  parameters ignored in 118 descriptions. The sweep reads the nine
+  descriptions over 10 MB too, which the figures of the view above
+  leave out. The run of descriptions in several documents gives the
+  figures recorded. The apidef gate passes at voxgig/apidef ef123d3
+  against 25f8d4b: 2,691 of 2,692 tests, one skipped as on apidef's
+  `main`, and 110 of 110 definitions byte-identical. The preset
+  comparison finds no difference in 15,177 documents, nor in the nine
+  of the corpus over 10 MB. The gates were started three times. Twice
+  they were stopped within minutes, for the stack and for two
+  variables that the code-quality check on the pull request found
+  unread, so that the run recorded is the one made alone on the final
+  build.
+- **apidef's `main` moved after that**, on 25 November, to 895450a. It
+  now keeps the first of a repeated parameter and records the rest, in
+  a step after the ignored headers are dropped. apidef's branch merges
+  it as 10cdaed, with the two steps in that order. The apidef gate
+  passes there against 895450a: 2,700 of 2,701 tests, one skipped as on
+  apidef's `main`, and 110 of 110 definitions byte-identical. None of
+  the 110 has a header that apidef ignores or a parameter that is
+  repeated, so four were written that have them, three with both and
+  one of 2.0, where no header is ignored. They are kept in
+  `docs/design/apidef-swap/definitions/` for the gate, and each is
+  byte-identical too. apidef's `main` changed one of the rows that
+  `test/resolve/apidef.tsv` copies, and the copy follows it. The
+  resolver in apidef's `main` is as it was: at 895450a it gives every
+  row of the two fixtures, as at 0f41ce1. This package's build did not
+  change, so the other gates stand as recorded.
+- **And again the same day**, to 2ffac75, which is apidef 8.33.3. The
+  branch merges it as 9bceec8, where the one conflict was in a file
+  that apidef's build writes. The gate passes there against 2ffac75:
+  2,734 of 2,735 tests, one skipped as on apidef's `main`, and 120 of
+  120 definitions byte-identical: the 104 the gate compares by itself,
+  six of them new in apidef, the twelve of G2 and the four kept for
+  it. apidef's parse stage and the fixture that
+  `test/resolve/apidef.tsv` copies did not change between the two.
+  A third move that day was apidef 8.34.0, at 46c33ab, which changed
+  its version alone. The branch merges it as 3186c51, and the gate
+  gives the same figures there.
 
 **Since acceptance**, as T4 was begun:
 

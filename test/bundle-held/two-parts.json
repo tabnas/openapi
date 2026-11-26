@@ -1,0 +1,30 @@
+{
+  "note": "Two parts are listed under `type`, and a reference in one resolves to the other. The check came to the second as what the first resolves to, and did not go into it as a part of its own.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": { "title": "t", "version": "1" },
+        "paths": {
+          "/p": { "post": { "callbacks": { "cb": { "{$url}": { "$ref": "sub/b.json#/A", "summary": "s" } } } } }
+        }
+      },
+      "documents": {
+        "sub/b.json": { "pet": { "$ref": "../c.json#/pet" }, "A": { "$ref": "#/pet" } },
+        "c.json": {
+          "pet": {
+            "properties": { "q": { "$ref": "c.json" } },
+            "discriminator": { "mapping": { "m": "sub/b.json" } }
+          }
+        },
+        "d.json": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": { "A": { "properties": { "q": { "properties": { "q": { "$ref": "sub/b.json#/pet" } } } } } }
+          }
+        }
+      }
+    }
+  ]
+}

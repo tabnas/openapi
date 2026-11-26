@@ -7,10 +7,18 @@
 // operation's tags name tags; a 3.2 tag names its parent; a Discriminator
 // maps payload values to schemas by name or URI, and by the names of the
 // schemas it is beside or that build on its own; a `$dynamicRef` or a
-// `$recursiveRef` has an initial target. Nothing here is substituted into
-// the tree: the report says what each name reaches, and the caller
-// decides. The URLs a description gives for things outside it are a
-// report of their own, since nothing here can say whether one is there.
+// `$recursiveRef` has an initial target; a server's URL names its
+// variables. Nothing here is substituted into the tree: the report says
+// what each name reaches, and the caller decides. The URLs a description
+// gives for things outside it are a report of their own, since nothing
+// here can say whether one is there.
+//
+// A template is read where it is written, too: a path, or a server's
+// URL, whose braces are no template's is said, with one that names a
+// thing twice, a path with no leading slash, a server's URL with a query
+// or a fragment, and two paths that are one template under other names.
+// What a name of a path or of a runtime expression reaches depends on
+// the operation, and is read on the routes, in operations.ts.
 //
 // Everything here is read from the site index (site-index.ts), which has
 // the type of every location, the base URI it is read under, and where a
@@ -20,6 +28,8 @@
 // reference read in what that reference names. None of it depends on the
 // shape the caller asked the resolved tree in.
 
+import { ExpressionError, namesOf, readTemplate } from './expression'
+import type { TemplatePart } from './expression'
 import { slot, step } from './model'
 import type { ModelVersion } from './model'
 import { EXTRA_FACTOR, hasIds as schemasHaveIds } from './site-index'
@@ -40,6 +50,12 @@ type ConnectionKind =
   | 'recursiveRef'
   | 'pathItemMerge'
   | 'operationIdReuse'
+  | 'serverVariable'
+  | 'template'
+  | 'pathClash'
+  | 'pathParameter'
+  | 'expression'
+  | 'linkParameter'
 
 // One connection: the position that names something (`at`), the name or
 // URI as written, whether its target is there, and where. The other
@@ -56,7 +72,21 @@ type Connection = {
   // The document `target` is in, by the URI it was given under, where
   // that is not the description.
   targetDoc?: string
-  // Why a URI found nothing: as the resolver's unresolved reasons.
+  // Where the pointer of a URI lands, where it is read on through a
+  // reference, and the document that is in where it is not the
+  // description. `target` is the place as the URI is written.
+  landing?: string
+  landingDoc?: string
+  // Why a URI found nothing: as the resolver's unresolved reasons. For a
+  // `template`, what is wrong with it: `malformed` braces, a name
+  // `repeated`, `no-slash` at the start of a path, a `query` or a
+  // `fragment` in a server's URL. For a `pathParameter` not found, which
+  // side is missing: `no-parameter` for an expression of the path, and
+  // `no-expression` for a path parameter. For an `expression`,
+  // `malformed` where a callback's key is no runtime expression. For a
+  // name of a parameter that is not found, `unresolved` where the
+  // operation has a parameter by a reference that is left as written,
+  // which may be the one.
   why?: string
   // The object-model type at a located target: operationRef must reach
   // an `operation`, a security requirement URI a `securityScheme`.
@@ -64,7 +94,8 @@ type Connection = {
   // How a security requirement key or a mapping value was read.
   via?: 'name' | 'uri'
   // A 3.2 security requirement key that is a security scheme's name and
-  // also locates one as a URI; the name wins.
+  // also locates one as a URI; the name wins. And a Link's parameter name
+  // that parameters of the operation have in more than one location.
   ambiguous?: boolean
   // Every operation that declares an operationId a Link names, when more
   // than one does.
@@ -79,7 +110,8 @@ type Connection = {
   // where the specification leaves the merge undefined.
   fields?: string[]
   // Every route through paths, webhooks and callbacks that reaches an
-  // operation with one operationId, when there is more than one.
+  // operation with one operationId, when there is more than one. For a
+  // `pathClash`, every path that is the one template.
   routes?: string[]
   // Where an implicit mapping comes from: a schema listed beside the
   // discriminator in `oneOf` or `anyOf`, one that builds on the
@@ -110,8 +142,14 @@ type UrlUse = {
   uri?: string
 }
 
+// The operations that declare each operationId, the description's
+// first, each with its location.
+type Declared = Map<string, { doc: DocFacts; at: string; loc: Loc | undefined }[]>
+
 type Use = {
   kind: ConnectionKind
+  // Its place in the walk.
+  order: number
   // The document the use is in.
   doc: DocFacts
   at: string
@@ -160,14 +198,19 @@ function connectionsOf(
   index: SiteIndex,
   hasIds: boolean,
   tick?: () => void,
-): { rows: Connection[]; urls: UrlUse[] } {
+): { rows: Connection[]; urls: UrlUse[]; declared: Declared } {
+  // The operations that declare each operationId, in every document.
+  const declared: Declared = new Map()
   // A root that is neither a map nor a list names nothing.
-  if (!Array.isArray(raw) && !isMap(raw)) return { rows: [], urls: [] }
+  if (!Array.isArray(raw) && !isMap(raw)) return { rows: [], urls: [], declared }
   const home = index.docs[0]
   const uses: Use[] = []
   const urls: UrlUse[] = []
-  // The operations that declare each operationId, in every document.
-  const declared = new Map<string, { doc: DocFacts; at: string }[]>()
+  // What is read where it is written: a server's variables, and the
+  // templates that are not well made. Each with its place in the walk.
+  const written: [number, Connection][] = []
+  let order = 0
+  const use = (u: Omit<Use, 'order'>) => uses.push({ ...u, order })
   // The tags of the description. A name used in another document is
   // looked for among these, as the specification recommends.
   const tags = new Map<string, { at: string; parent?: string }>()
@@ -198,7 +241,7 @@ function connectionsOf(
       // `$dynamicRef`, or 2019-09's `$recursiveRef`.
       const dynamic = ids && 'schema' === s.kind && isMap(node) ? loc?.rules?.dynamic : undefined
       if (null != dynamic && 'string' === typeof node[dynamic]) {
-        uses.push({
+        use({
           kind: '$dynamicRef' === dynamic ? 'dynamicRef' : 'recursiveRef',
           doc,
           at: f.at,
@@ -208,12 +251,12 @@ function connectionsOf(
       }
       if ('string' === typeof node) {
         if ('connection:operationId' === state) {
-          uses.push({ kind: 'operationId', doc, at: f.at, name: node, base: f.base })
+          use({ kind: 'operationId', doc, at: f.at, name: node, base: f.base })
         } else if ('locator:operation' === state) {
-          uses.push({ kind: 'operationRef', doc, at: f.at, name: node, base: f.base })
+          use({ kind: 'operationRef', doc, at: f.at, name: node, base: f.base })
         } else if ('connection:tag' === state) {
           const holder = 'parent' === f.last ? f.holder : undefined
-          uses.push({
+          use({
             kind: 'parent' === f.last ? 'tagParent' : 'tag',
             doc,
             at: f.at,
@@ -222,7 +265,7 @@ function connectionsOf(
             holder: isMap(holder) && 'string' === typeof holder.name ? holder.name : undefined,
           })
         } else if ('mapping' === state) {
-          uses.push({ kind: 'defaultMapping' === f.last ? 'defaultMapping' : 'mapping', doc, at: f.at, name: node, base: f.base })
+          use({ kind: 'defaultMapping' === f.last ? 'defaultMapping' : 'mapping', doc, at: f.at, name: node, base: f.base })
         } else if ('url' === s.kind) {
           const base = ('description' === s.type || 'retrieval' === s.type || 'api' === s.type ? s.type : 'none') as UrlUse['base']
           const row: UrlUse = { at: f.at, value: node, base }
@@ -247,18 +290,26 @@ function connectionsOf(
         if ('schema' === s.kind && undefined !== loc) {
           const d = node.discriminator
           if ('2.0' === dmv ? 'string' === typeof d : isMap(d) && 'string' === typeof d.propertyName) {
-            uses.push({ kind: 'implicitMapping', doc, at: f.at + '/discriminator', name: '', base: f.base, loc, node })
+            use({ kind: 'implicitMapping', doc, at: f.at + '/discriminator', name: '', base: f.base, loc, node })
           }
         }
         if ('connection:securityScheme' === s.keys) {
           for (const key of Object.keys(node)) {
-            uses.push({ kind: 'securityScheme', doc, at: f.at + '/' + esc(key), name: key, base: f.base })
+            use({ kind: 'securityScheme', doc, at: f.at + '/' + esc(key), name: key, base: f.base })
           }
         }
         if ('operation' === s.type && 'object' === s.kind && 'string' === typeof node.operationId) {
           const list = declared.get(node.operationId) ?? []
-          list.push({ doc, at: f.at })
+          list.push({ doc, at: f.at, loc })
           declared.set(node.operationId, list)
+        }
+        if (('server' === s.type || 'paths' === s.type) && 'object' === s.kind) {
+          const say = (row: Connection) => {
+            if (doc !== home) row.doc = doc.key
+            written.push([order, row])
+          }
+          if ('paths' === s.type) pathsOf(node, f.at, say)
+          else if ('string' === typeof node.url) serverOf(node, f.at, say)
         }
         if (doc === home && 'tag' === s.type && 2 === f.depth && 'tags' === loc!.parent!.seg && 'string' === typeof node.name) {
           if (!tags.has(node.name)) {
@@ -267,6 +318,7 @@ function connectionsOf(
         }
       }
     }
+    order++
     if (undefined === loc) continue
     const names: (string | number)[] = Array.isArray(node) ? node.map((_: any, i: number) => i) : Object.keys(node)
     for (let i = names.length - 1; 0 <= i; i--) {
@@ -304,6 +356,7 @@ function connectionsOf(
     // It may name a location in another document of the set, which is
     // typed by the model of that document's own version.
     const land = index.landingAt(where.target, where.doc)
+    const through = land.found && undefined !== land.through
     return {
       found: land.found,
       target: pointer(where.target),
@@ -311,7 +364,16 @@ function connectionsOf(
       why: land.found ? undefined : 'not-found',
       type: land.found ? slot((land.doc ?? index.docs[0]).mv, index.stateAt(land)).type : null,
       node: land.found ? land.node : undefined,
+      landing: through ? pointer(land.path!) : undefined,
+      landingDoc: through && undefined !== land.doc && land.doc !== index.docs[0] ? land.doc.key : undefined,
     }
+  }
+
+  // Where a URI lands, on its row, where that is not where it is written.
+  const lands = (row: Connection, u: { landing?: string; landingDoc?: string }): void => {
+    if (undefined === u.landing) return
+    row.landing = u.landing
+    if (undefined !== u.landingDoc) row.landingDoc = u.landingDoc
   }
 
   // The schema components that build on a schema with `allOf`, by the
@@ -410,7 +472,11 @@ function connectionsOf(
   const placed = (d: { doc: DocFacts; at: string }): string => (d.doc === home ? d.at : d.doc.key + '#' + d.at)
 
   const out: Connection[] = []
+  let next = 0
+  const sorted = written.sort((a, b) => a[0] - b[0])
   for (const use of uses) {
+    // What was read where it is written comes in its place in the walk.
+    while (next < sorted.length && sorted[next][0] < use.order) out.push(sorted[next++][1])
     if ('implicitMapping' === use.kind) {
       // The names a discriminator's value can take are those of the
       // description's schema components, so the implicit ones are worked
@@ -435,6 +501,7 @@ function connectionsOf(
       row.found = u.found
       row.target = u.target
       if (undefined !== u.doc) row.targetDoc = u.doc
+      lands(row, u)
       if (null != u.why) row.why = u.why
       if ('operationRef' === use.kind) row.type = u.type
       if ('dynamicRef' === use.kind) {
@@ -457,6 +524,7 @@ function connectionsOf(
         row.found = u.found
         row.target = u.target
         if (undefined !== u.doc) row.targetDoc = u.doc
+        lands(row, u)
         row.via = 'uri'
         row.type = u.type
         if (null != u.why) row.why = u.why
@@ -491,13 +559,87 @@ function connectionsOf(
         row.found = u.found
         row.target = u.target
         if (undefined !== u.doc) row.targetDoc = u.doc
+        lands(row, u)
         row.via = 'uri'
         if (null != u.why) row.why = u.why
       }
     }
     out.push(row)
   }
-  return { rows: out, urls }
+  while (next < sorted.length) out.push(sorted[next++][1])
+  return { rows: out, urls, declared }
+}
+
+// A server's URL: each variable between its braces names one the Server
+// Object declares. One named twice is said, and so is a URL whose braces
+// are no template's, or that has a query or a fragment.
+function serverOf(node: Record<string, any>, at: string, say: (row: Connection) => void): void {
+  const url = node.url as string
+  const where = at + '/url'
+  let parts: TemplatePart[]
+  try {
+    parts = readTemplate(url, 'server').parts
+  } catch (err) {
+    if (!(err instanceof ExpressionError)) throw err
+    say({ kind: 'template', at: where, name: url, found: false, target: null, why: 'malformed' })
+    return
+  }
+  const seen = new Set<string>()
+  const twice = new Set<string>()
+  for (const part of parts) {
+    if (!('name' in part)) continue
+    if (seen.has(part.name)) {
+      if (!twice.has(part.name)) say({ kind: 'template', at: where, name: part.name, found: false, target: null, why: 'repeated' })
+      twice.add(part.name)
+      continue
+    }
+    seen.add(part.name)
+    const found = isMap(node.variables) && own(node.variables, part.name)
+    say({
+      kind: 'serverVariable',
+      at: where,
+      name: part.name,
+      found,
+      target: found ? at + '/variables/' + esc(part.name) : null,
+    })
+  }
+  // What is between braces is a name, whatever characters it has.
+  const literal = parts.map((part) => ('literal' in part ? part.literal : '')).join('')
+  for (const [mark, why] of [['?', 'query'], ['#', 'fragment']] as const) {
+    if (literal.includes(mark)) say({ kind: 'template', at: where, name: url, found: false, target: null, why })
+  }
+}
+
+// The paths of a Paths Object: each is a template that starts with a
+// slash and names no parameter twice, and no two are one template under
+// other names, which the specification calls identical.
+function pathsOf(node: Record<string, any>, at: string, say: (row: Connection) => void): void {
+  const same = new Map<string, string[]>()
+  for (const key of Object.keys(node)) {
+    if (key.startsWith('x-')) continue
+    const where = at + '/' + esc(key)
+    if (!key.startsWith('/')) say({ kind: 'template', at: where, name: key, found: false, target: null, why: 'no-slash' })
+    let parts: TemplatePart[]
+    try {
+      parts = readTemplate(key, 'path').parts
+    } catch (err) {
+      if (!(err instanceof ExpressionError)) throw err
+      say({ kind: 'template', at: where, name: key, found: false, target: null, why: 'malformed' })
+      continue
+    }
+    const names = namesOf({ template: key, kind: 'path', parts })
+    for (const name of new Set(names.filter((n, i) => names.indexOf(n) !== i))) {
+      say({ kind: 'template', at: where, name, found: false, target: null, why: 'repeated' })
+    }
+    if (0 === names.length) continue
+    const shape = parts.map((part) => ('literal' in part ? part.literal : '{}')).join('')
+    const list = same.get(shape)
+    if (undefined === list) same.set(shape, [where])
+    else list.push(where)
+  }
+  for (const [shape, list] of same) {
+    if (1 < list.length) say({ kind: 'pathClash', at: list[0], name: shape, found: true, target: list[0], routes: list })
+  }
 }
 
 // Every route through paths, webhooks and callbacks that reaches an

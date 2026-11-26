@@ -8,7 +8,10 @@ behind them.
 
 ```ts
 import { parse, resolve, resolveAll, version, make, aliasedSize, wellFormed, OpenApi, ResolveError, VERSION } from '@tabnas/openapi'
+import { bundle, bundleAll } from '@tabnas/openapi'
+import { readExpression, readTemplate, evaluateExpression, ExpressionError } from '@tabnas/openapi'
 import type { Connection, Lossy, ParseOptions, ParseReport, Reading, ResolveOptions, ResolveResult, VersionInfo } from '@tabnas/openapi'
+import type { BundleOptions, BundleResult, Exchange, Expression, Ignored, OperationView, Template } from '@tabnas/openapi'
 ```
 
 ### `parse(text, options?)`
@@ -310,6 +313,7 @@ type ResolveOptions = {
   refs?: 'uri' | 'pointer'                            // default 'uri'
   xref?: boolean                                      // default false
   extensions?: string[]                               // default []
+  operations?: boolean                                // default false
   compat?: 'apidef'
 }
 
@@ -324,6 +328,8 @@ type ResolveResult = {
   dataSlots: number             // $ref maps read as data
   dialects: DialectUse[]        // the schema dialects it declares
   urls: UrlUse[]                // the URLs it gives for things outside it
+  ignored: Ignored[]            // what the specification says to ignore
+  operations?: OperationView[]  // with `operations`: each operation, and what applies to it
 }
 
 type DialectUse = {
@@ -736,6 +742,8 @@ type Connection = {
   found: boolean
   target: string | null   // what it names, when found
   targetDoc?: string      // the document that is in, where not the description
+  landing?: string        // where a pointer lands, when it is read on through a reference
+  landingDoc?: string     // the document that is in, where not the description
   why?: string            // why a URI found nothing, as in unresolved
   type?: string | null    // the object type at a located target
   via?: 'name' | 'uri'
@@ -752,6 +760,12 @@ type Connection = {
 `connections` lists the places a description names something other than
 through `$ref`. Nothing in it is put into the tree.
 
+`target` is the place a URI names, as the URI is written. A pointer is
+read on the document as it is written, so where a step is missing at a
+reference it is read on in what that reference names. `landing` is the
+place it comes to then, as the `landing` of a `provenance` row is, and
+a row has it only where it is not `target`.
+
 | `kind` | `at` | What it names | Other members |
 |---|---|---|---|
 | `operationId` | a Link's `operationId` | the operation that declares it | `targets`, when more than one does |
@@ -766,6 +780,12 @@ through `$ref`. Nothing in it is put into the tree.
 | `recursiveRef` | a 2019-09 schema with `$recursiveRef` | its initial target, by URI | `anchor`, when that target has `$recursiveAnchor: true` |
 | `pathItemMerge` | a Path Item with `$ref` | the Path Item it names | `fields`: the fields both have, where the specification leaves the merge undefined |
 | `operationIdReuse` | the first route | one `operationId` that more than one route through `paths`, `webhooks` and callbacks reaches | `routes` |
+| `serverVariable` | a Server Object's `url` | the variable of that `name` among its `variables` | |
+| `template` | a path, or a Server Object's `url` | nothing: it is not well made | `why` |
+| `pathClash` | the first of the paths | the paths that are one template under other names | `routes` |
+| `pathParameter` | an operation, for a template expression of its path | the path parameter of that `name` | `why`, where it is not found |
+| `expression` | a Link's value, or a callback's key | the parameter that its runtime expression names | `why` |
+| `linkParameter` | a name in a Link's `parameters` | the parameter of that name in the operation the Link names | `ambiguous` |
 
 A discriminator has an implicit mapping beside its `mapping`: a value
 of its property names the schema component of that name. Its
@@ -778,8 +798,57 @@ implicit row. In 2.0 the discriminator is the name of the property,
 and the name of the schema itself is a value too, with `from` set to
 `self`.
 
+A path and a server's URL are templates: text with names between
+braces. [`readTemplate`](#readtemplatetext-kind) reads them, and three
+kinds of row say what it finds where a template is written:
+
+- A `serverVariable` row for each variable of a server's URL, found
+  where the Server Object declares it.
+- A `template` row for a template that is not well made, with the
+  reason in `why`. `malformed` is braces that are no template's, and
+  `name` is the text. `repeated` is a name the template has twice, which
+  is `name`. `no-slash` is a path that does not start with `/`, which
+  the object model reads as no Path Item. `query` and `fragment` are a
+  server's URL that has one outside its braces.
+- A `pathClash` row for paths that differ only in the names between
+  their braces, as `/pets/{petId}` and `/pets/{name}` do. The
+  specification calls such paths identical. `name` is the template with
+  each name left out, and `routes` lists the paths.
+
+Three more kinds are read for each operation, on its route:
+
+- A `pathParameter` row for each template expression of an operation's
+  path. It is found where the operation has a path parameter of that
+  name, its own or its Path Item's, and `why` is `no-parameter` where it
+  has none. A path parameter that no expression of the path names has a
+  row too, at the parameter, with `why` set to `no-expression`. A path
+  whose braces are no template's is held to no parameters, and a Path
+  Item with no operations to none either.
+- An `expression` row for each runtime expression that names a
+  parameter of the request: `$request.path.id`, `$request.query.id` or
+  `$request.header.id`. A Link's `parameters` values and `requestBody`
+  hold them, and a callback's key is one. The specification has such a
+  parameter declared by the operation that the Link or the callback
+  belongs to, and the row is found where it is. An expression of the
+  body, of the response, of the URL or of the method has no row, and
+  neither has a constant. A header that a parameter may not describe,
+  `Accept` say, has none either. A callback's key whose braces hold no
+  expression has a row with `why` set to `malformed`.
+- A `linkParameter` row for each name in a Link's `parameters`, held to
+  the parameters of the operation the Link names. A name may say the
+  location first, as `path.id` does, and is read that way where the
+  operation has such a parameter. A name that its parameters have in
+  more than one location is found, with `ambiguous`. A Link that names
+  no operation has no such rows.
+
+A name of one of these three kinds may be that of a parameter the
+operation has by a reference that is left as written: one into a
+document that was not given, say. Where the operation has such a
+parameter, a name that is not found has `why` set to `unresolved`.
+
 The rows come in document order, then the `pathItemMerge` rows in walk
-order, then the `operationIdReuse` rows. A name inside example data is
+order, then the `operationIdReuse` rows, then the rows read for each
+operation, in the order of the routes. A name inside example data is
 data, and has no row. A name in a map that only a reference types has
 one. A target is looked for as a reference's is: on the document as
 written, and through a `$ref` where a step is missing, so a target
@@ -832,6 +901,136 @@ such a URI. A `urn:` is none either.
 
 A value that is no string has no row, and neither has one in an example
 or an extension.
+
+#### Operations
+
+```ts
+type OperationView = {
+  at: string                    // where the resolved tree has the operation
+  kind: 'path' | 'webhook' | 'callback'
+  path?: string                 // for path: the path, as written
+  name?: string                 // for webhook and callback: its name
+  expression?: string           // for callback: the key it is under
+  of?: string                   // for callback: the `at` of the operation that has it
+  method: string                // GET, or a member of additionalOperations as written
+  additional?: true             // the method is a member of additionalOperations
+  operationId?: string
+  operation: any                // the Operation Object, as the tree has it at `at`
+  parameters: ParameterView[]
+  partial?: true                // a parameter is a reference left as written
+  servers?: Inherited           // not in 2.0
+  security: Inherited
+  consumes?: Inherited          // in 2.0 alone
+  produces?: Inherited
+  schemes?: Inherited
+}
+
+type ParameterView = {
+  name: string
+  in: string
+  at: string                    // where the resolved tree has it
+  from: 'operation' | 'pathItem'
+  parameter: any                // the Parameter Object, as the tree has it there
+}
+
+type Inherited = {
+  from: 'operation' | 'pathItem' | 'root' | 'default' | 'none'
+  at: string | null             // where the resolved tree has the list
+  value: any[]                  // the list, as the tree has it there
+}
+
+type Ignored = {
+  at: string                    // where the resolved tree has it
+  what: 'parameter' | 'responseHeader' | 'encodingHeader'
+  name: string                  // as written
+  kind?: 'path' | 'webhook' | 'callback'  // for a parameter: how its list is reached
+  path?: string                 // the path, under `paths`
+  method?: string               // the method, for an operation's own list
+  additional?: true             // the method is a member of additionalOperations
+  index?: number                // its place in the list
+}
+```
+
+An Operation Object does not hold everything that applies to its
+operation. Its Path Item and the root give it more, and the
+specification says how. With `operations: true` the result has
+`operations`, one entry for each operation that a route reaches:
+through `paths`, through `webhooks`, and through the callbacks of an
+operation. Each says what applies:
+
+- **`parameters`.** An operation has its Path Item's parameters, and
+  one of its own stands in the place of a Path Item's of the same name
+  and location. The list has the Path Item's that are left, in their
+  order, and then the operation's own. A header's name is compared
+  without regard to case, as HTTP has it, and any other name exactly.
+  An entry with no name or no location is left out. So is a reference
+  that names nothing, which `unresolved` lists, whatever is written
+  beside it, and the operation then has `partial`: its list lacks a
+  parameter.
+- **`servers`.** The operation's own list, else its Path Item's, else
+  the root's. A list with nothing in it is no list, as the specification
+  has it for the root's. With no list at all, `from` is `default` and
+  `value` is the one server the specification gives such an API, with a
+  `url` of `/`.
+- **`security`.** The operation's own list, else the root's. An
+  operation's list with nothing in it is its own all the same, which is
+  how an operation removes the root's. With neither, `from` is `none`.
+- **`consumes`, `produces` and `schemes`**, in 2.0, which has no
+  servers. Each is the operation's own, an empty one too, else the
+  root's.
+
+Each `at` is a route from the root of the resolved tree, and each value
+is the object that the tree has there. A parameter's `at` is in the
+operation's list or in its Path Item's. Where a path's Path Item is
+given by `$ref`, the route is the path's own, and the tree has the Path
+Item there. Where the tree keeps a reference on the way as written, the
+value is `undefined` and the rest of the entry stands. That is so for a
+reference that closes a cycle, and under `sharing: 'inline-once'` for
+each use of a target after the first.
+
+The operations of a webhook and of a callback are read as any other,
+with `servers` and `security` inherited in the same way. The specification
+does not say whether the root's apply to a request that the API itself
+sends, so `from` says where each came from. A callback that leads back
+to a Path Item it is already in ends there. A `$ref` where an
+operation is expected is no reference the object model has, so no
+operation is read there. Under `slots: 'all'` it is one, and the
+operation is the one it names.
+
+The routes are walked on the document as written, as the
+`connections` report's are, and what applies is read there. So the
+entries are the same under any `sharing` and `cycles`. Under
+`siblings: 'merge'` the members beside a reference are read with what it
+names, their own winning, as the tree has them. With
+[several documents](#several-documents), a Path Item in another
+document is on the route of the path that names it, and each operation
+is read by the version of the document it is in. So the rule on
+ignored headers holds for an operation of 3.0 or later, and a 2.0
+operation has `consumes`, `produces`, and `schemes` where a later one
+has `servers`. The lists that the root gives are the description's own.
+
+A value that two routes reach is walked once for each, and a reference
+is followed once for each value that leads to it. So the walk is held
+to the bound that the `connections` report's is held to, and past it
+`resolve` raises `openapi_work`. Callbacks and encodings that nest
+deeper than `maxDepth`, which a reference can lead them to, are
+`openapi_depth`.
+
+`ignored` is given with or without the option. It lists what the
+specification says to ignore, on each route that reaches it:
+
+- A header parameter named `Accept`, `Content-Type` or `Authorization`,
+  whatever its case, for which `what` is `parameter`. The request body,
+  the responses, and the security schemes describe those. Such a
+  parameter is in no operation's `parameters`. Its row says how its list
+  is reached, with the path where that is under `paths`, the method
+  where the list is an operation's own, and its place in the list.
+- A header named `Content-Type` among the headers of a response, or of
+  an Encoding Object, for which `what` is `responseHeader` or
+  `encodingHeader`.
+
+The rule is in 3.0 and later. For 2.0 the report is empty, and a header
+parameter of such a name is a parameter.
 
 ### `resolveAll(raw, options)`
 
@@ -1027,6 +1226,434 @@ load('file:///etc/passwd') // => undefined
 // const { tree } = await resolveAll(raw, { retrievalUri: 'https://api.example.com/openapi.yaml', load })
 ```
 
+### `bundle(raw, options?)`
+
+```ts
+function bundle(raw: any, options?: BundleOptions): BundleResult
+
+type BundleOptions = Pick<ResolveOptions,
+  'version' | 'retrievalUri' | 'documents' | 'parse' | 'maxDepth' | 'maxSteps' | 'onCheck' | 'checkEveryN' | 'slots' | 'extensions'>
+
+type BundleResult = {
+  tree: any
+  version: string
+  documents: string[]
+  embedded: { at: string; doc: string; from: string; as: 'component' | 'defs' | 'inline' }[]
+  left: { at: string; ref: unknown; why: string }[]
+  dialects: { at: string; dialect: string }[]
+}
+```
+
+Writes a description that is several documents as one. `tree` is the
+description's own document, with what it names in the other documents
+brought in, and with each reference that named another document naming
+a place in the tree. Nothing is resolved: a reference is still a
+reference. The bundle resolves to what the documents resolve to, but
+for what its `left` report lists, and bundled again it is itself.
+
+Neither the raw tree nor any document is changed, and the bundle shares
+no value with them. `JSON.stringify(tree)` is the bundle as JSON text.
+`version` is the version the description declares, and `documents`
+lists the other documents that were read, each by its URI.
+
+The options say how the documents are read, each as `resolve` takes
+it. `documents` gives the other documents, and `retrievalUri` the URI
+of the description. Any other option of `resolve` is a `TypeError`,
+since it asks something of a resolved tree.
+
+```js
+const { parse, bundle } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+info: { title: Pets, version: "1" }
+paths:
+  /pets:
+    get:
+      responses:
+        "200": { $ref: "responses.yaml#/Ok" }
+`)
+const out = bundle(raw, {
+  retrievalUri: 'https://example.com/api/openapi.yaml',
+  documents: {
+    'responses.yaml': 'Ok:\n  description: ok\n  content:\n    application/json:\n      schema: {$ref: "schemas/pet.yaml"}\n',
+    'schemas/pet.yaml': 'type: object\n',
+  },
+})
+out.tree.paths['/pets'].get.responses['200'] // => { $ref: '#/components/responses/Ok' }
+out.tree.components.responses.Ok.content['application/json'].schema // => { $ref: '#/components/schemas/pet' }
+out.tree.components.schemas.pet // => { type: 'object' }
+out.embedded.map((e) => [e.at, e.from, e.as]) // => [ [ '/components/responses/Ok', '/Ok', 'component' ], [ '/components/schemas/pet', '', 'component' ] ]
+out.left // => []
+```
+
+#### Where a target goes
+
+A target is what a reference names in another document. Where it goes
+follows from its type:
+
+- A target that the object model types goes among the components of
+  its type: a schema in `components.schemas`, a response in
+  `components.responses`. In 2.0 that is `definitions`, `parameters`,
+  or `responses`, at the root. Its type is its own where it has one,
+  and else the type that the reference to it expects.
+- Its name there is the last step of the pointer to it, or for a whole
+  document the name of its file, in the characters a component's name
+  has. A name that is taken has `_2` after it, then `_3`.
+- A name is taken, too, where something hopes for it: a reference that
+  names a component the description does not have, a mapping value
+  that does, by pointer or by name, and the name of a security
+  requirement with no scheme. A target of that name would be what it
+  names, and it named nothing. An anchor that a reference hopes for is
+  left out of what is brought in, for the same reason.
+- A target is brought in once, however many references name it. A
+  target inside another target is brought in as part of that one, and
+  named there.
+- Where the description's version has no component for the type, the
+  target is written in the place of the first reference to it, and
+  each later reference names that place. A Path Item in 3.0 and in 2.0
+  is one such, and so is what a `$ref` in data names under
+  `slots: 'all'`. A Path Item's own fields beside its `$ref` are laid
+  over the fields of the one it names, as `resolve` lays them, and
+  that place is then no other reference's to name. The fields they
+  are laid over are not written.
+- The description may have something else where the components of a
+  type go: a value that is no map, or under `slots: 'all'` a reference
+  to a document. Nothing is put there, and no such place is made where
+  a reference names it and finds nothing. A target of that type is
+  then written in the place of a reference too.
+- A target is written in the place of a reference only where that
+  keeps what the documents mean. The place has to read the type the
+  target has, or read data. And the members beside the reference have
+  to be ones that are not read: those beside a reference in data, or
+  one of 2.0 or 3.0, or one in a schema of draft-04 to draft-07. Any
+  other reference has to be alone. A reference that cannot hold its target
+  names the place where another one does, and is listed in `left` as
+  `outside` where none does.
+- A schema that declares an identifier of its own with `$id` is a
+  schema resource. It is brought whole into `components.schemas` and
+  keeps its identifier, so a reference that names it by the identifier
+  still does, and a reference inside it stands as written. A JSON
+  Schema document whose `$id` is its own URI is such a resource.
+- A reference inside a resource is read in the resource, so a fragment
+  there cannot name the rest of the bundle. What such a reference
+  names outside the resource is copied into the resource's own
+  `$defs`, or `definitions` in draft-04 to draft-07. Under
+  `slots: 'all'` a reference in data may name content that nothing
+  gave a type. That is written in the place of the reference, in a
+  resource as anywhere else: among the definitions it would be read as
+  a schema.
+- A resource is in the bundle once, where a schema is read, so that
+  its identifier is declared once and is read. Plain content may be
+  written in more places than one, and a reference stands for a
+  resource in every copy but the one that holds it. A resource in a
+  part of a target that the bundle reads as data is brought again by
+  itself.
+- Of two schemas that declare one identifier, the documents are read
+  with the last of them as its resource. The other is plain content
+  to a bundle: its identifier is left out, and listed in `left`.
+- A description of 3.0 or 2.0 has no schema resource, whatever its
+  other documents are, since nothing in it reads an identifier. A
+  schema of a 3.1 document that declares one is plain content in such
+  a bundle. A fragment in it is written as a pointer from the root,
+  and its identifier is left out, and listed in `left`.
+- A reference may land on a value that the object model reads as
+  plain JSON: the `example` of a schema, or its `default`. Among the
+  components it would be read as one of them, and a `$ref` in it as a
+  reference. So the object that the value is in is brought, and the
+  reference names the value in it.
+- A part may have its type from a reference alone, in a place where
+  the object that holds it reads plain JSON: the `default` of a
+  schema, on which a reference landed before anything read the schema.
+  In the bundle the schema is read first, and no reference makes the
+  part what it was there. So the part is brought once more by itself,
+  where its type is read, and each reference to it names that one. The
+  copy in the object that holds it is listed in `left` as `type`.
+
+A discriminator's mapping value that names a schema in another
+document brings that schema in too, and names it there. A schema that
+only a mapping value names is read as a schema, with the references
+in it. An `operationRef` names its operation where the bundle has it.
+
+What is written in the place of a reference is read as the object
+model reads that place. Under `slots: 'all'` an operation in a file of
+its own is written where its `$ref` was, and a response that it names
+is then a response, and goes among the responses.
+
+#### What is written again
+
+What is brought in is read in the bundle against the description's
+base URI, and under the description's schema dialect. So the bundle
+writes four things again, each to mean what it meant:
+
+- A relative URL that is read against the base URI, such as an
+  `externalDocs` URL, names the same resource from its new place. So
+  does a server's `url`, which is read against the URI its document
+  was retrieved from. A server's `url` that has variables stands as
+  written.
+- A reference that names nothing is written to name what it named.
+  One that names the description by its URI is written as the
+  fragment alone, as a reference to a place in the description is.
+- A relative `$id` of a resource names the same URI from its new
+  place.
+- A schema that was read under another dialect than its new place is
+  given that dialect as `$schema`.
+
+A reference of the description's own that is a fragment alone stands
+as written, since every place of the description is where it was. One
+whose pointer is read on through another reference, into another
+document, is the exception. A reader that takes a pointer by the
+letter reads on through no reference, and the bundle may have no
+place for what the reference on the way names. So it is written to
+name where the bundle has what it named.
+
+Under `slots: 'all'` a reference in data may be written where the
+bundle reads a type: in a file that holds an operation, say, which is
+written where an operation is. The members beside such a reference
+were not read, and there they would be, so it is written alone. What
+it names had no type either. Where the bundle has that only in a
+place that reads data, it is brought again where the type is read, and
+the copy that is data stays data.
+
+#### The reports
+
+`embedded` has a row for each target that was brought in: `at` is
+where the bundle has it, `doc` and `from` are the document it came
+from and its pointer there, and `as` says how it was brought in. That
+is `component`, `defs` for a copy in the `$defs` of a resource, or
+`inline` for one written in the place of a reference.
+
+`left` has a row for each thing the bundle could not make whole. `at`
+is its place in the bundle and `ref` its text in the documents. A
+reference that names nothing has the `why` that `resolve` gives it,
+and `loop` where its pointer comes back to itself. The other reasons
+are these:
+
+| `why` | What was left |
+|---|---|
+| `cycle` | a reference to a target that would be written inside itself without end, and that no other reference holds alone |
+| `outside` | a reference, a mapping value or an `operationRef` whose target is in a document of the set, where the bundle has no place for the target |
+| `dynamic` | a `$dynamicRef` or a `$recursiveRef` in content that moved, where what it names first did not move with it |
+| `anchor` | an anchor that was left out, because the place it moved to has one of that name, or has a reference that names one and finds none |
+| `id` | an identifier that was left out. It named the resource it was already in, or another schema has it, or the description's version reads none, or it was not read, and in its place in the bundle it would start a resource |
+| `type` | a part of a target that the documents read as one type, where the bundle may read it as another, or as data |
+
+A `type` row is for a part that has its type from a reference, and not
+from where it is: a schema in a member that its document gives no
+meaning, which a reference names. In the bundle it is read as it was
+only if a reference of that type lands on it there. It is listed where
+none does, where one of another type does too, and where its place in
+the bundle has a type of its own or is one that the model reads plain
+JSON in. What is in a listed part is not read as the documents read
+it, and `ref` is where the part came from. A description that names
+each thing as one type has no such row.
+
+An identifier in a part that the documents read as another type than
+a schema is a plain member there. It is left out, and listed as `id`,
+where a reference of the bundle may read the part as a schema: the
+member would then name a resource.
+
+A reference that is listed as `outside` is written to name what it
+named. In a schema resource it may have named its target through a
+reference of the description. That place of the description holds
+something else in the bundle, a reference that stands for the target,
+so the text names the target in its own document.
+
+`dialects` has a row for each schema that was given a `$schema`, with
+the dialect. OpenAPI reads `$schema` at any Schema Object that is not
+inside another, which is where the bundle writes it. A reader that
+takes `$schema` only at the root of a schema resource reads such a
+schema under the description's own dialect.
+
+#### Bounds
+
+`maxDepth`, `maxSteps`, `onCheck`, and `checkEveryN` hold as they do
+for `resolve`, and the copying counts as steps with the reading. The
+texts in `documents` are held together to the limits of one text. Two
+bounds are the bundle's own, with no option given:
+
+- A target written in the place of a reference is written again for
+  each reference that lays fields over it. Such copies can multiply,
+  so all the copying together is held to sixteen times the work of
+  reading the documents once, and 100,000 steps besides. Past it
+  `bundle` throws a `ResolveError` coded `openapi_work`.
+- A target written in the place of a reference is as deep as its
+  place and its own depth together, so a bundle can nest deeper than
+  any of its documents. A bundle that nests deeper than `maxDepth` is
+  `openapi_depth`, and so are references that each name the next,
+  written one in the place of another more than `maxDepth` times.
+  Where the stack runs out before either, that is `openapi_depth` too.
+
+#### What a bundle does not keep
+
+- The bundle is one document of one version. A document of another
+  version is read in it by the description's version. A schema
+  resource of 3.1 is plain content in a description of 3.0.
+- A schema that is brought in becomes a component with a name. A
+  discriminator that lists it then has that name as an implicit
+  mapping value, where the schema had no name before.
+- A name that is looked for in every document, an `operationId`, is
+  looked for in the bundle alone. An operation that no reference
+  brings in is not in it.
+- A schema that only a mapping value names is read as a schema in the
+  bundle, with the references in it. `resolve` reads it as data: it
+  types a place by the references that land on it, and a mapping
+  value is none.
+- Under `slots: 'all'`, content that nothing typed may be written where
+  the bundle reads a type. An identifier in it was a plain member, and
+  is left out where it would start a schema resource.
+- A bundle that lists a part under `type` is not its own bundle.
+  Bundled again, that part is read as the bundle has it.
+- A server's `url` with variables, in a document from another
+  directory than the description, is read against the description.
+
+### `bundleAll(raw, options)`
+
+```ts
+function bundleAll(raw: any, options: BundleOptions & {
+  load: (uri: string) => unknown | Promise<unknown>
+  maxDocuments?: number         // default 10000
+  maxRounds?: number            // default 64
+}): Promise<BundleResult>
+```
+
+Finds and loads the documents a description names, as `resolveAll`
+does, and writes them as one, as `bundle` does. `load`,
+`maxDocuments`, and `maxRounds` are those of `resolveAll`, with the
+same bounds. The other options and the result are those of `bundle`.
+
+```js
+const { parse, bundleAll } = require('@tabnas/openapi')
+
+const files = {
+  'https://example.com/api/a.yaml': 'A: {type: object, properties: {b: {$ref: "b.yaml#/B"}}}\n',
+  'https://example.com/api/b.yaml': 'B: {type: string}\n',
+}
+const raw = parse('openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    A: {$ref: "a.yaml#/A"}\n')
+let schemas
+bundleAll(raw, { retrievalUri: 'https://example.com/api/openapi.yaml', load: (uri) => files[uri] }).then((b) => {
+  schemas = b.tree.components.schemas
+})
+// schemas is { A: { $ref: '#/components/schemas/A_2' }, A_2: { type: 'object', properties: { b: { $ref: '#/components/schemas/B' } } }, B: { type: 'string' } }
+```
+
+### `readExpression(text)`
+
+```ts
+function readExpression(text: string): Expression
+
+type Expression = {
+  expression: string            // as written
+  source: 'url' | 'method' | 'statusCode' | 'request' | 'response'
+  kind?: 'header' | 'query' | 'path' | 'body'   // for request and response
+  name?: string                 // for header, query and path, as written
+  pointer?: string              // for body: the JSON Pointer after `#`, as written
+  tokens?: string[]             // and its tokens, with `~1` and `~0` read
+}
+```
+
+Reads a runtime expression: `$url`, `$method`, `$statusCode`, or
+`$request.` or `$response.` and then `header.` with a name, `query.`
+with a name, `path.` with a name, or `body` with an optional `#` and a
+JSON Pointer. It throws an `ExpressionError` for any other text.
+
+The grammar is the specification's ABNF, read as it is written:
+
+- What follows `query.` or `path.` is the name, to the end of the text,
+  whatever characters it has, and it may be empty. So
+  `$request.query.a.b` names the parameter `a.b`.
+- A header's name is a token of RFC 9110, one character at least. A
+  token may hold `.` and `#`.
+- The pointer is not a URI fragment, so it is not percent-decoded:
+  `$request.body#/a%2Fb` has the token `a%2Fb`. A `~` in it is followed
+  by `0` or `1`.
+- The words of the grammar match without regard to case, as the
+  literals of an ABNF grammar do, so `$URL` is `$url`. A name keeps the
+  case it is written in.
+
+The whole text is the expression. One between braces in a larger text
+is a template's, which `readTemplate` reads.
+
+### `readTemplate(text, kind?)`
+
+```ts
+function readTemplate(text: string, kind?: 'path' | 'server' | 'runtime'): Template
+
+type Template = {
+  template: string              // as written
+  kind: 'path' | 'server' | 'runtime'
+  parts: TemplatePart[]
+}
+
+type TemplatePart = { literal: string } | { name: string, expression?: Expression }
+```
+
+Reads a template into its parts: the text to keep, and the names
+between braces. `kind` says what a name is, and is `'path'` unless
+given:
+
+- `'path'`: a path, whose names are template expressions that path
+  parameters give values to.
+- `'server'`: a Server Object's `url`, whose names are server
+  variables.
+- `'runtime'`: a callback's key or a Link's value, where what is between
+  braces is a runtime expression. Each such part has `expression`, as
+  `readExpression` gives it. A text that is one bare expression, as
+  `$request.body#/url` is, has that as its one part. A text with no
+  braces that is no expression is one literal.
+
+A name is any characters but a brace, and a segment may hold several
+names with text between them, as the specification's grammars have it.
+Only the braces are held to the grammar. It throws an `ExpressionError`
+for a brace that is not closed, a brace inside braces, a closing brace
+with none open, braces with nothing between them, and under `'runtime'`
+braces that hold no runtime expression. The characters of the literal
+parts are not judged, and neither is a name that a template has twice:
+the `connections` report of `resolve` says that.
+
+### `evaluateExpression(expr, exchange)`
+
+```ts
+function evaluateExpression(expr: string | Expression | Template, exchange: Exchange): unknown
+
+type Exchange = {
+  request?: HttpMessage & { url?: string, method?: string }
+  response?: HttpMessage & { statusCode?: number | string }
+}
+
+type HttpMessage = {
+  headers?: Record<string, unknown> | Iterable<readonly [string, unknown]>
+  query?: Record<string, unknown>
+  path?: Record<string, unknown>
+  body?: unknown                // the body, parsed
+}
+```
+
+Gives the value a runtime expression names in one exchange: a request
+and its response. Nothing in a description has such a value until there
+is a request, so `resolve` gives none, and the caller that has the
+request asks here.
+
+- `$url` and `$method` are the request's `url` and `method`, and
+  `$statusCode` the response's `statusCode`.
+- A header is looked up without regard to case. `headers` is a map
+  from name to value, or anything that gives pairs of name and value: a
+  `Map`, a list of pairs, or the `Headers` of the Fetch API.
+- A query parameter and a path parameter are looked up by name, with
+  its case, in `query` and `path`.
+- A pointer is read into `body`, an index of a list as its digits with
+  no leading zero.
+
+The value keeps the type it has in the exchange. Where the exchange has
+no such value the result is `undefined`, as the specification has it
+for an expression that fails to evaluate.
+
+Text is read with `readExpression` first, and throws as that does. A
+template of kind `'runtime'` gives its text with each expression's
+value in its place, and `undefined` where one of them has none. One
+that is a single bare expression keeps the type of its value. A value
+that is a map or a list is written as JSON in such a text.
+
 ### `version(tree)`
 
 ```ts
@@ -1152,8 +1779,12 @@ And where the readings part:
 
 ## What this release does not do
 
-`resolve` loads nothing, and `resolveAll` loads only what its `load`
-reads. No loader is on unless the caller makes one.
+`resolve` and `bundle` load nothing, and `resolveAll` and `bundleAll`
+load only what their `load` reads. No loader is on unless the caller
+makes one.
+
+`bundle` writes a tree, which `JSON.stringify` writes as JSON. Nothing
+here writes YAML.
 
 Under `refs: 'pointer'`, and so under `compat: 'apidef'`, no other
 document is read.
@@ -1174,7 +1805,10 @@ table under `parse`. The engine's are these:
 
 `openapi_stream` is placed at the start of the second document,
 `openapi_duplicate_key` at the repeated name, and the others at the start
-of the document. `openapi_root` says what the root is in
+of the document. `readExpression` and `readTemplate` throw an
+`ExpressionError`, whose `code` is `openapi_expression`. It has the
+`text` that was read and the `offset` in it where reading stopped.
+`openapi_root` says what the root is in
 `details.kind`: `'empty'` for a text of white space and comments alone,
 or `'null'`, `'a list'`, `'a string'`, `'a number'` or `'a Boolean'`. A
 member name a message quotes is JSON-quoted and cut short. The default parser is lenient: it reads some text that the strict

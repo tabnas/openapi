@@ -42,6 +42,23 @@ every row to that resolver. Under `cycles: 'keep'`, which the preset
 sets, the report arrays are in document order. They run in
 `ts/test/resolve-spec.test.ts`.
 
+Two more columns are optional there: `operations`, one line for each
+operation of the view that the row's options ask for, and `ignored`,
+one `what at name` line for each thing the specification says to
+ignore. The runner's own comment has the format of each. Every value a
+view gives is held to the resolved tree at its place, whatever the row
+pins. `operations.tsv` holds the view and the `ignored` report, and
+`templates.tsv` the rows of `connections` that read a template or a
+runtime expression, which say the name after the place.
+
+`expression/` holds the fixtures of the readers of runtime expressions
+and templates, a file for each function: `expression-read.tsv` for
+`readExpression`, `template-read.tsv` for `readTemplate`, with the kind
+in a third column, and `expression-eval.tsv` for `evaluateExpression`,
+with the exchange as JSON and `UNDEFINED` for no value. They run in
+`ts/test/expression-spec.test.ts`, which fails when a file there has no
+runner.
+
 `model/` holds the object model's fixtures, `classify.tsv`: a version, an
 RFC 6901 pointer and the state the classifier must reach. They run in
 `ts/test/model.test.ts`, outside `spec/` because they test the model, not
@@ -102,6 +119,9 @@ section 5 of
 | what `resolve` gives | `resolve/` | `ts/test/resolve-spec.test.ts` |
 | the object model | `model/` | `ts/test/model.test.ts` |
 | a description in several files | `docs/<case>/` | `ts/test/documents-spec.test.ts` |
+| what `readExpression`, `readTemplate` or `evaluateExpression` gives | `expression/` | `ts/test/expression-spec.test.ts` |
+| what `bundle` writes of several documents | `bundle/<case>.json` | `ts/test/bundle-spec.test.ts` |
+| a set of documents that a generator failed `bundle` on | `bundle-held/<what was wrong>.json` | `ts/test/bundle-spec.test.ts` |
 
 A case of `docs/` is a folder: the documents as files, and `case.json`.
 That file names the `entry` document and the `retrievalUri` it was
@@ -114,6 +134,39 @@ the site's own. `source` says where the case comes from, and `options`,
 when present, is given to `resolve`. Every file of a folder must be one
 the case names. The first five are the examples of OpenAPI 3.2.0's
 Appendix F and Appendix G, written as the specification writes them.
+`bundle` is what `bundle` writes of the same documents, in the form
+that a case of `bundle/` has it.
+
+A case of `bundle/` is one JSON file: a `note` that says what the case
+shows, the `entry` document and its `retrievalUri`, each other
+document in `documents` by its URI, the `options` if any, and what
+`bundle` gives. That is the bundle's `tree`, and each row of its
+reports as a list: an `embedded` row is its place, its document, its
+place there and how it was brought in; a `left` row its place, its
+text and why; a `dialects` row its place and the dialect. The runner
+also holds each case to three things that no case writes down. The
+bundle resolves to what the documents resolve to, which
+[`tools/corpus/bundle-agree.cjs`](../tools/corpus/bundle-agree.cjs)
+checks, and which the cases of `docs/` are held to as well. No
+document is changed. And the bundle, bundled again, is itself. So read
+the `tree` of a new case by hand for what it should be, and leave
+whether it means the same to the runner. A rule of `bundle` that a
+review found has a case here under a name of its own: `occupied`,
+`hoped`, `seat`, `one-identifier`, `two-identifiers`, `type` and the
+rest. `ts/test/bundle.test.ts` has what a case cannot carry: the sets
+of documents that three generators write, and the bundles that the
+check has to fail.
+
+A file of `bundle-held/` is for one thing that was wrong: a `note`
+that says what, the `retrievalUri` of the entry, and `sets`. Each set
+is an `entry`, its `documents` and its `options` if any, as a
+generator wrote it and cut down to what failed. No set says what
+`bundle` gives. The runner holds each to what every bundle is held to:
+it resolves to what the documents resolve to, no document is changed,
+and it is its own bundle unless it lists a part under `type`. A set
+that a generator fails on goes here once it is repaired, in the file
+of its cause or a new one, so that a seed that is no longer run still
+counts.
 
 A folder is not made ahead of its contents, because a fixture folder
 with nothing in it fails here, as an empty fixture does. When porting
