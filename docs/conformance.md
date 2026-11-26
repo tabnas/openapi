@@ -262,9 +262,9 @@ packages named above.
   reference. The 13 documents that the base reading refuses reach
   neither resolver.
 - **The apidef gate.** `node tools/apidef-gate.cjs` runs apidef's own
-  TypeScript suite on this build, at apidef's commit `3186c51`, where
+  TypeScript suite on this build, at apidef's commit `9549a6c`, where
   apidef reads a description through this package. Of 2,735 tests,
-  2,734 pass and one is skipped, as it is at `46c33ab`, the commit of
+  2,734 pass and one is skipped, as it is at `259e4c3`, the commit of
   apidef's `main` that has its own parsing still. The gate also
   compares what the two commits make of 120 descriptions, and all 120
   results are the same, byte for byte.

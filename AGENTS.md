@@ -1537,7 +1537,7 @@ node tools/apidef-preset.cjs ../apidef --ref 0f41ce1 --corpus .corpus/src --rows
   the run proved nothing about it. The candidate is the branch, and
   `--base` names what it is compared with: the commit of apidef's `main`
   that the branch last merged, so that the two differ by the swap alone.
-  Nothing is allowed to fail. At apidef 3186c51 against 46c33ab that is
+  Nothing is allowed to fail. At apidef 9549a6c against 259e4c3 that is
   2,734 of 2,735 tests passing, none failing, one skipped as on apidef's
   `main`, and every definition byte-identical: the 104 it compares by
   itself, the twelve of G2 below, and the four of

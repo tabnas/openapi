@@ -1115,6 +1115,12 @@ what the code does.
     10 MB.
   - The suite, 1,736 tests and the 11 of the prose gate, and the
     generators as said above.
+- **apidef's `main` moved once more that evening**, to 259e4c3, which
+  is apidef 8.34.1: its guide skips a version segment inside a path.
+  The branch merges it as 9549a6c, with no conflict, and the gate
+  passes there against 259e4c3 with the same figures: 2,734 of 2,735
+  tests, one skipped as on apidef's `main`, and 120 of 120 definitions
+  byte-identical. apidef's parse stage did not change.
 
 **Since acceptance**, as T5 was begun:
 
