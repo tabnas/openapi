@@ -1060,6 +1060,15 @@ cannot be written to mean that, so it stands, with a `version` row.
 reference, and `OVERRIDE` in `resolve.ts` is its table for a Reference
 Object.
 
+The rule holds only where the reference comes to a map in the end
+(`endOf`). What is beside a reference to a schema that is `false`, or
+to one whose chain names nothing or comes round, is read by no
+version: `combine` gives a target that is no map as it is, and a
+reference to one left as written is left as written. Written as an
+`allOf`, such a reference resolved to an `allOf` of `false` where the
+documents gave `false`, which the review of the pull request found. It
+stands as it was written.
+
 The check holds a `version` row by taking the field out of its
 document, where it was written, and resolving the documents again
 (`without`, and `expected` in `agree`). It first allowed the field

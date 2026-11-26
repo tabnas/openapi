@@ -321,6 +321,21 @@ function readBeside(v: ModelVersion, site: SiteFacts, alone: boolean): Beside {
 }
 const isRead = (beside: Beside, name: string): boolean => 'all' === beside || beside.includes(name)
 
+// What a reference comes to in the end, as the documents have it: where
+// it lands, and from a reference there on to where that one lands. None
+// where the chain names nothing, or comes round to itself: such a
+// reference is left as it is written, by every version.
+function endOf(land: Landing): unknown {
+  const met = new Set<Loc>()
+  let cur: Landing | undefined = land
+  while (undefined !== cur && cur.found && undefined !== cur.loc?.site) {
+    if (met.has(cur.loc)) return undefined
+    met.add(cur.loc)
+    cur = cur.loc.site.landing
+  }
+  return undefined === cur || !cur.found ? undefined : cur.node
+}
+
 // Write a description and the documents given with it as one document.
 // Neither the raw tree nor any document is changed.
 function bundle(raw: any, options: BundleOptions = {}): BundleResult {
@@ -1534,8 +1549,10 @@ function bundleOn(raw: any, front: Front, all: boolean): BundleResult {
         if ('data' === site.kind && null !== expectAt(ds)) for (const k of beside) delete out[k]
         // And a reference of a document of another version than the
         // description's is read in the bundle by the description's rule
-        // for what is beside it.
-        else if (written !== mv && 0 < beside.length && ('data' !== ds.state || true === ds.edge)) {
+        // for what is beside it. Where it comes to no map in the end, a
+        // schema that is `false` say, or to nothing, no version reads
+        // what is beside it, and it stands as it was written.
+        else if (written !== mv && 0 < beside.length && ('data' !== ds.state || true === ds.edge) && isMap(endOf(land))) {
           const then = readBeside(written, site, site.alone)
           const now = readBeside(mv, site, hasIds(mv) ? dialectOf(inside).dialect.refAlone : true)
           // What that rule reads, and the document's own did not, is

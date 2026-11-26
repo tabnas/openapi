@@ -979,7 +979,7 @@ what the code does.
   function that says which addresses are public, and the reasons of a
   bundle's `left` rows. It said the size limit was 16 MiB by default,
   which Decision 34 made the limit for a parser the caller gives: it
-  is 128 MiB. The prose gate is green at 658 alerts, none an error.
+  is 128 MiB. The prose gate is green at 664 alerts, none an error.
 - **The conformance statement** (item 2) is
   [`docs/conformance.md`](../conformance.md). Its prose says what each
   measurement is, and its figures are written by
@@ -1077,6 +1077,17 @@ what the code does.
     it.
   - **W14**, of section 2.3, is the base reading's and is not
     repaired.
+- **The automated review of the pull request** found the hole in the
+  check too, and one thing more. What is beside a reference of another
+  version was written again whatever the reference comes to. Where
+  that is no map, a schema that is `false`, resolving reads nothing
+  beside the reference: it gives the `false`. The bundle wrote an
+  `allOf` of the reference with the members beside it, which resolves
+  to a schema and not to `false`. The same held for a reference whose
+  chain names nothing, or comes round to itself, which every version
+  leaves as written. The rule now holds only where the reference
+  comes to a map in the end. `version-boolean.json` and
+  `version-unresolved.json` of `test/bundle/` hold it.
 
 **Since acceptance**, as T5 was begun:
 

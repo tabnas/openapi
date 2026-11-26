@@ -1566,6 +1566,12 @@ it meant:
   field's place and its value, and the bundle resolves to the target's
   own field there.
 
+None of this is done for a reference that comes to no map in the end:
+one to a schema that is `false`, or one whose chain of references
+names nothing or comes round to itself. No version reads what is
+beside such a reference, so it is written as it was, with what is
+beside it.
+
 A reference that is listed as `outside` is written to name what it
 named. In a schema resource it may have named its target through a
 reference of the description. That place of the description holds
