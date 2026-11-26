@@ -1,0 +1,95 @@
+{
+  "source": "This repository: documents with no version, typed by the references into them",
+  "note": "Three documents declare no version. Each part of them is what the reference that lands on it says: a schema. A part that no reference lands on is data: `Unused` holds a `$ref` and is no site, so it is reported nowhere. Two of the documents name each other, and that cycle is cut once.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": {
+    "https://example.com/api/Pet.yaml": "Pet.yaml",
+    "https://example.com/api/Owner.yaml": "Owner.yaml",
+    "https://example.com/api/defs.yaml": "defs.yaml"
+  },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "object",
+              "properties": { "pets": { "type": "array", "items": { "$ref": "Pet.yaml" } } }
+            },
+            "tags": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [
+    {
+      "at": "/properties/pets/items",
+      "ref": "Pet.yaml",
+      "target": "",
+      "doc": "https://example.com/api/Owner.yaml",
+      "targetDoc": "https://example.com/api/Pet.yaml"
+    }
+  ],
+  "sites": [
+    ["", "/components/schemas/Pet", "https://example.com/api/Pet.yaml", "", "resolved"],
+    [
+      "https://example.com/api/Pet.yaml",
+      "/properties/owner",
+      "https://example.com/api/Owner.yaml",
+      "",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/Owner.yaml",
+      "/properties/pets/items",
+      "https://example.com/api/Pet.yaml",
+      "",
+      "cut"
+    ],
+    [
+      "https://example.com/api/Pet.yaml",
+      "/properties/tags/items",
+      "https://example.com/api/defs.yaml",
+      "/Tag",
+      "resolved"
+    ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "$ref": "#/components/schemas/Pet_2" },
+          "Pet_2": {
+            "type": "object",
+            "properties": {
+              "owner": { "$ref": "#/components/schemas/Owner" },
+              "tags": { "type": "array", "items": { "$ref": "#/components/schemas/Tag" } }
+            }
+          },
+          "Owner": {
+            "type": "object",
+            "properties": { "pets": { "type": "array", "items": { "$ref": "#/components/schemas/Pet_2" } } }
+          },
+          "Tag": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Pet_2", "https://example.com/api/Pet.yaml", "", "component"],
+      ["/components/schemas/Owner", "https://example.com/api/Owner.yaml", "", "component"],
+      ["/components/schemas/Tag", "https://example.com/api/defs.yaml", "/Tag", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

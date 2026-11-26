@@ -41,7 +41,7 @@ import { Loc, buildIndex, hasIds } from './site-index'
 import { HISTORY_OVER, MAX_BYTES, PART, stepsOf, utf8Length } from './text'
 import type { Part } from './text'
 import { ALIAS_FACTOR, ALIAS_FLOOR } from './yaml-alias'
-import type { DocFacts, DocInput, Kind, SiteFacts, Why } from './site-index'
+import type { DocFacts, DocInput, Kind, Landing, SiteFacts, Why } from './site-index'
 import { NOTHING, define, isMap, merged, normalizeUri, own, pointer, resolveUri, stepInto, withoutFragment } from './uri'
 import type { Path } from './uri'
 
@@ -509,11 +509,25 @@ function utf8(s: string): number {
   return n
 }
 
-// The operators the fold recognises: two key operators, by member name.
+// The operators the fold recognises: key operators, by member name. A
+// reference is one. The two members of a discriminator that hold mapping
+// values are two more, for one purpose: a mapping value names a schema
+// and nothing is put in its place, so the fold comes to what it names
+// only where the walk does. Where that is in another document, the fold
+// is told of the discriminator's map, and what it names is read there:
+// see `farOf`.
 const OPS = {
   ref: { key: true, src: '$ref' },
   dynamicRef: { key: true, src: '$dynamicRef', dynamic: true },
+  mapping: { key: true, src: 'mapping' },
+  defaultMapping: { key: true, src: 'defaultMapping' },
 }
+const MAPPED = new Set(['mapping', 'defaultMapping'])
+// The one member of the map a fold starts from where it does not start
+// from the description: see `startKey`. The name sorts after every
+// operator above, so a map of a document that has a member of this name
+// is asked as whatever else it is first.
+const START = '\uffff'
 
 // One site, from the moment the walk first meets it. `row` is what the
 // index knows of it, which the walk does not change.
@@ -562,9 +576,8 @@ type Front = {
   index: ReturnType<typeof buildIndex>
 }
 
-// `count` carries the steps of an earlier front on, where one run builds
-// more than one: the bound and the check are then those of the run.
-function frontOf(raw: any, o: Settled, who = 'resolve', count: { steps: number } = { steps: 0 }): Front {
+function frontOf(raw: any, o: Settled, who = 'resolve'): Front {
+  const count = { steps: 0 }
   const detected = readVersion(raw).version
   const mv: ModelVersion =
     'auto' !== o.version ? o.version : 'unknown' === detected ? '3.2' : (detected as ModelVersion)
@@ -893,6 +906,60 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
   // Under 'keep', the finished tree of each other document a site lands
   // in: see `keepCycles`.
   const folded = new Map<string, any>()
+  // A landing in another document is read off that document's finished
+  // tree, so the document is folded, whole, the first time something
+  // lands in it. Every site in it holds a placeholder too.
+  const foldWhole = (site: Site, far: DocFacts | undefined) => {
+    if (undefined === far || far === home || folded.has(far.key)) return
+    folded.set(far.key, undefined)
+    const whole = site.written([], far.key)
+    if (whole.found) folded.set(far.key, whole.value)
+  }
+
+  // What a mapping value names in another document: its landing, where
+  // that is found there, on a map or a list. The walk of the description
+  // does not come to such a place, and no reference may, so the sites in
+  // it would be read by nothing. The description's own places are walked,
+  // whatever names them. Under `refs: 'pointer'` no other document is
+  // read.
+  const isFar = (land: Landing): boolean => land.found && undefined !== land.loc && land.doc !== home
+  // The same for the mapping values of one discriminator, by the location
+  // of its map.
+  const farOf = (loc: Loc): Landing[] | undefined => {
+    if (pointers || 1 === index.docs.length) return undefined
+    const below = index.child(loc, 'mapping')
+    let lands: Landing[] | undefined
+    for (const rows of [loc.mappings, below?.mappings]) {
+      for (const row of rows ?? []) {
+        const land = index.mappingLanding(row)
+        if (isFar(land)) (lands ??= []).push(land)
+      }
+    }
+    return lands
+  }
+  // A mapping value is no reference: nothing is put in its place, so
+  // what it names is not inside the schema that names it. Under 'cut' the
+  // fold follows references, and what it is folding is open until it is
+  // done. Read from its discriminator, a schema that builds on its parent
+  // with `allOf`, as most that a mapping value names do, would close a
+  // cycle through the parent that the resolved tree does not have. So
+  // each landing is read once the description has been, with nothing
+  // open: `later` has them in the order the walk met their
+  // discriminators. Under 'keep' the document each is in is folded then,
+  // so the sites of a document that a reference lands in too are met in
+  // the order they always were.
+  const later: Landing[] = []
+  const laterAt = new Set<Loc>()
+  // For that, the fold starts from a document of one map, which reads the
+  // description as a reference would, and then each landing. It is made
+  // only where a mapping value of the documents has such a landing, so
+  // the fold of any other description starts from the description, as it
+  // always has. Its key is none of the documents'.
+  let startKey: string | undefined
+  if (!pointers && 1 < index.docs.length && index.mappings.some((row) => isFar(index.mappingLanding(row)))) {
+    startKey = START
+    while (byKey.has(startKey)) startKey += START
+  }
 
   const opts: FoldOptions = {
     op: OPS,
@@ -927,9 +994,24 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
     // that for every map. This is called once per location, in walk
     // order, so each site's record of what became of it is made here.
     recognise: (site: Site, op: Op) => {
+      if (START === op.src) return site.doc === startKey
+      // A discriminator's map is nothing to the fold but for what its
+      // mapping values name in another document, and no description
+      // without such a value is asked more of than it ever was.
+      if (undefined === startKey && MAPPED.has(op.src)) return false
       const loc = site.k as unknown as Loc
       if ('$dynamicRef' === op.src) return loc.dynamic
-      const row = loc.site
+      // A discriminator, by any member it is asked as: what its mapping
+      // values name in another document is read later. The map itself
+      // folds as what else it is.
+      if (undefined !== startKey) {
+        for (const land of farOf(loc) ?? []) {
+          if (laterAt.has(land.loc!)) continue
+          laterAt.add(land.loc!)
+          later.push(land)
+        }
+      }
+      const row = MAPPED.has(op.src) ? undefined : loc.site
       if (undefined === row) return false
       const info: SiteInfo = { seq: seq++, row, at: row.at, kind: row.kind, type: row.type, ref: row.ref, status: 'resolved' }
       const inDoc = keyOf(loc.doc)
@@ -950,7 +1032,19 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       return true
     },
 
-    evaluate: (site, _op: Op, terms: any[]) => {
+    evaluate: (site, op: Op, terms: any[]) => {
+      if (START === op.src) {
+        // The description, and then what the mapping values met on the
+        // way name in other documents. Reading one may meet more. Under
+        // 'keep' the document is folded, whole, as the document a
+        // reference lands in is.
+        const whole = site.written([], home.key)
+        for (let i = 0; i < later.length; i++) {
+          if ('keep' === o.cycles) foldWhole(site, later[i].doc)
+          else site.written(later[i].path!, later[i].doc!.key)
+        }
+        return whole.value
+      }
       const siblings = terms[1]
       const info = infos.get((site.k as unknown as Loc).site!)!
       if ('not-a-string' === info.why) {
@@ -965,15 +1059,7 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
       // is read from the finished tree: see `keepCycles`. The site holds a
       // placeholder until then.
       if ('keep' === o.cycles) {
-        // A landing in another document is read off that document's
-        // finished tree, so the document is folded, whole, the first time
-        // a site lands in it. Every site in it holds a placeholder too.
-        const far = info.row.landing?.doc
-        if (undefined !== far && far !== home && !folded.has(far.key)) {
-          folded.set(far.key, undefined)
-          const whole = site.written([], far.key)
-          if (whole.found) folded.set(far.key, whole.value)
-        }
+        foldWhole(site, info.row.landing?.doc)
         const placeholder = Object.create(null)
         deferred.set(placeholder, { info, siblings, plain: site.plain() })
         return placeholder
@@ -1221,7 +1307,13 @@ function resolve(raw: any, options: ResolveOptions = {}): ResolveResult {
 
   let tree: any
   try {
-    tree = fold(raw, opts)
+    // From the start document the description is one reference down, so
+    // the fold's bound on nesting is one more, for the same bound on the
+    // description.
+    tree =
+      undefined === startKey
+        ? fold(raw, opts)
+        : fold({ [START]: true }, { ...opts, op: { ...OPS, start: { key: true, src: START } }, doc: startKey, maxDepth: limit + 1 })
     if ('keep' === o.cycles) tree = keepCycles(tree)
   } catch (err: any) {
     // The fold's bounds are this package's to name: nesting and
@@ -1448,7 +1540,7 @@ function unshare(root: any, budget?: number): any {
   return copy(root)
 }
 
-export { resolve, resolveAll, ResolveError, frontOf, gather, quoted, settle }
+export { resolve, resolveAll, ResolveError, OVERRIDE, frontOf, gather, quoted, settle }
 
 export type { Front }
 

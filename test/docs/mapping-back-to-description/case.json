@@ -1,0 +1,59 @@
+{
+  "source": "This repository: references from what only a mapping value names, back to the description",
+  "note": "A schema that only a mapping value names refers to the whole description and to the schema that names it. Neither is a cycle: the description has been read by the time the schema is.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/dog.yaml": "dog.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml" } }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    [
+      "https://example.com/api/dog.yaml",
+      "/properties/all",
+      "https://example.com/api/openapi.yaml",
+      "",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/dog.yaml",
+      "/properties/pet",
+      "https://example.com/api/openapi.yaml",
+      "/components/schemas/Pet",
+      "resolved"
+    ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "dog": "#/components/schemas/dog" } }
+          },
+          "dog": {
+            "properties": { "all": { "$ref": "#" }, "pet": { "$ref": "#/components/schemas/Pet" } }
+          }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/dog", "https://example.com/api/dog.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

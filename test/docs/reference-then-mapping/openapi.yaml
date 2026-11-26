@@ -1,0 +1,14 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "entry", "version": "1" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Owner": { "type": "object", "properties": { "pet": { "$ref": "dog.yaml" } } },
+      "Pet": {
+        "type": "object",
+        "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml" } }
+      }
+    }
+  }
+}

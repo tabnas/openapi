@@ -1,0 +1,47 @@
+{
+  "note": "A document may be anything at its root: a schema that is `false`, a list that a pointer reads into and that a reference names whole, and nothing at all.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Never": { "$ref": "never.json" },
+        "Second": { "$ref": "list.yaml#/1" },
+        "All": { "$ref": "list.yaml" },
+        "None": { "$ref": "empty.yaml" }
+      }
+    }
+  },
+  "documents": {
+    "never.json": false,
+    "list.yaml": [{ "type": "string" }, { "type": "number" }],
+    "empty.yaml": null
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Never": { "$ref": "#/components/schemas/never" },
+          "Second": { "$ref": "#/components/schemas/list/1" },
+          "All": { "$ref": "#/components/schemas/list" },
+          "None": { "$ref": "#/components/schemas/empty" },
+          "never": false,
+          "list": [{ "type": "string" }, { "type": "number" }],
+          "empty": null
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/never", "https://example.com/api/never.json", "", "component"],
+      ["/components/schemas/list", "https://example.com/api/list.yaml", "", "component"],
+      ["/components/schemas/empty", "https://example.com/api/empty.yaml", "", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

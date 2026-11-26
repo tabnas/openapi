@@ -1,0 +1,72 @@
+{
+  "source": "This repository: a child that a reference names, and then a mapping value",
+  "note": "The documents of `mapping-then-reference` with the two schemas the other way round. The tree is the same, and nothing is cut.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/dog.yaml": "dog.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Owner": {
+          "type": "object",
+          "properties": {
+            "pet": {
+              "allOf": [
+                {
+                  "type": "object",
+                  "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml" } }
+                },
+                { "type": "object" }
+              ]
+            }
+          }
+        },
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml" } }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    [
+      "",
+      "/components/schemas/Owner/properties/pet",
+      "https://example.com/api/dog.yaml",
+      "",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/dog.yaml",
+      "/allOf/0",
+      "https://example.com/api/openapi.yaml",
+      "/components/schemas/Pet",
+      "resolved"
+    ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Owner": { "type": "object", "properties": { "pet": { "$ref": "#/components/schemas/dog" } } },
+          "Pet": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "dog": "#/components/schemas/dog" } }
+          },
+          "dog": { "allOf": [{ "$ref": "#/components/schemas/Pet" }, { "type": "object" }] }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/dog", "https://example.com/api/dog.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

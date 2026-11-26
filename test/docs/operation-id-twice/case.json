@@ -1,0 +1,63 @@
+{
+  "source": "This repository: an `operationId` that two documents declare",
+  "note": "The description and another document each declare one `operationId`. A Link that names it finds the description's own, and `targets` lists both.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/other.yaml": "other.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "tags": [{ "name": "pets" }],
+    "paths": {
+      "/near": { "get": { "operationId": "nearOp", "responses": {} } },
+      "/far": { "get": { "operationId": "nearOp", "responses": {} } }
+    },
+    "components": { "links": { "Both": { "operationId": "nearOp" } } }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [["", "/paths/~1far", "https://example.com/api/other.yaml", "/paths/~1far", "resolved"]],
+  "connections": [
+    {
+      "kind": "operationId",
+      "at": "/components/links/Both/operationId",
+      "name": "nearOp",
+      "found": true,
+      "target": "/paths/~1near/get",
+      "targets": ["/paths/~1near/get", "https://example.com/api/other.yaml#/paths/~1far/get"]
+    },
+    {
+      "kind": "operationIdReuse",
+      "at": "/paths/~1near/get",
+      "name": "nearOp",
+      "found": true,
+      "target": "/paths/~1near/get",
+      "routes": ["/paths/~1near/get", "/paths/~1far/get"]
+    }
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "tags": [{ "name": "pets" }],
+      "paths": {
+        "/near": { "get": { "operationId": "nearOp", "responses": {} } },
+        "/far": { "$ref": "#/components/pathItems/_far" }
+      },
+      "components": {
+        "links": { "Both": { "operationId": "nearOp" } },
+        "pathItems": { "_far": { "get": { "operationId": "nearOp", "responses": {} } } }
+      }
+    },
+    "embedded": [
+      [
+        "/components/pathItems/_far",
+        "https://example.com/api/other.yaml",
+        "/paths/~1far",
+        "component"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

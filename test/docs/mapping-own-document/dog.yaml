@@ -1,0 +1,5 @@
+{
+  "Dog": { "type": "object", "discriminator": { "propertyName": "kind", "mapping": { "p": "#/Puppy" } } },
+  "Puppy": { "properties": { "n": { "$ref": "name.yaml" }, "lost": { "$ref": "#/Nothing" } } },
+  "Unused": { "$ref": "never.yaml" }
+}

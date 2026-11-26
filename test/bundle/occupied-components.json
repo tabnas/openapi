@@ -1,0 +1,51 @@
+{
+  "note": "Nothing is put where the description has something that is no map. Here `components` is a list, so the target is written in the place of its reference.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": {
+        "get": {
+          "responses": {
+            "200": {
+              "description": "ok",
+              "content": { "application/json": { "schema": { "$ref": "a.json#/Pet" } } }
+            }
+          }
+        }
+      }
+    },
+    "components": [1]
+  },
+  "documents": { "a.json": { "Pet": { "type": "string" } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": { "application/json": { "schema": { "type": "string" } } }
+              }
+            }
+          }
+        }
+      },
+      "components": [1]
+    },
+    "embedded": [
+      [
+        "/paths/~1a/get/responses/200/content/application~1json/schema",
+        "https://example.com/api/a.json",
+        "/Pet",
+        "inline"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

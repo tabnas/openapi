@@ -1,0 +1,51 @@
+{
+  "source": "This repository: the same under `cycles: 'keep'`",
+  "note": "The documents of `mapping-child`, resolved under `cycles: 'keep'`: the same site, resolved.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/dog.yaml": "dog.yaml" },
+  "resolveOptions": { "cycles": "keep" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml" } }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    [
+      "https://example.com/api/dog.yaml",
+      "/allOf/0",
+      "https://example.com/api/openapi.yaml",
+      "/components/schemas/Pet",
+      "resolved"
+    ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "dog": "#/components/schemas/dog" } }
+          },
+          "dog": { "allOf": [{ "$ref": "#/components/schemas/Pet" }, { "type": "object" }] }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/dog", "https://example.com/api/dog.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "old", "version": "1" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "A": { "$ref": "#/components/schemas/B", "description": "beside, and not read in 3.0" },
+      "B": { "type": "string" }
+    }
+  }
+}

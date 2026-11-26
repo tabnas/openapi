@@ -1,4 +1,4 @@
-input	expected	unresolved	cuts	opts	select
+input	expected	unresolved	cuts	opts	select	order
 # What `compat: 'apidef'` gives where apidef's reading of a reference
 # parts from the specification's. Each expected value is what
 # @voxgig/apidef's own resolver gives for the row's input, at the
@@ -51,3 +51,17 @@ input	expected	unresolved	cuts	opts	select
 {"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"A":{"$ref":"#/components/schemas/C/properties/q"},"C":{"properties":{"q":{"$ref":"#/components/schemas/C"}}}}}}	"#/components/schemas/C"	[]	[]	{"compat":"apidef"}	["components","schemas","A","properties","q","x-ref"]
 # A container that a reference written before it names, and that holds a reference to its own parent, is resolved where it stands.
 {"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"X":{"$ref":"#/components/schemas/P/properties/t"},"P":{"properties":{"t":{"properties":{"up":{"$ref":"#/components/schemas/P"}}}}}}}}	"#/components/schemas/P"	[]	[]	{"compat":"apidef"}	["components","schemas","P","properties","t","properties","up","x-ref"]
+# A cycle is kept as apidef builds it: the reference that closes it holds a
+# copy with its own `x-ref`.
+{"openapi":"3.0.0","components":{"schemas":{"Node":{"type":"object","properties":{"next":{"$ref":"#/components/schemas/Node"}}}}}}	"#/components/schemas/Node"	[]	[]	{"compat":"apidef"}	["components","schemas","Node","properties","next","x-ref"]
+# The order of a resolved site's members is the one that resolving in place
+# leaves, which follows the order the document has its sites in. A row with
+# `yes` in the `order` column is held to the order of its members too.
+{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"A":{"$ref":"#/components/schemas/C","description":"a"},"C":{"type":"string"},"X":{"$ref":"#/components/schemas/A","title":"t"}}}}	{"type":"string","description":"a","x-ref":"#/components/schemas/A","title":"t"}	[]	[]	{"compat":"apidef"}	["components","schemas","X"]	yes
+{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"X":{"$ref":"#/components/schemas/A","title":"t"},"A":{"$ref":"#/components/schemas/C","description":"a"},"C":{"type":"string"}}}}	{"type":"string","description":"a","title":"t","x-ref":"#/components/schemas/A"}	[]	[]	{"compat":"apidef"}	["components","schemas","X"]	yes
+{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"T":{"type":"string","description":"theirs","x-ref":"written","z":1},"A":{"description":"mine","$ref":"#/components/schemas/T","a":0}}}}	{"type":"string","description":"mine","x-ref":"#/components/schemas/T","z":1,"a":0}	[]	[]	{"compat":"apidef"}	["components","schemas","A"]	yes
+# A reference to a reference that closes a cycle, with the cycle written
+# first: each resolves, and each has its own `x-ref`.
+{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"C":{"properties":{"q":{"$ref":"#/components/schemas/C"}}},"A":{"$ref":"#/components/schemas/C/properties/q"}}}}	"#/components/schemas/C"	[]	[]	{"compat":"apidef"}	["components","schemas","C","properties","q","x-ref"]
+{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"C":{"properties":{"q":{"$ref":"#/components/schemas/C"}}},"A":{"$ref":"#/components/schemas/C/properties/q"}}}}	"#/components/schemas/C/properties/q"	[]	[]	{"compat":"apidef"}	["components","schemas","A","x-ref"]
+{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"C":{"properties":{"q":{"$ref":"#/components/schemas/C"}}},"A":{"$ref":"#/components/schemas/C/properties/q"}}}}	"#/components/schemas/C"	[]	[]	{"compat":"apidef"}	["components","schemas","C","properties","q","properties","q","x-ref"]

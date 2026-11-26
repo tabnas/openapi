@@ -1,0 +1,35 @@
+{
+  "note": "A text that a loader gives may be a schema that is no map.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Never": { "$ref": "never.json" } } }
+  },
+  "table": { "https://example.com/api/never.json": "false" },
+  "asked": ["https://example.com/api/never.json"],
+  "documents": ["https://example.com/api/never.json"],
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Never": false } }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [["", "/components/schemas/Never", "https://example.com/api/never.json", "", "resolved"]],
+  "bundle": {
+    "asked": ["https://example.com/api/never.json"],
+    "documents": ["https://example.com/api/never.json"],
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": { "schemas": { "Never": { "$ref": "#/components/schemas/never" }, "never": false } }
+    },
+    "embedded": [["/components/schemas/never", "https://example.com/api/never.json", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

@@ -213,7 +213,7 @@ default that a shared row pins changes until porting starts.
 | T3 | the site index, and `resolve` on it | all five items built. Item 1 is the prototype E12: [`docs/design/prototype/e12-site-index.result.md`](docs/design/prototype/e12-site-index.result.md). Item 2 is the index in `ts/src/site-index.ts`, with `resolve` and the `connections` report built on it: W1, W2 and W3 are repaired, W6 is `openapi_depth`, a step bound and a check are options, and the sweep counts a site reported resolved that holds its map as written. It equals the prototype on every description of the corpus, and moves the eight the prototype named. Item 3 is the dialects: a schema of 3.1 or 3.2 is read by the dialect it declares, draft-04 to 2020-12, an unknown one as 2020-12 and reported in `dialects`; URIs are compared in their normal form; and the vendored schemas are the latest published, with the model held to the 3.1.2 and 3.2.1 texts. W4 and W5 are repaired. Items 2 to 5 need what tabnas/expr#117 added to the fold, which `expr` 0.6.4 released: with it `resolve` runs on an install from the registry, and the corpus baselines are swept on the released packages. Item 4 is the three reports the audit found missing, each read from the index and none changing the resolved tree: the `implicitMapping` rows of `connections`, `conflict` on a `provenance` row whose reference lands on a type it does not expect, and `urls`, the URLs a description gives with what a relative one is relative to. Item 5 is the fixtures: every probe of the audit has a row under its number, in `test/resolve/probes.tsv` or `test/pending/parse-probes.tsv`, and `ts/test/probes.test.ts` holds the two files to the audit's list. With it, the last leniency of Decision 25 that the object model owed: a 3.0 component is read under any name, as 3.1 and 3.2 read it |
 | T4 | several documents | done, on the maintainer's word of 23 November 2026, with the bounds of Decision 36 as the maintainer took them on 24 November: the index over a set of documents and `resolve` on it, given the documents in a table (items 1 and 2); a document with no version typed by the references into it (item 3); `resolveAll`, which loads what a description names in rounds, with the two loaders of Decision 31, one for files under a directory and one for HTTP from listed hosts (item 4); the `connections` report across documents (item 5); and the specification's five examples as the first cases of `test/docs/` (item 6). Each description of the Azure sample, Redocly's starter and DigitalOcean's source under `slots: 'all'` resolves from its own file with nothing left unresolved, which `tools/corpus/documents.cjs` measures |
 | T5 | beyond references | begun on the maintainer's word of 24 November 2026, to the scope of Decision 32. Items 1 and 2 are built: the operation as the specification reads it, as the option `operations` of `resolve`, with the `ignored` report; and `readExpression`, `readTemplate` and `evaluateExpression`, with what a template or an expression names checked in `connections`. On the corpus the `ignored` report equals apidef's own `dropIgnoredHeaders` on every description, 5,238 of them, and apidef's branch drops that function. Item 3 is built too: `bundle` and `bundleAll` write a description in several documents as one, with every reference still a reference. Each bundle is held to its documents: it has to resolve to what they resolve to. That holds for the 925 descriptions of the corpus's four sources in several documents, DigitalOcean's 3,622 files among them, and for the sets of documents that three generators write: the two that came after an independent review are each clean at 100,000 sets under the default slots and 100,000 under `slots: 'all'` |
-| T6 | finish, then publish | see [`typescript-plan.md`](docs/design/typescript-plan.md) |
+| T6 | finish, then publish | begun on the maintainer's word of 26 November 2026, with T5 merged that day as tabnas/openapi#13. Item 6 is built: the site index types what a discriminator's mapping value names, as it types what a reference names, so `resolve` reads a schema that only a mapping value names, and `bundle` is one writing on one index. Items 1 to 3 are built too: the pages; the conformance statement, [`docs/conformance.md`](docs/conformance.md); and the hand-off, which is a fixture with no TypeScript in it for each behaviour that data can state, in the folders of `test/`, and [`docs/design/porting-brief.md`](docs/design/porting-brief.md). The hand-off found that a bundle of documents of more than one version does not keep its meaning, which is the plan's Decision 37. Items 4 and 5 are the release, which is the maintainer's, and apidef's merge after it: see [`typescript-plan.md`](docs/design/typescript-plan.md) |
 
 Phase 0 left one rule in place: **the plugin adds no grammar.**
 `ts/test/debug-model.test.ts` and `rs/tests/debug_model_test.rs` hold
@@ -381,8 +381,9 @@ in `test/pending/` and its other tests in `ts/test/openapi.test.ts` and
   grammar's path it is gathered in `check`, as a number's `val`
   closes, from the token the rule opened on. That token's offset, `sI`,
   is exact, and `located` counts the row and column from it. Its own
-  `rI` and `cI` are not exact under the yaml grammar, which is a defect
-  there (section 7 of the plan). The place in the tree is read off the
+  `rI` and `cI` were not exact under the yaml grammar before
+  `@tabnas/yaml` 0.5.33, which is the peer's floor now (W11 of the
+  plan). The place in the tree is read off the
   rule stack (`pair` and `yamlElemPair` have the member name, `elem`,
   `yamlBlockList` and `yamlBlockElem` the list so far), and is said
   only when the finished tree has that number there.
@@ -432,6 +433,18 @@ every fact about the document:
   the round used to look for them among all the sites, uncounted, and
   a chain of 20,000 references that each type the next took five
   seconds, where it now takes a third of one.
+- The mapping values: each value of a discriminator's `mapping`, and
+  its `defaultMapping` in 3.2, where the model reads one
+  (`index.mappings`). `locateMapping` is the one statement of how such
+  a value is read: the name of one of the description's schema
+  components where it is one, else a URI reference. The `connections`
+  report and `bundle` both ask it. A mapping value names a schema, so
+  it types the region it lands on as a reference in a schema's place
+  does, and in the same rounds: by round, then by document order, a
+  mapping value after a site at its own location. So a schema that
+  only a mapping value names is read as a schema, and the references
+  in it are sites. Nothing is put in a mapping value's place, so it is
+  no site itself. Under `refs: 'pointer'` it types nothing.
 - A conflict, `index.conflict(site)`: the type of a landing the model
   types by where it is, when that is not the type its reference
   expects. `typeOf` reads a type off a state: an object's name,
@@ -512,6 +525,30 @@ cycle is cut.
   below. Under `strict` a landing with a `through` is not found, since
   RFC 6901 has no such step.
 
+**What a mapping value names in another document is read too.** The
+walk of the description does not come to such a place, and no
+reference may, so the sites in it would be read by nothing. It is read
+once the description has been, and not from its discriminator. A
+mapping value is no reference: what it names is not inside the schema
+that names it. Read from there under `cycles: 'cut'`, a child that
+builds on its parent with `allOf`, as most that a mapping value names
+do, closed a cycle through the parent that the resolved tree does not
+have. The first build of this did that: it reported a cut in the usual
+shape of a discriminator, and left the child's reference as written
+wherever a reference reached the child afterwards. So where a mapping
+value of the documents lands in another document (`isFar`), the fold
+starts from a document of one map (`startKey`). Its `evaluate` reads
+the description as a reference would, and then each landing whose
+discriminator the walk met (`later`): the place itself under 'cut',
+and the whole of its document under 'keep', as the document a
+reference lands in is. The fold's bound on nesting is one more there,
+for the same bound on the description, and
+`ts/test/documents.test.ts` holds the bounds to falling where they
+fall without it. No other description is folded that way: its fold
+starts from the description, as it always has. The sites of what only
+mapping values name therefore come last in the reports, under either
+way with cycles.
+
 Sharing (one result per location) is the fold's, and under
 `cycles: 'cut'` so is cycle detection. Under `cycles: 'keep'` the fold
 follows no reference at all. Every site holds a placeholder until the
@@ -558,7 +595,8 @@ site's members in the order that apidef's resolving in place leaves.
 one walk of the typed locations for the names (operationId,
 operationRef, security requirement keys, tags, 3.2 tag parents,
 discriminator mappings, and the `$dynamicRef` or `$recursiveRef` of a
-schema whose dialect has it), each URI judged by where it lands; Path Item merge conflicts come from `evaluate`;
+schema whose dialect has it), each URI judged by where it lands, and a
+mapping value read as `index.locateMapping` reads it; Path Item merge conflicts come from `evaluate`;
 `operationIdReuse` walks routes through paths, webhooks and callbacks on
 the document, a reference on the way standing for its landing. None of
 it reads the resolved tree, so it does not depend on the shape asked
@@ -901,17 +939,31 @@ documents with `gather`, which is the rounds of `resolveAll`.
   targets a reference names would follow the order the references are
   met in. So where `write` finds such a pair it runs again with the
   outer ones as `tops`, and brings those only.
-- **A mapping value types nothing in the index.** The index types a
-  place by the references that land on it, and a mapping value is
-  none. A schema that only a mapping value names would be brought in
-  as a schema with references in it that nothing has read. So
-  `bundle` builds the index again with a reference to each such
-  schema among the entry's components (`withTypers`), at most
-  `MAPPING_ROUNDS` times, and those components are not written. The
-  steps of every round are counted as one run. The result says which
-  schemas it told the index of under the symbol `TOLD`, for the check
-  alone, which reads the documents with the same said. It goes when
-  the index types what a mapping value names (the plan's T6).
+- **A mapping value is a landing that gives a schema.** The index
+  types what a mapping value names, so `bundle` is one writing on one
+  index, and a schema that only a mapping value names is brought in as
+  what a reference names is. Where the bundle keeps count of what
+  lands on a part with a type (`landings`), a mapping value is counted
+  with the references, as giving a schema (`givenBy`). Leaving it out
+  failed three sets of the second and third generators, in a little
+  over 100,000 (`mapping-lands-on-a-part.json`): a mapping value and a
+  Path Item reference land on one part, the reference is of the
+  earlier round in the documents, and the mapping value is in the
+  bundle, where its schema has become a component. Such a part is
+  listed in `left` as `type`. Until T6 the index typed nothing by a
+  mapping value, and `bundle` built it again with a reference to each
+  such schema, in rounds of its own.
+- **A place in a part that a reference typed reads what the documents
+  read there.** Under `slots: 'all'` such a part may stay where the
+  model reads data, and is read as what it was once a reference lands
+  on it in the bundle. So `refer` asks what the documents read at the
+  reference's own location (`was`) before it writes a target in the
+  reference's place, and leaves a target of another type `outside`.
+  Without that, an operation of another document was written in the
+  place of a Path Item's reference. The operation was itself a `$ref`
+  where an operation goes, which is data to the model. In the bundle
+  it was read as the reference of a Path Item: it gave what it names a
+  type, and the members beside a reference in that were read.
 - **What waits for every place.** An `operationRef` and a reference
   left to evaluation are read after the queue is empty (`later`), and
   so is a reference to a target that was being written around it
@@ -971,11 +1023,52 @@ content in a description is a reason to write it into a generator, not
 to trust the ones there. Each set that one of them failed on is in
 `test/bundle-held/`, cut down, by what was wrong.
 
+**And a seed is not the generator.** A run of 100,000 sets is clean
+for the seed it was given. In T6 the second and third generators were
+run under seeds they had not had, 7 and 8, for a change to the index.
+Beside what that change broke, the third found a set under
+`slots: 'all'` that the build before it failed too, one in 30,000: an
+operation written in the place of a Path Item's reference
+(`operation-in-a-path-item.json`). Run a change under a seed that has
+not been run, and say which. With the repairs, the three are clean at
+100,000 sets each way under those seeds: 500,000 sets.
+
 A bundle does not keep everything, and
 [the reference](ts/doc/reference.md) lists what it does not: the
 bundle is read by the description's version, a schema brought in gains
 a component's name, an `operationId` is looked for in the bundle
 alone, and a server's `url` with variables stands as written.
+
+**A document of another version than the description's is where the
+bundle is weakest**, and a case written for the hand-off found it: the
+members beside a reference follow the version of the document the
+reference is in, and the bundle is read by one version. `copy` now
+writes such a reference to mean what it meant, in the branch where it
+stays a reference. A member that its own version did not read, and the
+description's would, is left out, with a `sibling` row of `left`. What
+is beside a schema's `$ref`, where its own version applied it and the
+description's does not, is written as the first of an `allOf`, which
+is how resolving reads it, in that order of members: the check
+compares order. A field beside any other reference that only its own
+version reads cannot be written to mean that, so it stands, with a
+`version` row, and the check allows that field at that reference and
+nothing else (`fields`). `readBeside` is the one statement of what a
+version reads beside a reference, and `OVERRIDE` in `resolve.ts` is
+its table for a Reference Object.
+
+That is one part of a wider gap, which is open: the two versions'
+object models read some places differently. A schema in `prefixItems`
+or `$defs` of a 3.1 document is data in a 3.0 description, so a
+reference in it is not followed in the bundle. A `$ref` map in such a
+member of a 3.0 document was data, and is a reference in a 3.1
+description. `copy` steps a target by the model of its own version
+(`keeps`), which is how its document read it, and the bundle is read
+by the description's. Nothing in the bundle says so, the check fails
+such a set, and no generator writes one: the third writes a document
+of another version, with nothing in it that the two versions read
+differently. The repair is to treat a place that the two models read
+differently as the `type` rows treat a part that a reference typed. It
+is the plan's Decision 37, and the reference says what is not kept.
 
 `test/resolve/*.tsv` pins the resolver, with
 `ts/test/resolve-spec.test.ts` as the runner (optional `select`,
@@ -1082,9 +1175,10 @@ keeps cycles.
 | [`rs/`](rs/) | Rust port, crate `tabnas-openapi`, library `tabnas_openapi`: `parse(&ParseOptions)`, `Fast`, `version`, `openapi` / `plugin()`, `make` / `make_with(&MakeOptions)`, `OpenApiOptions`, `VERSION`, `OpenApiError`. `rs/AGENTS.md` has the crate's own notes, including how raw mode works around the engine's Rust API. The README's examples run as doctests. |
 | [`test/spec/`](test/spec/) | Shared `.tsv` fixtures. All three runners discover and run every file, so a row added here covers TypeScript, Go and Rust together. See [`test/AGENTS.md`](test/AGENTS.md). |
 | [`test/petstore/`](test/petstore/) | One OpenAPI 3.1 description in YAML and the same in JSON. Every runtime's suite reads both and holds them to `JSON.parse` of the JSON form. |
-| [`test/resolve/`](test/resolve/), [`test/model/`](test/model/), [`test/pending/`](test/pending/), [`test/docs/`](test/docs/), [`test/expression/`](test/expression/), [`test/bundle/`](test/bundle/), [`test/bundle-held/`](test/bundle-held/) | Fixtures only the TypeScript suite runs: the resolver's, the object model's, parse fixtures for what only the TypeScript `parse` gives yet, descriptions in several documents, a folder each, the readers of runtime expressions and templates, bundles, a file each, and the sets of documents that a generator failed `bundle` on. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. |
+| [`test/resolve/`](test/resolve/), [`test/model/`](test/model/), [`test/pending/`](test/pending/), [`test/bytes/`](test/bytes/), [`test/long/`](test/long/), [`test/docs/`](test/docs/), [`test/load/`](test/load/), [`test/expression/`](test/expression/), [`test/bundle/`](test/bundle/), [`test/bundle-held/`](test/bundle-held/) | Fixtures only the TypeScript suite runs: the resolver's, the object model's, parse fixtures for what only the TypeScript `parse` gives yet, texts given as bytes, texts too long to write out, each built from a recipe, descriptions in several documents, a folder each, descriptions whose documents are loaded, the readers of runtime expressions and templates, bundles, a file each, and the sets of documents that a generator failed `bundle` on. [`test/AGENTS.md`](test/AGENTS.md) says where a new fixture goes. None of them has TypeScript in it: they are what a port is held to. |
 | [`test/corpus/`](test/corpus/) | `documents.json`, written by `tools/corpus/documents.cjs`: what resolving each description in several documents from its own file comes to, and what writing it as one document does. And the corpus sweep's record over real documents: `ledger.tsv`, one row per way a document fails, and `baseline.json`, the headline figures, both written by the sweep and never by hand; `ledger-spec.tsv` and `baseline-spec.json`, the same under `reading: 'spec'`; and `accepted.tsv`, written by hand, the ledger rows that are not this package's defect, each with its reason. |
-| [`docs/design/`](docs/design/) | The design notes, the plan, the prototypes, and [`apidef-swap/`](docs/design/apidef-swap/README.md): what apidef's side of T1 and T2 changes, and where it lives. Working documents, outside the prose gate. |
+| [`docs/conformance.md`](docs/conformance.md) | The conformance statement: what the TypeScript package is measured against, and what the measurements say. Its figures are written by `node tools/corpus/statement.cjs --write` from the records in `test/corpus/`, and `ts/test/conformance.test.ts` fails when the page and the records part. Run that command after a sweep or a documents run is accepted with `--write`. |
+| [`docs/design/`](docs/design/) | The design notes, the plan, the prototypes, [`apidef-swap/`](docs/design/apidef-swap/README.md): what apidef's side of T1 and T2 changes, and where it lives, and [`porting-brief.md`](docs/design/porting-brief.md): what a port is held to, each option with the default it should have when porting starts, and what no fixture carries. Working documents, outside the prose gate. |
 | [`ts/doc/`](ts/doc/), [`go/doc/`](go/doc/) | Per-runtime Diátaxis docs: `tutorial.md`, `guide.md`, `reference.md`, `concepts.md`. Gated, with the READMEs, by [`docs/STYLE-GUIDE.md`](docs/STYLE-GUIDE.md). |
 | [`tools/`](tools/) | `port-deps.cjs` (stamped by admin), which `ts/test/port-deps.test.ts` runs; `object-model.cjs`, the object model's generator; `model-census.cjs`, the census of real descriptions; [`corpus/`](tools/corpus/README.md), the corpus sweep; `apidef-gate.cjs`, the apidef gate, with its helpers in `apidef-gate/`; `apidef-preset.cjs`, the preset comparison, with its helpers in `apidef-preset/`. Those three are gates run by hand: see "Verify your work". `peer-floors.cjs` measures the floor of each peer range, and `peer-floors.json` is its record: see "The tabnas dependencies". |
 | [`model/`](model/) | The object model's inputs (the vendored OAI schemas, the applicator lists, the overlay) and the generated `object-model.json`. |
@@ -1254,17 +1348,15 @@ file. CI does the linked model with the siblings `ci.yml` names.
   the base declares. `go/window_test.go`, `rs/tests/window_test.rs` and
   `ts/test/window.test.ts` hold it, and the Go and Rust tests give the
   constructor's steps a base that declares the window.
-- **A token's row and column are not exact under the yaml grammar.** A
-  value after `key: ` reports a column one or more too far, and a row is
-  not counted inside a quoted scalar that runs over a line. The offset,
-  `sI`, is right. So anything here that reports a place counts it from
-  the offset, as `located` does for the `lossy` report. An error's
+- **Two defects of the yaml grammar that this guide listed are
+  repaired**, in `@tabnas/yaml` 0.5.33, which is the peer's floor
+  (W11 and W12 of the plan). A token's row and column are exact: a
+  value after `key: ` no longer reports a column too far, and a row is
+  counted inside a quoted scalar that runs over a line. So an error's
   `lineNumber` and `columnNumber`, and the `row` and `col` of
-  `provenance`, are the grammar's own and carry the same fault.
-- **A multi-line plain scalar that starts with a number is refused.**
-  `a: 12` with `more` on the next line, indented, is the string
-  `12 more` in YAML and `unexpected` here, under both readings. It is
-  the yaml grammar's.
+  `provenance`, are right. And `a: 12` with `more` on the next line,
+  indented, is the string `12 more`, under both readings. `located`
+  still counts a place from the token's offset, which gives the same.
 - **The plugin installs once per instance.** A second `use` changes
   nothing (a WeakSet in TypeScript, the `openapi-installed` decoration in
   Go and Rust): a second subscriber would count every YAML document

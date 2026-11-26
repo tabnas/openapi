@@ -1,0 +1,1 @@
+{ "allOf": [{ "$ref": "openapi.yaml#/components/schemas/Pet" }, { "type": "object" }] }

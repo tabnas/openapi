@@ -1,0 +1,30 @@
+{
+  "note": "And in a description of 2.0, where `definitions` is a number.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "swagger": "2.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": {
+        "get": { "responses": { "200": { "description": "ok", "schema": { "$ref": "a.json#/Pet" } } } }
+      }
+    },
+    "definitions": 5
+  },
+  "documents": { "a.json": { "Pet": { "type": "string" } } },
+  "bundle": {
+    "tree": {
+      "swagger": "2.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": { "responses": { "200": { "description": "ok", "schema": { "type": "string" } } } }
+        }
+      },
+      "definitions": 5
+    },
+    "embedded": [["/paths/~1a/get/responses/200/schema", "https://example.com/api/a.json", "/Pet", "inline"]],
+    "left": [],
+    "dialects": []
+  }
+}

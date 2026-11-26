@@ -1,0 +1,49 @@
+input	expected	opts	lossy
+# The numbers a tree does not hold exactly. `parse` fills the `lossy`
+# member of a map given as its `report` option, and this file has a
+# fourth column for it: one `at row:col text` line for each such number,
+# in the order of the text, with the place in the tree as a JSON Pointer
+# (`-` for a value the tree does not keep), the row and column of the
+# number in the text, and the number as written. A row and a column
+# count from 1. No row here has a character outside the basic plane on
+# the line of a number, before it: what a column counts there is not
+# something a row may decide.
+#
+# An integer past 2^53 is reported, in any base and behind any sign. One
+# that the tree holds exactly is not, and neither is a string of digits or
+# a fraction.
+openapi: 3.1.0\nmax: 9223372036854775807\nok: 9007199254740992\nlist:\n  - 1\n  - 9007199254740993\n  - {deep: -9007199254740993}\nhex: 0x20000000000001\ntext: "9007199254740993"\nfloat: 0.12345678901234567890\n	{"openapi":"3.1.0","max":9223372036854776000,"ok":9007199254740992,"list":[1,9007199254740992,{"deep":-9007199254740992}],"hex":9007199254740992,"text":"9007199254740993","float":0.12345678901234568}		["/max 2:6 9223372036854775807","/list/1 6:5 9007199254740993","/list/2/deep 7:12 -9007199254740993","/hex 8:6 0x20000000000001"]
+# Each place is where the text has the number, whatever comes before it: a
+# block scalar, a quoted scalar over two lines, lines that end with a
+# carriage return and a line feed, and a character outside the basic plane
+# on an earlier line.
+a: |\n  block\n\nb: "two\n  lines"\r\nc😀:\r\n  d: 9007199254740993\r\ne: 9007199254740993\n	{"a":"block\n","b":"two lines","c😀":{"d":9007199254740992},"e":9007199254740992}		["/c😀/d 7:6 9007199254740993","/e 8:4 9007199254740993"]
+# JSON text that the fast path reads has its report read off the text, and
+# it is the report the grammar gives: on either path, under `strict`, and
+# under the specification's reading.
+{"openapi":"3.1.0","a":[1,{"b":9007199254740993}],"d":"9007199254740993000"}	{"openapi":"3.1.0","a":[1,{"b":9007199254740992}],"d":"9007199254740993000"}		["/a/1/b 1:32 9007199254740993"]
+{"openapi":"3.1.0","a":[1,{"b":9007199254740993}],"d":"9007199254740993000"}	{"openapi":"3.1.0","a":[1,{"b":9007199254740992}],"d":"9007199254740993000"}	{"fast":true}	["/a/1/b 1:32 9007199254740993"]
+{"openapi":"3.1.0","a":[1,{"b":9007199254740993}],"d":"9007199254740993000"}	{"openapi":"3.1.0","a":[1,{"b":9007199254740992}],"d":"9007199254740993000"}	{"fast":false}	["/a/1/b 1:32 9007199254740993"]
+{"openapi":"3.1.0","a":[1,{"b":9007199254740993}],"d":"9007199254740993000"}	{"openapi":"3.1.0","a":[1,{"b":9007199254740992}],"d":"9007199254740993000"}	{"strict":true}	["/a/1/b 1:32 9007199254740993"]
+{"openapi":"3.1.0","a":[1,{"b":9007199254740993}],"d":"9007199254740993000"}	{"openapi":"3.1.0","a":[1,{"b":9007199254740992}],"d":"9007199254740993000"}	{"reading":"spec"}	["/a/1/b 1:32 9007199254740993"]
+# JSON text after a blank line is read by the fast path, with a report as
+# without.
+\n{"openapi":"3.1.0","maximum":9007199254740993}	{"openapi":"3.1.0","maximum":9007199254740992}		["/maximum 2:30 9007199254740993"]
+# A text with no such number has an empty report.
+{"openapi":"3.1.0","a":12}	{"openapi":"3.1.0","a":12}		[]
+a: 12\n	{"a":12}		[]
+# What each reading takes for a number decides what can be lossy: digits
+# with underscores and a number in base two are numbers under the base
+# reading, and strings under the specification's.
+a: 9_007_199_254_740_993\nb: 0b100000000000000000000000000000000000000000000000000001\nc: 012345678901234567890\n	{"a":9007199254740992,"b":9007199254740992,"c":12345678901234567000}		["/a 1:4 9_007_199_254_740_993","/b 2:4 0b100000000000000000000000000000000000000000000000000001","/c 3:4 012345678901234567890"]
+a: 9_007_199_254_740_993\nb: 0b100000000000000000000000000000000000000000000000000001\nc: 012345678901234567890\n	{"a":"9_007_199_254_740_993","b":"0b100000000000000000000000000000000000000000000000000001","c":12345678901234567000}	{"reading":"spec"}	["/c 3:4 012345678901234567890"]
+# An alias copies its anchor's node, and the anchor's place is the one
+# reported.
+a: &n 9007199254740993\nb: *n\nc: &m {x: 9007199254740993}\nd: {<<: *m}\n	{"a":9007199254740992,"b":9007199254740992,"c":{"x":9007199254740992},"d":{"x":9007199254740992}}		["/a 1:7 9007199254740993","/c/x 3:11 9007199254740993"]
+# Of a repeated member name, the value the tree does not keep has no place
+# in it, and the one it keeps has.
+a: 9007199254740993\na: 5\n	{"a":5}		["- 1:4 9007199254740993"]
+a: 5\na: 9007199254740993\n	{"a":9007199254740992}		["/a 2:4 9007199254740993"]
+# A place in a block list, in a list of lists, and under a member name with
+# a slash in it.
+l:\n  - - 1\n    - 9007199254740993\n  - x: 9007199254740993\n    y/z: [0, 9007199254740993]\n	{"l":[[1,9007199254740992],{"x":9007199254740992,"y/z":[0,9007199254740992]}]}		["/l/0/1 3:7 9007199254740993","/l/1/x 4:8 9007199254740993","/l/1/y~1z/1 5:14 9007199254740993"]

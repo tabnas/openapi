@@ -1,0 +1,22 @@
+{
+  "note": "A document given as `null` is a document with nothing in it, and a reference to it names that.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Pet": { "$ref": "Pet.yaml" } } }
+  },
+  "documents": { "Pet.yaml": null },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": { "schemas": { "Pet": { "$ref": "#/components/schemas/Pet_2" }, "Pet_2": null } }
+    },
+    "embedded": [["/components/schemas/Pet_2", "https://example.com/api/Pet.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

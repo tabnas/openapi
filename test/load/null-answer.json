@@ -1,0 +1,47 @@
+{
+  "note": "A loader may answer `null` for a document it does not have, as well as nothing.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Pet": { "$ref": "Pet.yaml" }, "Gone": { "$ref": "gone.yaml" } } }
+  },
+  "table": {
+    "https://example.com/api/Pet.yaml": { "type": "object" },
+    "https://example.com/api/gone.yaml": null
+  },
+  "asked": ["https://example.com/api/Pet.yaml", "https://example.com/api/gone.yaml"],
+  "documents": ["https://example.com/api/Pet.yaml"],
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Pet": { "type": "object" }, "Gone": { "$ref": "gone.yaml" } } }
+  },
+  "unresolved": [{ "at": "/components/schemas/Gone", "ref": "gone.yaml", "why": "external" }],
+  "cuts": [],
+  "sites": [
+    ["", "/components/schemas/Pet", "https://example.com/api/Pet.yaml", "", "resolved"],
+    ["", "/components/schemas/Gone", "", null, "unresolved"]
+  ],
+  "bundle": {
+    "asked": ["https://example.com/api/Pet.yaml", "https://example.com/api/gone.yaml"],
+    "documents": ["https://example.com/api/Pet.yaml"],
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "$ref": "#/components/schemas/Pet_2" },
+          "Gone": { "$ref": "gone.yaml" },
+          "Pet_2": { "type": "object" }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/Pet_2", "https://example.com/api/Pet.yaml", "", "component"]],
+    "left": [["/components/schemas/Gone", "gone.yaml", "external"]],
+    "dialects": []
+  }
+}

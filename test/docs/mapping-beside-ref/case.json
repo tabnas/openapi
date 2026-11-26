@@ -1,0 +1,59 @@
+{
+  "source": "This repository: a discriminator with a `$ref` member beside its mapping",
+  "note": "A discriminator is no place for a reference, so a `$ref` member of one is a plain member. Its mapping is read all the same, and the schema that the mapping value names is read.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/dog.yaml": "dog.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": {
+            "$ref": "#/components/schemas/Other",
+            "propertyName": "kind",
+            "mapping": { "dog": "dog.yaml" }
+          }
+        },
+        "Other": { "type": "string" }
+      }
+    }
+  },
+  "unresolved": [
+    {
+      "at": "/properties/n",
+      "ref": "#/nowhere",
+      "why": "not-found",
+      "doc": "https://example.com/api/dog.yaml"
+    }
+  ],
+  "cuts": [],
+  "sites": [["https://example.com/api/dog.yaml", "/properties/n", "", "/nowhere", "unresolved"]],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": {
+              "$ref": "#/components/schemas/Other",
+              "propertyName": "kind",
+              "mapping": { "dog": "#/components/schemas/dog" }
+            }
+          },
+          "Other": { "type": "string" },
+          "dog": { "properties": { "n": { "$ref": "dog.yaml#/nowhere" } } }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/dog", "https://example.com/api/dog.yaml", "", "component"]],
+    "left": [["/components/schemas/dog/properties/n", "#/nowhere", "not-found"]],
+    "dialects": []
+  }
+}

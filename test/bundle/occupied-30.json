@@ -1,0 +1,51 @@
+{
+  "note": "The same in a description of 3.0, where the map of the schema components is a string.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": {
+        "get": {
+          "responses": {
+            "200": {
+              "description": "ok",
+              "content": { "application/json": { "schema": { "$ref": "a.json#/Pet" } } }
+            }
+          }
+        }
+      }
+    },
+    "components": { "schemas": "text" }
+  },
+  "documents": { "a.json": { "Pet": { "type": "string" } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": { "application/json": { "schema": { "type": "string" } } }
+              }
+            }
+          }
+        }
+      },
+      "components": { "schemas": "text" }
+    },
+    "embedded": [
+      [
+        "/paths/~1a/get/responses/200/content/application~1json/schema",
+        "https://example.com/api/a.json",
+        "/Pet",
+        "inline"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

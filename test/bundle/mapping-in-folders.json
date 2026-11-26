@@ -1,0 +1,62 @@
+{
+  "note": "A schema that only a mapping value names, which names another by a mapping value of its own, in a folder: what that one names is brought in too, by references that go up a folder and stay in it. A mapping value that is a name of a component and finds none stands as a name, and is no row of `left`.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml", "gone": "gone.yaml" } }
+        }
+      }
+    }
+  },
+  "documents": {
+    "dog.yaml": "type: object\nproperties:\n  name: {$ref: \"name.yaml\"}\ndiscriminator:\n  propertyName: breed\n  mapping:\n    puppy: \"sub/puppy.yaml#/Puppy\"\n",
+    "sub/puppy.yaml": {
+      "Puppy": { "allOf": [{ "$ref": "../dog.yaml" }, { "$ref": "toy.yaml" }] },
+      "Unused": { "$ref": "never.yaml" }
+    },
+    "sub/toy.yaml": { "type": "string" },
+    "name.yaml": { "type": "string" }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": { "dog": "#/components/schemas/dog", "gone": "gone.yaml" }
+            }
+          },
+          "dog": {
+            "type": "object",
+            "properties": { "name": { "$ref": "#/components/schemas/name" } },
+            "discriminator": { "propertyName": "breed", "mapping": { "puppy": "#/components/schemas/Puppy" } }
+          },
+          "name": { "type": "string" },
+          "Puppy": {
+            "allOf": [{ "$ref": "#/components/schemas/dog" }, { "$ref": "#/components/schemas/toy" }]
+          },
+          "toy": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/dog", "https://example.com/api/dog.yaml", "", "component"],
+      ["/components/schemas/name", "https://example.com/api/name.yaml", "", "component"],
+      ["/components/schemas/Puppy", "https://example.com/api/sub/puppy.yaml", "/Puppy", "component"],
+      ["/components/schemas/toy", "https://example.com/api/sub/toy.yaml", "", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

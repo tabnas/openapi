@@ -1,0 +1,71 @@
+{
+  "note": "A document the loader does not have costs an asking all the same, which over HTTP is a request: eight are asked for, and all eight stay other documents.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "S0": { "$ref": "gone0.yaml" },
+        "S1": { "$ref": "gone1.yaml" },
+        "S2": { "$ref": "gone2.yaml" },
+        "S3": { "$ref": "gone3.yaml" },
+        "S4": { "$ref": "gone4.yaml" },
+        "S5": { "$ref": "gone5.yaml" },
+        "S6": { "$ref": "gone6.yaml" },
+        "S7": { "$ref": "gone7.yaml" }
+      }
+    }
+  },
+  "table": {},
+  "asked": [
+    "https://example.com/api/gone0.yaml",
+    "https://example.com/api/gone1.yaml",
+    "https://example.com/api/gone2.yaml",
+    "https://example.com/api/gone3.yaml",
+    "https://example.com/api/gone4.yaml",
+    "https://example.com/api/gone5.yaml",
+    "https://example.com/api/gone6.yaml",
+    "https://example.com/api/gone7.yaml"
+  ],
+  "documents": [],
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "S0": { "$ref": "gone0.yaml" },
+        "S1": { "$ref": "gone1.yaml" },
+        "S2": { "$ref": "gone2.yaml" },
+        "S3": { "$ref": "gone3.yaml" },
+        "S4": { "$ref": "gone4.yaml" },
+        "S5": { "$ref": "gone5.yaml" },
+        "S6": { "$ref": "gone6.yaml" },
+        "S7": { "$ref": "gone7.yaml" }
+      }
+    }
+  },
+  "unresolved": [
+    { "at": "/components/schemas/S0", "ref": "gone0.yaml", "why": "external" },
+    { "at": "/components/schemas/S1", "ref": "gone1.yaml", "why": "external" },
+    { "at": "/components/schemas/S2", "ref": "gone2.yaml", "why": "external" },
+    { "at": "/components/schemas/S3", "ref": "gone3.yaml", "why": "external" },
+    { "at": "/components/schemas/S4", "ref": "gone4.yaml", "why": "external" },
+    { "at": "/components/schemas/S5", "ref": "gone5.yaml", "why": "external" },
+    { "at": "/components/schemas/S6", "ref": "gone6.yaml", "why": "external" },
+    { "at": "/components/schemas/S7", "ref": "gone7.yaml", "why": "external" }
+  ],
+  "cuts": [],
+  "sites": [
+    ["", "/components/schemas/S0", "", null, "unresolved"],
+    ["", "/components/schemas/S1", "", null, "unresolved"],
+    ["", "/components/schemas/S2", "", null, "unresolved"],
+    ["", "/components/schemas/S3", "", null, "unresolved"],
+    ["", "/components/schemas/S4", "", null, "unresolved"],
+    ["", "/components/schemas/S5", "", null, "unresolved"],
+    ["", "/components/schemas/S6", "", null, "unresolved"],
+    ["", "/components/schemas/S7", "", null, "unresolved"]
+  ]
+}

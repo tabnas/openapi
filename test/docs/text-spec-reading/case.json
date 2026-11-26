@@ -1,0 +1,30 @@
+{
+  "source": "This repository: the `parse` option of `resolve` says how a document given as text is read",
+  "note": "The same document as `text-base-reading`, with `parse: { reading: 'spec' }`: the word `yes` is a string, as the core schema of YAML 1.2 has it.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/flag.yaml": "flag.yaml" },
+  "options": { "parse": { "reading": "spec" } },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Flag": { "default": "yes" } } }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [["", "/components/schemas/Flag", "https://example.com/api/flag.yaml", "", "resolved"]],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": { "Flag": { "$ref": "#/components/schemas/flag" }, "flag": { "default": "yes" } }
+      }
+    },
+    "embedded": [["/components/schemas/flag", "https://example.com/api/flag.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

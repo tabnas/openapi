@@ -1,0 +1,127 @@
+{
+  "note": "A document given with the description is not asked for, and what it names is.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "A": { "$ref": "a.yaml#/A" } } }
+  },
+  "given": {
+    "a.yaml": { "A": { "type": "object", "properties": { "b": { "$ref": "b.yaml#/B" } } } },
+    "b.yaml": "B:\n  type: object\n  properties:\n    c: {$ref: \"sub/c.yaml\"}\n    again: {$ref: \"a.yaml#/A\"}\n"
+  },
+  "table": {
+    "https://example.com/api/a.yaml": { "A": { "type": "object", "properties": { "b": { "$ref": "b.yaml#/B" } } } },
+    "https://example.com/api/b.yaml": "B:\n  type: object\n  properties:\n    c: {$ref: \"sub/c.yaml\"}\n    again: {$ref: \"a.yaml#/A\"}\n",
+    "https://example.com/api/sub/c.yaml": "{\"type\":\"array\",\"items\":{\"$ref\":\"../d.yaml#/D\"}}",
+    "https://example.com/api/d.yaml": { "D": { "type": "string" } },
+    "https://example.com/api/unused.yaml": { "never": "asked for" }
+  },
+  "asked": ["https://example.com/api/sub/c.yaml", "https://example.com/api/d.yaml"],
+  "documents": [
+    "https://example.com/api/a.yaml",
+    "https://example.com/api/b.yaml",
+    "https://example.com/api/sub/c.yaml",
+    "https://example.com/api/d.yaml"
+  ],
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "A": {
+          "type": "object",
+          "properties": {
+            "b": {
+              "type": "object",
+              "properties": {
+                "c": { "type": "array", "items": { "type": "string" } },
+                "again": { "$ref": "a.yaml#/A" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [
+    {
+      "at": "/B/properties/again",
+      "ref": "a.yaml#/A",
+      "target": "/A",
+      "doc": "https://example.com/api/b.yaml",
+      "targetDoc": "https://example.com/api/a.yaml"
+    }
+  ],
+  "sites": [
+    ["", "/components/schemas/A", "https://example.com/api/a.yaml", "/A", "resolved"],
+    [
+      "https://example.com/api/a.yaml",
+      "/A/properties/b",
+      "https://example.com/api/b.yaml",
+      "/B",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/b.yaml",
+      "/B/properties/c",
+      "https://example.com/api/sub/c.yaml",
+      "",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/sub/c.yaml",
+      "/items",
+      "https://example.com/api/d.yaml",
+      "/D",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/b.yaml",
+      "/B/properties/again",
+      "https://example.com/api/a.yaml",
+      "/A",
+      "cut"
+    ]
+  ],
+  "bundle": {
+    "asked": ["https://example.com/api/sub/c.yaml", "https://example.com/api/d.yaml"],
+    "documents": [
+      "https://example.com/api/a.yaml",
+      "https://example.com/api/b.yaml",
+      "https://example.com/api/sub/c.yaml",
+      "https://example.com/api/d.yaml"
+    ],
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": { "$ref": "#/components/schemas/A_2" },
+          "A_2": { "type": "object", "properties": { "b": { "$ref": "#/components/schemas/B" } } },
+          "B": {
+            "type": "object",
+            "properties": {
+              "c": { "$ref": "#/components/schemas/c" },
+              "again": { "$ref": "#/components/schemas/A_2" }
+            }
+          },
+          "c": { "type": "array", "items": { "$ref": "#/components/schemas/D" } },
+          "D": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/A_2", "https://example.com/api/a.yaml", "/A", "component"],
+      ["/components/schemas/B", "https://example.com/api/b.yaml", "/B", "component"],
+      ["/components/schemas/c", "https://example.com/api/sub/c.yaml", "", "component"],
+      ["/components/schemas/D", "https://example.com/api/d.yaml", "/D", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

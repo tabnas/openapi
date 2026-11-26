@@ -1,0 +1,10 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "t", "version": "1" },
+  "tags": [{ "name": "pets" }],
+  "paths": {
+    "/near": { "get": { "operationId": "nearOp", "responses": {} } },
+    "/far": { "$ref": "other.yaml#/paths/~1far" }
+  },
+  "components": { "links": { "Both": { "operationId": "nearOp" } } }
+}

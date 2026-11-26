@@ -1,0 +1,6 @@
+{
+  "type": "object",
+  "discriminator": { "propertyName": "kind", "mapping": { "c": "c.yaml" } },
+  "allOf": [{ "$ref": "a.yaml" }],
+  "properties": { "c": { "$ref": "c.yaml" } }
+}

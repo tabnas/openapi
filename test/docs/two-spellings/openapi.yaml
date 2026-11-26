@@ -1,0 +1,11 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "entry", "version": "1" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Pet": { "$ref": "shared.yaml#/components/schemas/Pet" },
+      "Again": { "$ref": "./shared.yaml#/components/schemas/Pet" }
+    }
+  }
+}

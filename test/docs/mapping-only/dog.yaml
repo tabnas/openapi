@@ -1,0 +1,10 @@
+type: object
+properties:
+  name:
+    $ref: name.yaml
+  owner:
+    $ref: '#/nowhere'
+discriminator:
+  propertyName: breed
+  mapping:
+    puppy: puppy.yaml

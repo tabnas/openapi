@@ -1,0 +1,74 @@
+{
+  "source": "This repository: the members beside a reference follow the version of the document the reference is in",
+  "note": "A description of 3.1 and a document of 3.0.3. Beside a `$ref` in a schema, 3.1 applies the other members and 3.0 does not read them, and each reference follows the rule of the document it is written in.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/old.yaml": "old.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "New": { "allOf": [{ "type": "string" }], "description": "beside, and applied in 3.1" },
+        "Old": { "type": "string" }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    [
+      "",
+      "/components/schemas/New",
+      "https://example.com/api/old.yaml",
+      "/components/schemas/B",
+      "resolved"
+    ],
+    [
+      "",
+      "/components/schemas/Old",
+      "https://example.com/api/old.yaml",
+      "/components/schemas/A",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/old.yaml",
+      "/components/schemas/A",
+      "",
+      "/components/schemas/B",
+      "resolved"
+    ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "New": { "$ref": "#/components/schemas/B", "description": "beside, and applied in 3.1" },
+          "Old": { "$ref": "#/components/schemas/A" },
+          "B": { "type": "string" },
+          "A": { "$ref": "#/components/schemas/B" }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/schemas/B",
+        "https://example.com/api/old.yaml",
+        "/components/schemas/B",
+        "component"
+      ],
+      [
+        "/components/schemas/A",
+        "https://example.com/api/old.yaml",
+        "/components/schemas/A",
+        "component"
+      ]
+    ],
+    "left": [["/components/schemas/A/description", "beside, and not read in 3.0", "sibling"]],
+    "dialects": []
+  }
+}

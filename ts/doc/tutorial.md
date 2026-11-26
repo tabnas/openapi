@@ -2,7 +2,9 @@
 
 An OpenAPI description is a tree of maps and lists. It is written in
 YAML or in JSON. In this tutorial we read one in both forms and look
-at what comes back. It takes about ten minutes, most of it reading.
+at what comes back. Then we resolve its references, across two files
+as well, write those files as one, and ask what applies to an
+operation. It takes about fifteen minutes, most of it reading.
 
 You need Node.js 24 or later.
 
@@ -162,8 +164,105 @@ raw.paths['/pets'].parameters // => [{ $ref: '#/components/parameters/Limit' }]
 
 We still have the raw tree, unchanged, beside the resolved one.
 
+## Resolve across two files
+
+A description is often several files. `resolve` reads no file itself,
+so we hand it the other one, under the name the description uses for
+it, and say where the description came from:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+paths: {}
+components:
+  schemas:
+    Animal: { $ref: 'schemas/Pet.yaml' }
+`)
+
+const result = resolve(raw, {
+  retrievalUri: 'https://example.com/api/openapi.yaml',
+  documents: {
+    'schemas/Pet.yaml': 'type: object\nproperties:\n  name: { type: string }\n',
+  },
+})
+
+result.tree.components.schemas.Animal.properties.name // => { type: 'string' }
+result.unresolved // => []
+```
+
+The name `schemas/Pet.yaml` is relative, and `retrievalUri` is what it
+is relative to. `unresolved` lists each reference that `resolve` had to
+leave as written. Here it left none.
+
+## Write the two files as one
+
+`bundle` takes the same two files and writes one description. It does
+not resolve anything. Each reference is still a reference, and now
+names a place in the one document:
+
+```js
+const { parse, bundle } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+paths: {}
+components:
+  schemas:
+    Animal: { $ref: 'schemas/Pet.yaml' }
+`)
+
+const one = bundle(raw, {
+  retrievalUri: 'https://example.com/api/openapi.yaml',
+  documents: {
+    'schemas/Pet.yaml': 'type: object\nproperties:\n  name: { type: string }\n',
+  },
+})
+
+one.tree.components.schemas.Animal // => { $ref: '#/components/schemas/Pet' }
+one.tree.components.schemas.Pet.properties.name // => { type: 'string' }
+one.left // => []
+```
+
+The schema from the second file became a component, named after its
+file. `JSON.stringify(one.tree)` is the bundle as text.
+
+## See what applies to an operation
+
+An operation does not hold everything that applies to it. Its Path Item
+can give it parameters, and the root can give it servers and security.
+With `operations: true`, `resolve` lists each operation with all of
+that worked out:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const raw = parse(`
+openapi: 3.1.0
+paths:
+  /pets/{id}:
+    parameters:
+      - { name: id, in: path, required: true }
+    get:
+      parameters:
+        - { name: limit, in: query }
+      responses: {}
+`)
+
+const [operation] = resolve(raw, { operations: true }).operations
+
+operation.method // => 'GET'
+operation.path // => '/pets/{id}'
+operation.parameters.map((p) => [p.name, p.from]) // => [['id', 'pathItem'], ['limit', 'operation']]
+```
+
+The operation wrote one parameter and has two. `from` says where each
+came from.
+
 ## Where next
 
-The [how-to guide](guide.md) reads a description from a file, resolves
-it, checks its version, and keeps a parser for reuse. The
-[reference](reference.md) lists every export.
+The [how-to guide](guide.md) reads a description from a file, loads
+the files it names, checks its version, and keeps a parser for reuse.
+The [reference](reference.md) lists every export, and the
+[concepts](concepts.md) page says why the package is built this way.

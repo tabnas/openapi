@@ -1,0 +1,8 @@
+input	expected	opts
+# JSON text that the fast path and the grammar read to one tree, as
+# ../spec/raw-fast.tsv has it, for what that file does not hold. Each
+# text is here once with the fast path on and once with it off, since
+# this folder's runner gives a row its own options only.
+# A member named `__proto__` is a member, at the root and in a list.
+{"__proto__":{"polluted":1},"a":[{"__proto__":2}]}	{"__proto__":{"polluted":1},"a":[{"__proto__":2}]}	{"fast":true}
+{"__proto__":{"polluted":1},"a":[{"__proto__":2}]}	{"__proto__":{"polluted":1},"a":[{"__proto__":2}]}	{"fast":false}

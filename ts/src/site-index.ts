@@ -22,7 +22,11 @@
 //              the document as written, and the sites the pointer was read
 //              through to get there;
 //   regions    the maps the model gives no state, typed by the references
-//              that land on them, found in rounds.
+//              that land on them, found in rounds;
+//   mappings   every mapping value of a discriminator, with what it
+//              names. It is no reference, and nothing is put in its
+//              place, but it names a schema, so it types what it lands
+//              on as a schema's `$ref` does.
 //
 // What it does not own is anything that depends on the tree being built:
 // the values, what is shared, and which edge of a cycle is cut. Those are
@@ -33,7 +37,7 @@
 
 import { DIALECTS, dialectOf } from './dialect'
 import type { Dialect, DialectUse } from './dialect'
-import { kindFrom, schemaStates, slot, stepper } from './model'
+import { kindFrom, leadsTo, schemaStates, slot, stepper } from './model'
 import type { How, ModelVersion, SlotKind } from './model'
 import {
   NOTHING,
@@ -76,9 +80,9 @@ type Known = 'typed' | 'data' | 'unknown'
 // OpenAPI from 3.1.
 const hasIds = (v: ModelVersion) => '3.1' === v || '3.2' === v
 
-// A region typed by a reference: the state it took, the site whose
-// landing gave it, and the round that found it.
-type Region = { state: string; by: SiteFacts; round: number }
+// A region typed by a reference: the state it took, the site or the
+// mapping value whose landing gave it, and the round that found it.
+type Region = { state: string; by: SiteFacts | MappingFacts; round: number }
 
 // One document of the set.
 type DocFacts = {
@@ -127,6 +131,9 @@ class Loc {
   ext = false
   // The site it is, if its `$ref` is a reference.
   site: SiteFacts | undefined = undefined
+  // The mapping values among its members, in their order: those of a
+  // discriminator's `mapping`, or a discriminator's `defaultMapping`.
+  mappings: MappingFacts[] | undefined = undefined
   // Whether it is a reference its dialect leaves to evaluation: a
   // `$dynamicRef` of 2020-12 or a `$recursiveRef` of 2019-09.
   dynamic = false
@@ -211,6 +218,30 @@ type SiteFacts = {
   stale?: boolean
 }
 
+// One mapping value of a discriminator: a fact about the document, as a
+// site is. It is a member of `loc` and a string, so it has no location of
+// its own. It names one of the description's schema components where it
+// is the name of one, and is a URI reference where it is not.
+type MappingFacts = {
+  loc: Loc
+  key: string
+  // Its place among the members of `loc`.
+  seq: number
+  // The round that first found it, as a site's.
+  round: number
+  at: string
+  ref: string
+  base: string
+  via: 'name' | 'uri'
+  why?: Why
+  target?: Path
+  targetDoc?: DocFacts
+  uri?: string
+  fragment?: string
+  landing?: Landing
+  stale?: boolean
+}
+
 type IndexConfig = {
   mv: ModelVersion
   // The URI of the document, which is the base URI of its root, and the
@@ -244,6 +275,9 @@ type IndexConfig = {
 
 type Located = { target?: Path; doc?: DocFacts; why?: Why; uri?: string; fragment?: string }
 
+// What a mapping value names, and how it was read.
+type Mapped = Located & { via: 'name' | 'uri' }
+
 type SiteIndex = {
   // The description's own root, and every document of the set, the
   // description first.
@@ -266,6 +300,14 @@ type SiteIndex = {
   // A URI reference against a base: the location it names here, or why it
   // names none.
   locate: (ref: string, base: string) => Located
+  // Every mapping value, in document order.
+  mappings: MappingFacts[]
+  // A mapping value against a base: the description's schema component
+  // of that name where there is one, else what it names as a URI
+  // reference. This is the one statement of how such a value is read.
+  locateMapping: (value: string, base: string) => Mapped
+  // Where a mapping value lands.
+  mappingLanding: (mapping: MappingFacts) => Landing
   // Where a site's reference lands.
   landing: (site: SiteFacts) => Landing
   // Where a location named by a path lands, as a site's reference does:
@@ -315,7 +357,16 @@ const samePath = (a: Path | undefined, b: Path | undefined): boolean => {
 }
 
 // What a state is in one version's object model.
-type StateInfo = { kind: Kind | null; type: string | null; schema: boolean; refable: boolean; from: SlotKind }
+type StateInfo = {
+  kind: Kind | null
+  type: string | null
+  schema: boolean
+  refable: boolean
+  from: SlotKind
+  // Whether it is a mapping value, and whether a member of it may be one.
+  mapping: boolean
+  maps: boolean
+}
 
 // What a dialect's identifier names in one version's object model: its
 // rules, whether this package knows it, and the state of a Schema Object
@@ -354,7 +405,15 @@ function modelFor(mv: ModelVersion): Model {
             : 'object' === s.kind && 'pathItem' === s.type
               ? 'pathItem'
               : null
-      i = { kind, type: s.type, schema: 'schema' === s.kind, refable: 'refable' === s.kind, from: kindFrom(mv, state) }
+      i = {
+        kind,
+        type: s.type,
+        schema: 'schema' === s.kind,
+        refable: 'refable' === s.kind,
+        from: kindFrom(mv, state),
+        mapping: 'mapping' === s.kind,
+        maps: leadsTo(mv, state, 'mapping'),
+      }
       stateInfos.set(state, i)
     }
     return i
@@ -427,6 +486,18 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
   const declared = new Map<Loc, string>()
 
   const sites: SiteFacts[] = []
+  // The mapping values, in the order found, and the description's schema
+  // components as written, which one may name.
+  const mappings = new Set<MappingFacts>()
+  const schemasAt: Path = '2.0' === cfg.mv ? ['definitions'] : ['components', 'schemas']
+  const named: Record<string, unknown> | undefined = (() => {
+    let node: any = raw
+    for (const seg of schemasAt) {
+      if (!isMap(node) || !own(node, seg as string)) return undefined
+      node = node[seg]
+    }
+    return isMap(node) ? node : undefined
+  })()
   const idIndex = new Map<string, Loc>()
   // The locations that declare an identifier.
   const declarers = new Set<Loc>()
@@ -434,8 +505,13 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
   let dataSlots = 0
   let nextOrd = 0
   let round = 0
-  // Sites found, or changed, since the landings were last worked out.
+  // Sites found, or changed, since the landings were last worked out,
+  // and the same of the mapping values.
   let stirred: SiteFacts[] = []
+  let stirredMaps: MappingFacts[] = []
+  // The mapping values whose pointer was read and names nothing, kept as
+  // `lost` keeps the sites.
+  const lostMaps = new Set<MappingFacts>()
 
   // The work done, in visits, references located and pointer steps. The
   // part of it that is held to a bound is `extra`: everything after the
@@ -488,6 +564,54 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     // to declare a name has it. After that the index is made again.
     if (0 === round && undefined === had) for (const k of keys!) idIndex.set(k, loc)
     else idsMoved = true
+  }
+
+  // The mapping values among the members of a location, as the model
+  // reads it now: the strings that it reads as one. A value that was
+  // found before keeps its record, and is read again where its base URI
+  // moved.
+  const noteMappings = (loc: Loc, node: any, state: string, base: string, m: Model) => {
+    const had = loc.mappings
+    let kept: Map<string, MappingFacts> | undefined
+    if (undefined !== had) {
+      kept = new Map()
+      for (const row of had) kept.set(row.key, row)
+    }
+    let now: MappingFacts[] | undefined
+    if (undefined !== node) {
+      const names = Object.keys(node)
+      let above: string | undefined
+      for (let i = 0; i < names.length; i++) {
+        const key = names[i]
+        const value = node[key]
+        if ('string' !== typeof value || !m.infoOf(m.step(state, key)).mapping) continue
+        let row = undefined === kept ? undefined : kept.get(key)
+        if (undefined === row) {
+          above ??= pointer(pathOf(loc))
+          row = { loc, key, seq: i, round, at: above + pointer([key]), ref: value, base, via: 'uri', stale: true }
+          mappings.add(row)
+          stirredMaps.push(row)
+        } else {
+          kept!.delete(key)
+          if (row.base !== base) {
+            row.base = base
+            if (!row.stale) {
+              row.stale = true
+              stirredMaps.push(row)
+            }
+          }
+        }
+        ;(now ??= []).push(row)
+      }
+    }
+    // What the model no longer reads as a mapping value is none.
+    if (undefined !== kept) {
+      for (const row of kept.values()) {
+        mappings.delete(row)
+        lostMaps.delete(row)
+      }
+    }
+    loc.mappings = now
   }
 
   type Frame = [Loc, string, Known, string, string, boolean]
@@ -641,6 +765,9 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
         } else if (undefined !== rules && null !== rules.dynamic && own(node, rules.dynamic)) {
           loc.dynamic = !pointers
         }
+        if (info.maps || undefined !== loc.mappings) noteMappings(loc, info.maps ? node : undefined, state, mine, m)
+      } else if (undefined !== loc.mappings) {
+        noteMappings(loc, undefined, state, mine, m)
       }
       loc.state = state
       loc.known = known
@@ -778,6 +905,28 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     return moved
   }
 
+  // A mapping value, against a base: the name of one of the description's
+  // schema components where it is one, whichever document it is written
+  // in, and a URI reference where it is not.
+  const locateMapping = (value: string, base: string): Mapped => {
+    if (undefined !== named && own(named, value)) return { target: [...schemasAt, value], doc: docs[0], via: 'name' }
+    const where = locateUri(value, base) as Mapped
+    where.via = 'uri'
+    return where
+  }
+
+  const locateMap = (row: MappingFacts) => {
+    worked(row.loc)
+    const where = locateMapping(row.ref, row.base)
+    row.via = where.via
+    row.why = where.why
+    row.target = where.target
+    row.targetDoc = where.doc
+    row.uri = where.uri
+    row.fragment = where.fragment
+    row.stale = false
+  }
+
   // ---- landings: a pointer read on the document as written ----
 
   const busy = new Set<SiteFacts>()
@@ -878,6 +1027,17 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     return (row.landing = out)
   }
 
+  // Where a mapping value lands. Its pointer is read as a site's is, and
+  // no pointer is read through it, since it is in no pointer's way.
+  const mappingLanding = (row: MappingFacts): Landing => {
+    if (undefined !== row.landing) return row.landing
+    if (undefined === row.target) return (row.landing = NO_LANDING)
+    const out = walkTo(row.target, undefined, row.targetDoc ?? row.loc.doc)
+    if (out.found) lostMaps.delete(row)
+    else lostMaps.add(row)
+    return (row.landing = out)
+  }
+
   // ---- typing by reference ----
 
   // The state a landing takes from its site, where the site has one to
@@ -889,18 +1049,27 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     return null
   }
 
-  // Type the landings of `rows` that the model gives no state, in the
-  // order of their rounds and then of the document. Nothing is typed
-  // twice: the first to land on a location types it.
-  const typeLandings = (rows: SiteFacts[]): number => {
+  // Type the landings of `rows` and of `maps` that the model gives no
+  // state, in the order of their rounds and then of the document, a
+  // mapping value after a site at its own location. Nothing is typed
+  // twice: the first to land on a location types it. A mapping value
+  // names a schema, so it gives what a schema's `$ref` gives.
+  const typeLandings = (rows: SiteFacts[], maps: MappingFacts[]): number => {
     // What each site gives is settled before anything is typed: a site
     // that this pass turns from data into a schema types in the next.
-    const plan = rows
-      .slice()
-      .sort((a, b) => (a.round !== b.round ? a.round - b.round : a.loc.ord - b.loc.ord))
-      .map((row): [SiteFacts, string | null] => [row, gives(row)])
+    type Giver = { by: SiteFacts | MappingFacts; seq: number; give: string | null }
+    const plan: Giver[] = []
+    for (const row of rows) plan.push({ by: row, seq: -1, give: gives(row) })
+    for (const row of maps) plan.push({ by: row, seq: row.seq, give: 'schema' })
+    plan.sort((a, b) =>
+      a.by.round !== b.by.round
+        ? a.by.round - b.by.round
+        : a.by.loc.ord !== b.by.loc.ord
+          ? a.by.loc.ord - b.by.loc.ord
+          : a.seq - b.seq,
+    )
     let typed = 0
-    for (const [row, give] of plan) {
+    for (const { by: row, give } of plan) {
       const land = row.landing
       if (null == give || undefined === land || !land.found) continue
       const at = land.loc
@@ -925,9 +1094,10 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     return typed
   }
 
-  // Bring what each site names, and where it lands, up to the survey.
-  // Gives the sites whose landing was worked out again.
-  const settle = (): SiteFacts[] => {
+  // Bring what each site and each mapping value names, and where it
+  // lands, up to the survey. Gives the ones whose landing was worked out
+  // again.
+  const settle = (): { rows: SiteFacts[]; maps: MappingFacts[] } => {
     let everySite = !incremental
     let everyLanding = !incremental
     if (idsMoved) {
@@ -957,20 +1127,39 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
       fresh.add(row)
     }
     stirred = []
+    // The mapping values, the same way. No pointer is read through one,
+    // so one that names something else now moves no other landing.
+    if (everySite) for (const row of mappings) row.stale = true
+    const freshMaps = new Set<MappingFacts>()
+    for (const row of everySite ? [...mappings] : stirredMaps) {
+      if (!row.stale || !mappings.has(row)) continue
+      locateMap(row)
+      freshMaps.add(row)
+    }
+    stirredMaps = []
     let redo: SiteFacts[]
-    if (everyLanding) redo = sites
-    else {
+    let redoMaps: MappingFacts[]
+    if (everyLanding) {
+      redo = sites
+      redoMaps = [...mappings]
+    } else {
       // A new site may be one that a pointer stopped at for want of a
       // step: every pointer that was read and names nothing is read
       // again. A site with no pointer to read names what it named.
       redo = [...fresh]
       for (const row of lost) if (!fresh.has(row)) redo.push(row)
+      redoMaps = [...freshMaps]
+      for (const row of lostMaps) if (!freshMaps.has(row)) redoMaps.push(row)
     }
     for (const row of redo) row.landing = undefined
+    for (const row of redoMaps) row.landing = undefined
     // Under `refs: 'pointer'` a site is read by the fold, as apidef reads
     // it, and a landing is worked out only when something asks for one.
-    if (!pointers) for (const row of redo) landingOf(row)
-    return redo
+    if (!pointers) {
+      for (const row of redo) landingOf(row)
+      for (const row of redoMaps) mappingLanding(row)
+    }
+    return { rows: redo, maps: redoMaps }
   }
 
   // ---- the rounds ----
@@ -981,7 +1170,7 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     let moved = settle()
     if (typing) {
       for (;;) {
-        if (0 === typeLandings(incremental ? moved : sites)) break
+        if (0 === typeLandings(incremental ? moved.rows : sites, incremental ? moved.maps : [...mappings])) break
         round++
         moved = settle()
       }
@@ -1045,6 +1234,9 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
     rounds: round,
     child: kidOf as (loc: Loc, seg: string | number) => Loc | undefined,
     locate: locateUri,
+    mappings: [...mappings].sort((a, b) => (a.loc.ord !== b.loc.ord ? a.loc.ord - b.loc.ord : a.seq - b.seq)),
+    locateMapping,
+    mappingLanding,
     landing: landingOf,
     landingAt: (target, doc) => walkTo(target, undefined, doc ?? docs[0]),
     stateAt,
@@ -1056,4 +1248,18 @@ function buildIndex(raw: any, cfg: IndexConfig): SiteIndex {
 
 export { Loc, buildIndex, hasIds, pathOf, EXTRA_FACTOR }
 
-export type { DocFacts, DocInput, IndexConfig, Kind, Known, Landing, Located, Region, SiteFacts, SiteIndex, Why }
+export type {
+  DocFacts,
+  DocInput,
+  IndexConfig,
+  Kind,
+  Known,
+  Landing,
+  Located,
+  Mapped,
+  MappingFacts,
+  Region,
+  SiteFacts,
+  SiteIndex,
+  Why,
+}

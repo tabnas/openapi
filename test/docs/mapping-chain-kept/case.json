@@ -1,0 +1,77 @@
+{
+  "source": "This repository: the same under `cycles: 'keep'`",
+  "note": "The documents of `mapping-chain`, resolved under `cycles: 'keep'`: the cycle is kept, and every site is resolved. The tree of the description holds no reference, so it is no graph.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": {
+    "https://example.com/api/a.yaml": "a.yaml",
+    "https://example.com/api/b.yaml": "b.yaml",
+    "https://example.com/api/c.yaml": "c.yaml"
+  },
+  "resolveOptions": { "cycles": "keep" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "a": "a.yaml" } }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    ["https://example.com/api/b.yaml", "/allOf/0", "https://example.com/api/a.yaml", "", "resolved"],
+    [
+      "https://example.com/api/b.yaml",
+      "/properties/c",
+      "https://example.com/api/c.yaml",
+      "",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/c.yaml",
+      "/properties/b",
+      "https://example.com/api/b.yaml",
+      "",
+      "resolved"
+    ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "a": "#/components/schemas/a" } }
+          },
+          "a": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "b": "#/components/schemas/b" } }
+          },
+          "b": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "c": "#/components/schemas/c" } },
+            "allOf": [{ "$ref": "#/components/schemas/a" }],
+            "properties": { "c": { "$ref": "#/components/schemas/c" } }
+          },
+          "c": { "properties": { "b": { "$ref": "#/components/schemas/b" } } }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/a", "https://example.com/api/a.yaml", "", "component"],
+      ["/components/schemas/b", "https://example.com/api/b.yaml", "", "component"],
+      ["/components/schemas/c", "https://example.com/api/c.yaml", "", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

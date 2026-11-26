@@ -1,0 +1,55 @@
+{
+  "note": "A `summary` beside a response's reference is read from 3.2. In a document of 3.1 under a description of 3.2 it was not read, and is left out. The `description` beside it is read in both, and stands.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.2.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/a": { "get": { "responses": { "200": { "$ref": "old.json#/components/responses/R" } } } } }
+  },
+  "documents": {
+    "old.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "responses": {
+          "R": {
+            "$ref": "#/components/responses/S",
+            "summary": "not read in 3.1",
+            "description": "read in both"
+          },
+          "S": { "description": "theirs", "summary": "theirs" }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.2.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/a": { "get": { "responses": { "200": { "$ref": "#/components/responses/R" } } } } },
+      "components": {
+        "responses": {
+          "R": { "$ref": "#/components/responses/S", "description": "read in both" },
+          "S": { "description": "theirs", "summary": "theirs" }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/responses/R",
+        "https://example.com/api/old.json",
+        "/components/responses/R",
+        "component"
+      ],
+      [
+        "/components/responses/S",
+        "https://example.com/api/old.json",
+        "/components/responses/S",
+        "component"
+      ]
+    ],
+    "left": [["/components/responses/R/summary", "not read in 3.1", "sibling"]],
+    "dialects": []
+  }
+}

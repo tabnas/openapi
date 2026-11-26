@@ -1,0 +1,29 @@
+{
+  "source": "This repository: a document given as text is read as `parse` reads one",
+  "note": "A document given as text is read by the reading in force. Under the base reading the word `yes` is a Boolean.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/flag.yaml": "flag.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Flag": { "default": true } } }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [["", "/components/schemas/Flag", "https://example.com/api/flag.yaml", "", "resolved"]],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": { "Flag": { "$ref": "#/components/schemas/flag" }, "flag": { "default": true } }
+      }
+    },
+    "embedded": [["/components/schemas/flag", "https://example.com/api/flag.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

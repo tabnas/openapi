@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "entry", "version": "1" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Never": { "$ref": "never.json" },
+      "Second": { "$ref": "list.yaml#/1" },
+      "All": { "$ref": "list.yaml" },
+      "None": { "$ref": "empty.yaml" }
+    }
+  }
+}

@@ -1,0 +1,252 @@
+{
+  "note": "A mapping value and a Path Item reference land on one part of a document. In the documents the reference is of the earlier round, so the part is a Path Item. In the bundle the schema that holds the mapping value is a component, so the mapping value is read first, and the part is read as a schema. A mapping value types what it names, and the bundle did not count it among what lands on a part, so the part was not listed. It is listed in `left` as `type`.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "t",
+          "version": "1"
+        },
+        "paths": {
+          "/q": {
+            "$ref": "c.json#/pet"
+          }
+        }
+      },
+      "documents": {
+        "a.json": {
+          "Y": {
+            "properties": {
+              "q": {
+                "properties": {
+                  "q": {
+                    "$ref": "c.json"
+                  }
+                }
+              }
+            },
+            "discriminator": {
+              "mapping": {
+                "m": "c.json#/A"
+              }
+            }
+          }
+        },
+        "sub/b.json": {
+          "A": {
+            "properties": {
+              "q": {
+                "$ref": "../a.json#/Y"
+              }
+            }
+          }
+        },
+        "c.json": {
+          "pet": {
+            "post": {
+              "callbacks": {
+                "cb": {
+                  "{$url}": {
+                    "$ref": "#/A"
+                  }
+                }
+              }
+            }
+          },
+          "A": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": {
+                          "q": {
+                            "properties": {
+                              "q": {
+                                "properties": {
+                                  "q": {
+                                    "$ref": "sub/b.json#/A/properties/q"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "t",
+          "version": "1"
+        },
+        "paths": {
+          "/q": {
+            "$ref": "sub/b.json#/Y"
+          }
+        },
+        "components": {
+          "schemas": {
+            "Y": {
+              "$ref": "c.json#/A/properties/q"
+            }
+          }
+        }
+      },
+      "documents": {
+        "sub/b.json": {
+          "Y": {
+            "post": {
+              "callbacks": {
+                "cb": {
+                  "{$url}": {
+                    "$ref": "#/pet"
+                  }
+                }
+              }
+            }
+          },
+          "pet": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "$ref": "b.json"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "c.json": {
+          "A": {
+            "properties": {
+              "q": {
+                "discriminator": {
+                  "mapping": {
+                    "m": "sub/b.json#/pet"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "t",
+          "version": "1"
+        },
+        "paths": {
+          "/p": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "properties": {
+                          "q": {
+                            "$ref": "sub/b.json#/Z"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "post": {
+              "callbacks": {
+                "cb": {
+                  "{$url}": {
+                    "$ref": "a.json#/A"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "components": {
+          "schemas": {
+            "Y": {
+              "properties": {
+                "r": {
+                  "$ref": "sub/b.json#/Z/default/k"
+                }
+              }
+            }
+          }
+        }
+      },
+      "documents": {
+        "a.json": {
+          "A": {
+            "post": {
+              "callbacks": {
+                "cb": {
+                  "{$url}": {
+                    "$ref": "c.json#/X"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "sub/b.json": {
+          "Z": {
+            "properties": {
+              "r": {
+                "$ref": "../c.json"
+              }
+            },
+            "discriminator": {
+              "mapping": {
+                "m": "../c.json#/X"
+              }
+            },
+            "default": {
+              "k": {}
+            }
+          }
+        },
+        "c.json": {
+          "X": {
+            "get": {
+              "responses": {
+                "200": {
+                  "content": {
+                    "a/b": {
+                      "schema": {
+                        "$ref": "sub/b.json"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

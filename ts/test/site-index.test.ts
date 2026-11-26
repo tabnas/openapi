@@ -102,12 +102,30 @@ function answer(index: SiteIndex): string {
           : 'nowhere',
     r.landing?.through ?? null,
   ])
+  const mappings = index.mappings.map((r) => {
+    const land = index.mappingLanding(r)
+    return [
+      placed(index, r.loc.doc, r.at),
+      r.key,
+      r.ref,
+      r.round,
+      r.base,
+      r.via,
+      r.why ?? null,
+      undefined === r.target ? null : placed(index, r.targetDoc, pointer(r.target)),
+      r.uri ?? null,
+      r.fragment ?? null,
+      land.found ? placed(index, land.doc, pointer(land.path!)) : true === land.loop ? 'loop' : 'nowhere',
+      land.through ?? null,
+    ]
+  })
   const byAt = (a: any[], b: any[]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
   return JSON.stringify({
     rounds: index.rounds,
     dataSlots: index.dataSlots,
     locs: locs.sort(byAt),
     sites: sites.sort(byAt),
+    mappings: mappings.sort(byAt),
     dialects: index.dialects(),
   })
 }
@@ -209,6 +227,28 @@ const ROUNDS: [string, boolean, number, number, any][] = [
     },
     'x-u': { T: { description: 'a response or a schema', type: 'object' } },
   }],
+  // A mapping value is no reference, and names a schema all the same: it
+  // types what it lands on as a schema's `$ref` does.
+  ['a mapping value types what it names, which has a mapping value of its own', true, 2, 2, {
+    openapi: '3.0.3', info, paths: {},
+    components: { schemas: { A: { discriminator: { propertyName: 'k', mapping: { b: '#/x-b/B' } } }, Leaf: { type: 'string' } } },
+    'x-b': { B: { discriminator: { propertyName: 'k', mapping: { c: '#/x-c/C' } } } },
+    'x-c': { C: { properties: { p: { $ref: '#/components/schemas/Leaf' } } } },
+  }],
+  ['a default mapping and a mapping value of one discriminator', true, 1, 2, {
+    openapi: '3.2.0', info, paths: {},
+    components: { schemas: { S: { discriminator: { propertyName: 'k', defaultMapping: '#/x-d/Other', mapping: { a: '#/x-m/A' } } } } },
+    'x-d': { Other: { properties: { a: { $ref: '#/x-m/A' } } } },
+    'x-m': { A: { type: 'string' } },
+  }],
+  ['a reference and a mapping value of one round that give one target different types', false, 1, 1, {
+    openapi: '3.0.3', info, paths: {},
+    components: {
+      responses: { R: { $ref: '#/x-u/T' } },
+      schemas: { S: { discriminator: { propertyName: 'k', mapping: { t: '#/x-u/T' } } } },
+    },
+    'x-u': { T: { description: 'a response or a schema', type: 'object' } },
+  }],
 ]
 
 const copy = (v: any) => JSON.parse(JSON.stringify(v))
@@ -274,6 +314,19 @@ function regionsDoc(seed: number): any {
   const starts = 1 + pick(3)
   for (let j = 0; j < starts; j++) doc.components.schemas['S' + j] = { $ref: ref(pick(count)) }
   if (0 === pick(3)) doc.components.responses.R = { $ref: ref(pick(count)) }
+  // A discriminator's mapping values name regions too, by the same
+  // texts. One may be the name of a schema component, or name nothing.
+  const discriminator = (): any => {
+    const mapping: any = {}
+    const n = 1 + pick(3)
+    for (let j = 0; j < n; j++) {
+      const how = pick(8)
+      mapping['m' + j] = 0 === how ? 'S0' : 1 === how ? DOC + '#' + at[pick(count)] + '/nope' : ref(pick(count))
+    }
+    return { propertyName: 'kind', mapping }
+  }
+  for (let i = 0; i < count; i++) if (0 === pick(3)) holders[i].discriminator = discriminator()
+  if (0 === pick(2)) doc.components.schemas.M = { type: 'object', discriminator: discriminator() }
   return doc
 }
 
@@ -311,16 +364,71 @@ describe('site index', () => {
   test('the index carried forward equals the index worked out from nothing, on regions nested in each other', () => {
     let typedSome = 0
     let nested = 0
+    let mapped = 0
+    let late = 0
     for (let seed = 1; seed <= 400; seed++) {
       const doc = regionsDoc(seed)
       const index = indexOf(doc)
       if (0 < index.rounds) typedSome++
       if (regions(index).some((r) => 2 < r.split(' ')[0].split('/x-r').length)) nested++
+      // A region that a mapping value typed, and a mapping value that
+      // was found only once the region around it was typed.
+      if (regions(index).some((r) => r.split(' ')[2].includes('/discriminator/'))) mapped++
+      if (index.mappings.some((m) => 0 < m.round)) late++
       assert.equal(answer(index), answer(indexOf(doc, { incremental: false })), 'seed ' + seed)
     }
     // The generator does make what it is for.
     assert.ok(300 < typedSome, 'only ' + typedSome + ' documents had a region typed')
     assert.ok(50 < nested, 'only ' + nested + ' documents had a region typed inside another')
+    assert.ok(50 < mapped, 'only ' + mapped + ' documents had a region typed by a mapping value')
+    assert.ok(50 < late, 'only ' + late + ' documents had a mapping value found in a later round')
+  })
+
+  test('a mapping value is the name of a schema component where there is one, and a URI reference where there is none', () => {
+    const doc = {
+      openapi: '3.1.0', info, paths: {},
+      components: {
+        schemas: {
+          Pet: {
+            discriminator: {
+              propertyName: 'kind',
+              mapping: { cat: 'Cat', dog: '#/x-models/Dog', gone: '#/x-models/Gone', far: 'other.json#/Far', '#/x-models/Dog': 'Cat' },
+              'x-note': 'no mapping value',
+            },
+          },
+          Cat: { type: 'object' },
+        },
+      },
+      'x-models': { Dog: { type: 'object' }, 'not-read': { discriminator: { propertyName: 'k', mapping: { a: '#/x-models/Dog' } } } },
+    }
+    const index = indexOf(doc)
+    const rows = index.mappings.map((m) => {
+      const land = index.mappingLanding(m)
+      return [m.at, m.ref, m.via, undefined === m.target ? null : pointer(m.target), m.why ?? null, land.found, m.round]
+    })
+    assert.deepEqual(rows, [
+      // The name of a component, whatever else it could be read as.
+      ['/components/schemas/Pet/discriminator/mapping/cat', 'Cat', 'name', '/components/schemas/Cat', null, true, 0],
+      ['/components/schemas/Pet/discriminator/mapping/dog', '#/x-models/Dog', 'uri', '/x-models/Dog', null, true, 0],
+      // A pointer that names nothing, and a document the set has not.
+      ['/components/schemas/Pet/discriminator/mapping/gone', '#/x-models/Gone', 'uri', '/x-models/Gone', null, false, 0],
+      ['/components/schemas/Pet/discriminator/mapping/far', 'other.json#/Far', 'uri', null, 'external', false, 0],
+      // The member's name is the discriminator's value, whatever it is.
+      ['/components/schemas/Pet/discriminator/mapping/#~1x-models~1Dog', 'Cat', 'name', '/components/schemas/Cat', null, true, 0],
+    ])
+    // What a mapping value lands on is a schema, and nothing else in the
+    // extension is: a mapping there is read by nothing.
+    assert.deepEqual(regions(index), ['/x-models/Dog schema /components/schemas/Pet/discriminator/mapping/dog 1'])
+    assert.deepEqual([...index.wanted], ['https://example.com/other.json'])
+    assert.equal(answer(index), answer(indexOf(doc, { incremental: false })))
+    // In 2.0 a discriminator is the name of a property, and has no
+    // mapping. Under `refs: 'pointer'` a mapping value is read and types
+    // nothing.
+    const two = { swagger: '2.0', info, paths: {}, definitions: { Pet: { discriminator: 'kind', mapping: { a: '#/x/A' } } }, x: { A: {} } }
+    assert.deepEqual(indexOf(two).mappings, [])
+    const plain = indexOf(doc, { pointers: true })
+    assert.equal(plain.mappings.length, 5)
+    assert.deepEqual(regions(plain), [])
   })
 
   test('the index carried forward equals the index worked out from nothing, on generated documents', () => {

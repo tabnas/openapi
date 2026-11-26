@@ -1,0 +1,43 @@
+{
+  "note": "The documents asked for are held to a count. Each document here names the next, and the sixth is not asked for under a count of five.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "N": { "$ref": "n0.yaml#/N" } } }
+  },
+  "options": { "maxDocuments": 5 },
+  "table": {
+    "https://example.com/api/n0.yaml": { "N": { "$ref": "n1.yaml#/N" } },
+    "https://example.com/api/n1.yaml": { "N": { "$ref": "n2.yaml#/N" } },
+    "https://example.com/api/n2.yaml": { "N": { "$ref": "n3.yaml#/N" } },
+    "https://example.com/api/n3.yaml": { "N": { "$ref": "n4.yaml#/N" } },
+    "https://example.com/api/n4.yaml": { "N": { "$ref": "n5.yaml#/N" } },
+    "https://example.com/api/n5.yaml": { "N": { "$ref": "n6.yaml#/N" } },
+    "https://example.com/api/n6.yaml": { "N": { "$ref": "n7.yaml#/N" } },
+    "https://example.com/api/n7.yaml": { "N": { "$ref": "n8.yaml#/N" } },
+    "https://example.com/api/n8.yaml": { "N": { "$ref": "n9.yaml#/N" } },
+    "https://example.com/api/n9.yaml": { "N": { "$ref": "n10.yaml#/N" } },
+    "https://example.com/api/n10.yaml": { "N": { "$ref": "n11.yaml#/N" } },
+    "https://example.com/api/n11.yaml": { "N": { "$ref": "n12.yaml#/N" } }
+  },
+  "asked": [
+    "https://example.com/api/n0.yaml",
+    "https://example.com/api/n1.yaml",
+    "https://example.com/api/n2.yaml",
+    "https://example.com/api/n3.yaml",
+    "https://example.com/api/n4.yaml"
+  ],
+  "error": { "code": "openapi_work", "at": "https://example.com/api/n5.yaml" },
+  "bundle": {
+    "asked": [
+      "https://example.com/api/n0.yaml",
+      "https://example.com/api/n1.yaml",
+      "https://example.com/api/n2.yaml",
+      "https://example.com/api/n3.yaml",
+      "https://example.com/api/n4.yaml"
+    ],
+    "error": { "code": "openapi_work", "at": "https://example.com/api/n5.yaml" }
+  }
+}

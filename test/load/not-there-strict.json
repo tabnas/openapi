@@ -1,0 +1,26 @@
+{
+  "note": "Under `strict` the rounds still run, and what is left is refused.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "A": { "$ref": "a.yaml#/A" },
+        "B": { "$ref": "a.yaml#/B" },
+        "C": { "$ref": "https://elsewhere.example/c.yaml" }
+      }
+    }
+  },
+  "options": { "strict": true },
+  "table": {
+    "https://example.com/api/a.yaml": { "A": { "$ref": "gone.yaml#/X" }, "B": { "$ref": "gone.yaml#/Y" } }
+  },
+  "asked": [
+    "https://example.com/api/a.yaml",
+    "https://elsewhere.example/c.yaml",
+    "https://example.com/api/gone.yaml"
+  ],
+  "error": { "code": "openapi_unresolved" }
+}

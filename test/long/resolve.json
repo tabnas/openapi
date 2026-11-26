@@ -1,0 +1,412 @@
+{
+  "note": "Descriptions too long to write out, each built from parts, and what `resolve` makes of each once `parse` has read it. A part of `text` is a string, or a map: `of` written `repeat` times with `join` between, where in `of` `{i}` is the count from 0, `{j}` the count from 1, and `{s}` as many spaces as the count from 0. `bytes` is the size of the text as UTF-8, to check a builder by. A case may have `documents`, the description's other documents by URI, each a text built from parts in the same way and given to `resolve` as text; `bytes` then counts them too. A case has the options of `resolve`, and either `error`, the code it refuses the description with, or `reads`: the path of a list or a map in the resolved tree, and how many items or members it has.",
+  "cases": [
+    {
+      "note": "Each reference followed is a visit of the walk that reads the operations. A chain of 900 references, and a list of 6,000 parameters that each lead into its start, is 5,400,000 of them, which is past sixteen times the work of reading the document once: refused, with no option given.",
+      "text": [
+        "{\"openapi\":\"3.1.0\",\"paths\":{\"/a\":{\"get\":{\"parameters\":[",
+        { "repeat": 6000, "of": "{\"$ref\":\"#/components/parameters/A899\"}", "join": "," },
+        "],\"responses\":{}}}},\"components\":{\"parameters\":{\"A0\":{\"name\":\"q\",\"in\":\"query\"}",
+        { "repeat": 899, "of": ",\"A{j}\":{\"$ref\":\"#/components/parameters/A{i}\"}" },
+        "}}}"
+      ],
+      "error": "openapi_work",
+      "bytes": 282170
+    },
+    {
+      "note": "With 50 parameters the same chain is 45,000 visits, and is read: each parameter is the one at the end of the chain.",
+      "text": [
+        "{\"openapi\":\"3.1.0\",\"paths\":{\"/a\":{\"get\":{\"parameters\":[",
+        { "repeat": 50, "of": "{\"$ref\":\"#/components/parameters/A899\"}", "join": "," },
+        "],\"responses\":{}}}},\"components\":{\"parameters\":{\"A0\":{\"name\":\"q\",\"in\":\"query\"}",
+        { "repeat": 899, "of": ",\"A{j}\":{\"$ref\":\"#/components/parameters/A{i}\"}" },
+        "}}}"
+      ],
+      "reads": { "at": ["paths", "/a", "get", "parameters"], "length": 50 },
+      "bytes": 44170
+    },
+    {
+      "note": "The texts of a description's documents are held together to the work that one text may take. A limit of a megabyte gives 100,000 steps, and a text of 12,000 small values takes a share of them: one such document is read.",
+      "text": [
+        "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"entry\",\"version\":\"1\"},\"paths\":{},\"components\":{\"schemas\":{",
+        { "repeat": 1, "of": "\"S{i}\":{\"$ref\":\"n{i}.yaml\"}", "join": "," },
+        "}}}"
+      ],
+      "documents": { "n0.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"] },
+      "options": { "retrievalUri": "https://example.com/api/openapi.yaml", "parse": { "maxBytes": 1000000 } },
+      "reads": { "at": ["components", "schemas", "S0", "enum"], "length": 12001 },
+      "bytes": 24130
+    },
+    {
+      "note": "Eight of them are stopped: together they take more steps than one text may.",
+      "text": [
+        "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"entry\",\"version\":\"1\"},\"paths\":{},\"components\":{\"schemas\":{",
+        { "repeat": 8, "of": "\"S{i}\":{\"$ref\":\"n{i}.yaml\"}", "join": "," },
+        "}}}"
+      ],
+      "documents": {
+        "n0.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"],
+        "n1.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"],
+        "n2.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"],
+        "n3.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"],
+        "n4.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"],
+        "n5.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"],
+        "n6.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"],
+        "n7.yaml": ["enum: [", { "repeat": 12000, "of": "x," }, "x]\n"]
+      },
+      "options": { "retrievalUri": "https://example.com/api/openapi.yaml", "parse": { "maxBytes": 1000000 } },
+      "error": "openapi_work",
+      "bytes": 192368
+    },
+    {
+      "note": "And to what the aliases of one text may copy out. Each of these documents copies a list of 41 items 1,501 times, which is under the budget a text has by itself: four of them are read.",
+      "text": [
+        "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"entry\",\"version\":\"1\"},\"paths\":{},\"components\":{\"schemas\":{",
+        { "repeat": 4, "of": "\"S{i}\":{\"$ref\":\"n{i}.yaml\"}", "join": "," },
+        "}}}"
+      ],
+      "documents": {
+        "n0.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n1.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n2.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n3.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ]
+      },
+      "options": { "retrievalUri": "https://example.com/api/openapi.yaml" },
+      "reads": { "at": ["components", "schemas", "S3", "b"], "length": 1501 },
+      "bytes": 18584
+    },
+    {
+      "note": "Twenty of them are refused: the floor of the budget, a megabyte, is one for the set and not one for each document.",
+      "text": [
+        "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"entry\",\"version\":\"1\"},\"paths\":{},\"components\":{\"schemas\":{",
+        { "repeat": 20, "of": "\"S{i}\":{\"$ref\":\"n{i}.yaml\"}", "join": "," },
+        "}}}"
+      ],
+      "documents": {
+        "n0.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n1.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n2.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n3.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n4.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n5.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n6.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n7.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n8.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n9.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n10.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n11.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n12.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n13.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n14.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n15.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n16.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n17.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n18.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n19.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ]
+      },
+      "options": { "retrievalUri": "https://example.com/api/openapi.yaml" },
+      "error": "openapi_alias_budget",
+      "bytes": 92556
+    },
+    {
+      "note": "A budget that the caller gives is each text's own, so the twenty are read under one of a megabyte.",
+      "text": [
+        "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"entry\",\"version\":\"1\"},\"paths\":{},\"components\":{\"schemas\":{",
+        { "repeat": 20, "of": "\"S{i}\":{\"$ref\":\"n{i}.yaml\"}", "join": "," },
+        "}}}"
+      ],
+      "documents": {
+        "n0.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n1.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n2.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n3.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n4.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n5.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n6.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n7.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n8.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n9.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n10.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n11.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n12.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n13.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n14.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n15.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n16.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n17.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n18.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ],
+        "n19.yaml": [
+          "a: &a [",
+          { "repeat": 40, "of": "x," },
+          "x]\nb: [",
+          { "repeat": 1500, "of": "*a," },
+          "*a]\n"
+        ]
+      },
+      "options": {
+        "retrievalUri": "https://example.com/api/openapi.yaml",
+        "parse": { "aliasBudget": 1000000 }
+      },
+      "reads": { "at": ["components", "schemas", "S19", "b"], "length": 1501 },
+      "bytes": 92556
+    }
+  ]
+}

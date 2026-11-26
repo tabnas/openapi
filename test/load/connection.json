@@ -1,0 +1,52 @@
+{
+  "note": "A document that a connection alone names is loaded too: here the `operationRef` of a Link, which no reference stands beside.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "links": { "Next": { "operationRef": "ops.yaml#/paths/~1pets/get" } } }
+  },
+  "table": {
+    "https://example.com/api/ops.yaml": {
+      "openapi": "3.1.0",
+      "info": { "title": "ops", "version": "1" },
+      "paths": { "/pets": { "get": { "operationId": "list", "responses": {} } } }
+    }
+  },
+  "asked": ["https://example.com/api/ops.yaml"],
+  "documents": ["https://example.com/api/ops.yaml"],
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "links": { "Next": { "operationRef": "ops.yaml#/paths/~1pets/get" } } }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [],
+  "connections": [
+    {
+      "kind": "operationRef",
+      "at": "/components/links/Next/operationRef",
+      "name": "ops.yaml#/paths/~1pets/get",
+      "found": true,
+      "target": "/paths/~1pets/get",
+      "targetDoc": "https://example.com/api/ops.yaml",
+      "type": "operation"
+    }
+  ],
+  "bundle": {
+    "asked": ["https://example.com/api/ops.yaml"],
+    "documents": ["https://example.com/api/ops.yaml"],
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": { "links": { "Next": { "operationRef": "ops.yaml#/paths/~1pets/get" } } }
+    },
+    "embedded": [],
+    "left": [["/components/links/Next/operationRef", "ops.yaml#/paths/~1pets/get", "outside"]],
+    "dialects": []
+  }
+}

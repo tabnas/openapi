@@ -1,0 +1,4 @@
+{
+  "get": { "security": [{ "Key": [] }], "externalDocs": { "url": "docs/pets.html" }, "responses": {} },
+  "x-notes": { "security": [{ "Ignored": [] }] }
+}

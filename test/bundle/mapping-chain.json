@@ -1,0 +1,65 @@
+{
+  "note": "Schemas that only mapping values name are brought in, each in turn: every one names the next by a mapping value, and each is a component in the order they are met.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": { "P": { "discriminator": { "propertyName": "k", "mapping": { "a": "m0.json" } } } }
+    }
+  },
+  "documents": {
+    "m0.json": { "type": "object", "discriminator": { "propertyName": "k", "mapping": { "n": "m1.json" } } },
+    "m1.json": { "type": "object", "discriminator": { "propertyName": "k", "mapping": { "n": "m2.json" } } },
+    "m2.json": { "type": "object", "discriminator": { "propertyName": "k", "mapping": { "n": "m3.json" } } },
+    "m3.json": { "type": "object", "discriminator": { "propertyName": "k", "mapping": { "n": "m4.json" } } },
+    "m4.json": { "type": "object", "discriminator": { "propertyName": "k", "mapping": { "n": "m5.json" } } },
+    "m5.json": { "type": "object" }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "P": {
+            "discriminator": { "propertyName": "k", "mapping": { "a": "#/components/schemas/m0" } }
+          },
+          "m0": {
+            "type": "object",
+            "discriminator": { "propertyName": "k", "mapping": { "n": "#/components/schemas/m1" } }
+          },
+          "m1": {
+            "type": "object",
+            "discriminator": { "propertyName": "k", "mapping": { "n": "#/components/schemas/m2" } }
+          },
+          "m2": {
+            "type": "object",
+            "discriminator": { "propertyName": "k", "mapping": { "n": "#/components/schemas/m3" } }
+          },
+          "m3": {
+            "type": "object",
+            "discriminator": { "propertyName": "k", "mapping": { "n": "#/components/schemas/m4" } }
+          },
+          "m4": {
+            "type": "object",
+            "discriminator": { "propertyName": "k", "mapping": { "n": "#/components/schemas/m5" } }
+          },
+          "m5": { "type": "object" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/m0", "https://example.com/api/m0.json", "", "component"],
+      ["/components/schemas/m1", "https://example.com/api/m1.json", "", "component"],
+      ["/components/schemas/m2", "https://example.com/api/m2.json", "", "component"],
+      ["/components/schemas/m3", "https://example.com/api/m3.json", "", "component"],
+      ["/components/schemas/m4", "https://example.com/api/m4.json", "", "component"],
+      ["/components/schemas/m5", "https://example.com/api/m5.json", "", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

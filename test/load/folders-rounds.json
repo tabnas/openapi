@@ -1,0 +1,30 @@
+{
+  "note": "And under a count of two rounds, the document of the third round is not asked for.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "A": { "$ref": "a.json" }, "Gone": { "$ref": "gone.json" } } }
+  },
+  "options": { "maxRounds": 2 },
+  "table": {
+    "https://example.com/api/a.json": { "type": "object", "properties": { "b": { "$ref": "sub/b.yaml" } } },
+    "https://example.com/api/sub/b.yaml": "type: object\nproperties:\n  c: { $ref: c.json }\n",
+    "https://example.com/api/sub/c.json": "{\"type\":\"string\"}"
+  },
+  "asked": [
+    "https://example.com/api/a.json",
+    "https://example.com/api/gone.json",
+    "https://example.com/api/sub/b.yaml"
+  ],
+  "error": { "code": "openapi_work" },
+  "bundle": {
+    "asked": [
+      "https://example.com/api/a.json",
+      "https://example.com/api/gone.json",
+      "https://example.com/api/sub/b.yaml"
+    ],
+    "error": { "code": "openapi_work" }
+  }
+}

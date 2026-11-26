@@ -462,6 +462,11 @@ typeof load // => 'function'
 // const { tree } = await resolveAll(raw, { retrievalUri: 'https://api.example.com/openapi.yaml', load })
 ```
 
+A file that only a discriminator's `mapping` names is part of the
+description too. `resolve` reads it as a schema and resolves the
+references in it, and `resolveAll` loads it and the files it names in
+turn. Its sites come last in `provenance`.
+
 A loader is yours to write, too: any function from a URI to a
 document, given as `resolve` takes one. A description names whatever documents
 its author chose, so decide what yours may read before it reads.
@@ -533,6 +538,13 @@ Read `left` before you use the bundle. It lists each reference that
 names nothing, as `unresolved` does for `resolve`, and whatever else
 the bundle could not make whole. An empty list means that every
 reference of the bundle names a place in it.
+
+Keep the documents to the version the description declares. A bundle
+is one document, so a document of another version is read in it by
+the description's version, and the two do not read everything alike.
+`left` lists a member beside a reference that is read another way,
+and the [reference](reference.md#what-a-bundle-does-not-keep) says
+what the bundle cannot list.
 
 A name in the bundle is the last step of the pointer to its target, or
 the name of the target's file. Where the name is taken, as `Pet` is in

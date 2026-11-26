@@ -1,0 +1,47 @@
+{
+  "note": "A reference that names nothing stands as written, and `left` gives the reason that `resolve` gives for it: a `$ref` that is no string, a fragment that is no JSON Pointer, an anchor that nothing declares, a pointer that finds nothing, a document that was not given, and a pointer that comes back to its own reference.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "NotText": { "$ref": 5 },
+        "BadPointer": { "$ref": "#/a~2" },
+        "NoAnchor": { "$ref": "#nowhere" },
+        "NotFound": { "$ref": "#/components/schemas/Nope" },
+        "External": { "$ref": "other.json#/x" },
+        "Loop": { "$ref": "#/components/schemas/Loop/properties/p" }
+      }
+    }
+  },
+  "documents": {},
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "NotText": { "$ref": 5 },
+          "BadPointer": { "$ref": "#/a~2" },
+          "NoAnchor": { "$ref": "#nowhere" },
+          "NotFound": { "$ref": "#/components/schemas/Nope" },
+          "External": { "$ref": "other.json#/x" },
+          "Loop": { "$ref": "#/components/schemas/Loop/properties/p" }
+        }
+      }
+    },
+    "embedded": [],
+    "left": [
+      ["/components/schemas/NotText", 5, "not-a-string"],
+      ["/components/schemas/BadPointer", "#/a~2", "bad-fragment"],
+      ["/components/schemas/NoAnchor", "#nowhere", "no-anchor"],
+      ["/components/schemas/NotFound", "#/components/schemas/Nope", "not-found"],
+      ["/components/schemas/External", "other.json#/x", "external"],
+      ["/components/schemas/Loop", "#/components/schemas/Loop/properties/p", "loop"]
+    ],
+    "dialects": []
+  }
+}

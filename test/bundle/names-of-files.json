@@ -1,0 +1,70 @@
+{
+  "note": "The name a target is given is made of the characters a component name has. A whole document takes the name of its file with one extension off, percent-decoded, with any other character as `_`: the folder where the path ends in `/`, nothing of a query, and `bundled` where no name is left. A name the map has is not taken again. A target inside a document takes the last step of its pointer, decoded as a pointer is.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "A": { "$ref": "schemas/my%20pet.v2.yaml" },
+        "B": { "$ref": "schemas/" },
+        "C": { "$ref": "schemas/pet?version=2" },
+        "D": { "$ref": "schemas/.json" },
+        "E": { "$ref": "A.json" },
+        "F": { "$ref": "defs.json#/defs/a%20b~1c~0d" }
+      }
+    }
+  },
+  "documents": {
+    "schemas/my%20pet.v2.yaml": { "title": "a file name with a space and two dots" },
+    "schemas/": { "title": "a folder" },
+    "schemas/pet?version=2": { "title": "a query" },
+    "schemas/.json": { "title": "no name" },
+    "A.json": { "title": "a name that is taken" },
+    "defs.json": { "defs": { "a b/c~d": { "type": "number" } } }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": { "$ref": "#/components/schemas/my_pet.v2" },
+          "B": { "$ref": "#/components/schemas/schemas" },
+          "C": { "$ref": "#/components/schemas/pet" },
+          "D": { "$ref": "#/components/schemas/bundled" },
+          "E": { "$ref": "#/components/schemas/A_2" },
+          "F": { "$ref": "#/components/schemas/a_b_c_d" },
+          "my_pet.v2": { "title": "a file name with a space and two dots" },
+          "schemas": { "title": "a folder" },
+          "pet": { "title": "a query" },
+          "bundled": { "title": "no name" },
+          "A_2": { "title": "a name that is taken" },
+          "a_b_c_d": { "type": "number" }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/schemas/my_pet.v2",
+        "https://example.com/api/schemas/my%20pet.v2.yaml",
+        "",
+        "component"
+      ],
+      ["/components/schemas/schemas", "https://example.com/api/schemas/", "", "component"],
+      ["/components/schemas/pet", "https://example.com/api/schemas/pet?version=2", "", "component"],
+      ["/components/schemas/bundled", "https://example.com/api/schemas/.json", "", "component"],
+      ["/components/schemas/A_2", "https://example.com/api/A.json", "", "component"],
+      [
+        "/components/schemas/a_b_c_d",
+        "https://example.com/api/defs.json",
+        "/defs/a b~1c~0d",
+        "component"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

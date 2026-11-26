@@ -1,0 +1,30 @@
+{
+  "note": "A name that a reference hopes for is kept clear of, where the reference that hopes is met after the name was given. The bundle is written again, and the target takes the next name.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": { "Has": { "$ref": "a.json#/Pet" }, "Hopes": { "$ref": "#/components/schemas/Pet" } }
+    }
+  },
+  "documents": { "a.json": { "Pet": { "type": "string" } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Has": { "$ref": "#/components/schemas/Pet_2" },
+          "Hopes": { "$ref": "#/components/schemas/Pet" },
+          "Pet_2": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/Pet_2", "https://example.com/api/a.json", "/Pet", "component"]],
+    "left": [["/components/schemas/Hopes", "#/components/schemas/Pet", "not-found"]],
+    "dialects": []
+  }
+}

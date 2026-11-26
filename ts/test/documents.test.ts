@@ -281,6 +281,200 @@ describe('several documents', () => {
     assert.equal(xref.A['x-ref'], 'Pet.yaml')
   })
 
+  // What a mapping value names is a schema, as what a reference names is,
+  // and nothing is put in the mapping value's place. So a schema in
+  // another document that only a mapping value names is read, and it is
+  // not inside the schema that names it.
+  const rows = (r: any) => r.provenance.map((p: any) => [p.doc ?? '', p.at, p.targetDoc ?? '', p.target, p.status])
+  const pet = (mapping: Record<string, string>, more: Record<string, unknown> = {}) => ({
+    type: 'object',
+    discriminator: { propertyName: 'kind', mapping },
+    ...more,
+  })
+
+  test('a schema that only a mapping value names is read, and one that builds on its parent closes no cycle', () => {
+    // The usual shape: the parent names each child by a mapping value,
+    // and each child builds on the parent with `allOf`.
+    const documents = { 'dog.yaml': { allOf: [{ $ref: 'openapi.yaml#/components/schemas/Pet' }, { type: 'object' }] } }
+    const parent = pet({ dog: 'dog.yaml' })
+    const owner = { type: 'object', properties: { pet: { $ref: 'dog.yaml' } } }
+    const child = { allOf: [parent, { type: 'object' }] }
+    for (const cycles of ['cut', 'keep'] as const) {
+      // The mapping value alone: the child's reference is read.
+      const alone = resolve(entry({ Pet: parent }), { retrievalUri: HERE, documents, cycles })
+      assert.deepEqual(rows(alone), [[at('dog.yaml'), '/allOf/0', HERE, '/components/schemas/Pet', 'resolved']])
+      assert.deepEqual([alone.cuts, alone.unresolved], [[], []])
+      assert.deepEqual(plain(alone.tree.components.schemas), { Pet: parent })
+
+      // With a reference to the child as well, before the parent or
+      // after it: the tree is the same, and nothing is cut.
+      for (const schemas of [{ Pet: parent, Owner: owner }, { Owner: owner, Pet: parent }]) {
+        const r = resolve(entry(schemas), { retrievalUri: HERE, documents, cycles })
+        assert.deepEqual([r.cuts, r.unresolved], [[], []])
+        assert.deepEqual(plain(r.tree.components.schemas.Owner), { type: 'object', properties: { pet: child } })
+        assert.deepEqual(rows(r).map((row: any) => row[4]), ['resolved', 'resolved'])
+      }
+    }
+  })
+
+  test('what only mapping values name is read after the description, with nothing open', () => {
+    // A cycle of references inside it is cut, as anywhere.
+    const self = { 'dog.yaml': { type: 'object', properties: { self: { $ref: 'dog.yaml' }, mate: { $ref: '#' } } } }
+    const cut = resolve(entry({ Pet: pet({ dog: 'dog.yaml' }) }), { retrievalUri: HERE, documents: self })
+    assert.deepEqual(cut.cuts, [
+      { at: '/properties/self', ref: 'dog.yaml', target: '', doc: at('dog.yaml') },
+      { at: '/properties/mate', ref: '#', target: '', doc: at('dog.yaml') },
+    ])
+    const kept = resolve(entry({ Pet: pet({ dog: 'dog.yaml' }) }), { retrievalUri: HERE, documents: self, cycles: 'keep' })
+    assert.deepEqual([kept.cuts, rows(kept).map((row: any) => row[4])], [[], ['resolved', 'resolved']])
+
+    // A reference back to the description is none, to the whole of it
+    // included: the description has been read by then.
+    const back = { 'dog.yaml': { properties: { all: { $ref: 'openapi.yaml' }, pet: { $ref: 'openapi.yaml#/components/schemas/Pet' } } } }
+    for (const cycles of ['cut', 'keep'] as const) {
+      const r = resolve(entry({ Pet: pet({ dog: 'dog.yaml' }) }), { retrievalUri: HERE, documents: back, cycles })
+      assert.deepEqual(rows(r), [
+        [at('dog.yaml'), '/properties/all', HERE, '', 'resolved'],
+        [at('dog.yaml'), '/properties/pet', HERE, '/components/schemas/Pet', 'resolved'],
+      ])
+      assert.deepEqual(r.cuts, [])
+    }
+
+    // A chain of mapping values through three documents. The last two
+    // name each other by reference, which is a cycle, cut once.
+    const chain = {
+      'a.yaml': pet({ b: 'b.yaml' }),
+      'b.yaml': pet({ c: 'c.yaml' }, { allOf: [{ $ref: 'a.yaml' }], properties: { c: { $ref: 'c.yaml' } } }),
+      'c.yaml': { properties: { b: { $ref: 'b.yaml' } } },
+    }
+    const linked = resolve(entry({ Pet: pet({ a: 'a.yaml' }) }), { retrievalUri: HERE, documents: chain })
+    assert.deepEqual(rows(linked), [
+      [at('b.yaml'), '/allOf/0', at('a.yaml'), '', 'resolved'],
+      [at('b.yaml'), '/properties/c', at('c.yaml'), '', 'resolved'],
+      [at('c.yaml'), '/properties/b', at('b.yaml'), '', 'cut'],
+    ])
+    const graph = resolve(entry({ Pet: pet({ a: 'a.yaml' }) }), { retrievalUri: HERE, documents: chain, cycles: 'keep' })
+    assert.deepEqual(rows(graph).map((row: any) => row[4]), ['resolved', 'resolved', 'resolved'])
+  })
+
+  test('a mapping value in another document is read there, wherever in the documents it lands', () => {
+    // In its own document, where the walk of the description does not
+    // come. What nothing names stays unread.
+    const documents = {
+      'dog.yaml': {
+        Dog: pet({ p: '#/Puppy' }),
+        Puppy: { properties: { n: { $ref: 'name.yaml' }, lost: { $ref: '#/Nothing' } } },
+        Unused: { $ref: 'never.yaml' },
+      },
+      'name.yaml': { type: 'string' },
+    }
+    for (const cycles of ['cut', 'keep'] as const) {
+      const r = resolve(entry({ Pet: { $ref: 'dog.yaml#/Dog' } }), { retrievalUri: HERE, documents, cycles })
+      assert.deepEqual(rows(r), [
+        ['', '/components/schemas/Pet', at('dog.yaml'), '/Dog', 'resolved'],
+        [at('dog.yaml'), '/Puppy/properties/n', at('name.yaml'), '', 'resolved'],
+        [at('dog.yaml'), '/Puppy/properties/lost', '', '/Nothing', 'unresolved'],
+      ])
+      assert.deepEqual(r.unresolved, [{ at: '/Puppy/properties/lost', ref: '#/Nothing', why: 'not-found', doc: at('dog.yaml') }])
+      // Under `strict` what is left there is refused, by its document.
+      assert.throws(
+        () => resolve(entry({ Pet: { $ref: 'dog.yaml#/Dog' } }), { retrievalUri: HERE, documents, cycles, strict: true }),
+        (e: any) => e instanceof ResolveError && 'openapi_unresolved' === e.code && e.message.includes(at('dog.yaml') + '#/Puppy/properties/lost'),
+      )
+    }
+
+    // The default of a 3.2 discriminator is a mapping value too. One
+    // that names a string, or nothing, has nothing to read.
+    const v32 = entry(
+      { Pet: { type: 'object', discriminator: { propertyName: 'kind', defaultMapping: 'other.yaml', mapping: { s: 'dog.yaml#/type', n: 'dog.yaml#/none', d: 'dog.yaml' } } } },
+      '3.2.0',
+    )
+    const more = {
+      'dog.yaml': { type: 'object', properties: { n: { $ref: '#/properties/m' }, m: { type: 'string' } } },
+      'other.yaml': { properties: { n: { $ref: 'dog.yaml' } } },
+    }
+    for (const cycles of ['cut', 'keep'] as const) {
+      assert.deepEqual(rows(resolve(v32, { retrievalUri: HERE, documents: more, cycles })), [
+        [at('other.yaml'), '/properties/n', at('dog.yaml'), '', 'resolved'],
+        [at('dog.yaml'), '/properties/n', '', '/properties/m', 'resolved'],
+      ])
+    }
+
+    // A discriminator's map is read as one whatever else is in it: a
+    // `$ref`, which is a reference only under `slots: 'all'`.
+    const both = entry({
+      Pet: { type: 'object', discriminator: { $ref: '#/components/schemas/Other', propertyName: 'kind', mapping: { dog: 'dog.yaml' } } },
+      Other: { type: 'string' },
+    })
+    const lost = { 'dog.yaml': { properties: { n: { $ref: '#/nowhere' } } } }
+    for (const cycles of ['cut', 'keep'] as const) {
+      assert.deepEqual(rows(resolve(both, { retrievalUri: HERE, documents: lost, cycles })), [[at('dog.yaml'), '/properties/n', '', '/nowhere', 'unresolved']])
+      assert.deepEqual(rows(resolve(both, { retrievalUri: HERE, documents: lost, cycles, slots: 'all' })), [
+        ['', '/components/schemas/Pet/discriminator', '', '/components/schemas/Other', 'resolved'],
+        [at('dog.yaml'), '/properties/n', '', '/nowhere', 'unresolved'],
+      ])
+    }
+
+    // Under `refs: 'pointer'` no other document is read, so there is
+    // none to give.
+    assert.throws(() => resolve(entry({ Pet: pet({ dog: 'dog.yaml' }) }), { retrievalUri: HERE, documents: lost, refs: 'pointer' }), TypeError)
+  })
+
+  test('the bounds hold alike where mapping values name other documents', () => {
+    const far = { 'dog.yaml': { type: 'object', properties: { p: { $ref: 'openapi.yaml#/components/schemas/Pet' } } } }
+    const outcome = (doc: unknown, documents: Record<string, unknown>, more: Record<string, unknown>) => {
+      try {
+        resolve(doc, { retrievalUri: HERE, documents, ...more })
+        return 'ok'
+      } catch (e: any) {
+        return e.code
+      }
+    }
+    // A chain of references, and nesting, each `n` long: where the bound
+    // falls does not move for the document a mapping value names.
+    const chain = (n: number) => {
+      const schemas: Record<string, unknown> = { Pet: pet({ dog: 'dog.yaml' }) }
+      for (let i = 0; i < n; i++) schemas['A' + i] = { $ref: '#/components/schemas/A' + (i + 1) }
+      schemas['A' + n] = { type: 'string' }
+      return entry(schemas)
+    }
+    const nest = (n: number) => {
+      let deep: unknown = { type: 'string' }
+      for (let i = 0; i < n; i++) deep = { items: deep }
+      return entry({ Pet: pet({ dog: 'dog.yaml' }), Deep: deep })
+    }
+    for (const make of [chain, nest]) {
+      const without: string[] = []
+      const withIt: string[] = []
+      for (let n = 4; n <= 14; n++) {
+        without.push(outcome(make(n), {}, { maxDepth: 12 }))
+        withIt.push(outcome(make(n), far, { maxDepth: 12 }))
+      }
+      assert.deepEqual(withIt, without)
+      assert.deepEqual([without[0], without[without.length - 1]], ['ok', 'openapi_depth'])
+    }
+
+    // The steps are counted, and held to `maxSteps`, to the step.
+    let steps = 0
+    resolve(chain(5), { retrievalUri: HERE, documents: far, checkEveryN: 1, onCheck: (n) => ((steps = n), true) })
+    assert.ok(0 < steps)
+    assert.equal(outcome(chain(5), far, { maxSteps: steps }), 'ok')
+    assert.equal(outcome(chain(5), far, { maxSteps: steps - 1 }), 'openapi_work')
+    assert.equal(outcome(chain(5), far, { checkEveryN: 1, onCheck: (n: number) => n < steps }), 'openapi_cancel')
+    assert.equal(outcome(chain(5), far, { cycles: 'keep', maxSteps: 10 }), 'openapi_work')
+
+    // A member named as the start of such a fold is, in the description
+    // and in the document, is a member like any other.
+    const odd = entry({ Pet: pet({ dog: 'dog.yaml' }), Odd: { '\uffff': true, properties: { x: { $ref: '#/components/schemas/Pet' } } } })
+    const named = { 'dog.yaml': { '\uffff': { $ref: 'x' }, properties: { n: { $ref: 'openapi.yaml#/components/schemas/Odd' } } } }
+    const r = resolve(odd, { retrievalUri: HERE, documents: named })
+    assert.deepEqual(rows(r), [
+      ['', '/components/schemas/Odd/properties/x', '', '/components/schemas/Pet', 'resolved'],
+      [at('dog.yaml'), '/properties/n', HERE, '/components/schemas/Odd', 'resolved'],
+    ])
+    assert.equal(r.tree.components.schemas.Odd['\uffff'], true)
+  })
+
   test('the steps of every document count against one bound', () => {
     const big: Record<string, unknown> = {}
     for (let i = 0; i < 400; i++) big['S' + i] = { type: 'object', properties: { a: { type: 'string' }, b: { type: 'string' } } }
@@ -463,6 +657,43 @@ describe('several documents, loaded', () => {
     assert.deepEqual(asked, [at('ops.yaml')])
     const row = r.connections.find((c) => 'operationRef' === c.kind)!
     assert.deepEqual([row.found, row.target, row.targetDoc, row.type], [true, '/paths/~1pets/get', at('ops.yaml'), 'operation'])
+  })
+
+  test('what a schema names that only a mapping value names is loaded too', async () => {
+    const table = {
+      [at('dog.yaml')]: 'type: object\nproperties:\n  name: {$ref: "name.yaml"}\ndiscriminator:\n  propertyName: breed\n  mapping:\n    puppy: "sub/puppy.yaml#/Puppy"\n',
+      [at('sub/puppy.yaml')]: { Puppy: { allOf: [{ $ref: '../dog.yaml' }, { $ref: 'toy.yaml' }] }, Unused: { $ref: 'never.yaml' } },
+      [at('sub/toy.yaml')]: { type: 'string' },
+      [at('name.yaml')]: { type: 'string' },
+      [at('never.yaml')]: { never: 'asked for' },
+    }
+    const doc = entry({ Pet: { type: 'object', discriminator: { propertyName: 'kind', mapping: { dog: 'dog.yaml', gone: 'gone.yaml' } } } })
+    for (const cycles of ['cut', 'keep'] as const) {
+      const { asked, load } = loader(table)
+      const r = await resolveAll(doc, { retrievalUri: HERE, load, cycles })
+      // A round for what the description's mapping values name, one for
+      // what the schema they name does, by reference and by a mapping
+      // value of its own, and one for what that names in turn.
+      assert.deepEqual(asked, [at('dog.yaml'), at('gone.yaml'), at('name.yaml'), at('sub/puppy.yaml'), at('sub/toy.yaml')])
+      assert.deepEqual(r.documents, [at('dog.yaml'), at('name.yaml'), at('sub/puppy.yaml'), at('sub/toy.yaml')])
+      assert.deepEqual(
+        r.provenance.map((p) => [p.doc, p.at, p.targetDoc, p.target, p.status]),
+        [
+          [at('dog.yaml'), '/properties/name', at('name.yaml'), '', 'resolved'],
+          [at('sub/puppy.yaml'), '/Puppy/allOf/0', at('dog.yaml'), '', 'resolved'],
+          [at('sub/puppy.yaml'), '/Puppy/allOf/1', at('sub/toy.yaml'), '', 'resolved'],
+        ],
+      )
+      assert.deepEqual([r.unresolved, r.cuts], [[], []])
+      assert.deepEqual(
+        r.connections.filter((c) => 'mapping' === c.kind).map((c) => [c.doc ?? '', c.at, c.found, c.targetDoc ?? '', c.target ?? '', c.why ?? '']),
+        [
+          ['', '/components/schemas/Pet/discriminator/mapping/dog', true, at('dog.yaml'), '', ''],
+          ['', '/components/schemas/Pet/discriminator/mapping/gone', false, '', '', 'external'],
+          [at('dog.yaml'), '/discriminator/mapping/puppy', true, at('sub/puppy.yaml'), '/Puppy', ''],
+        ],
+      )
+    }
   })
 
   test('the documents asked for are held to a count, whether or not the loader has them', async () => {

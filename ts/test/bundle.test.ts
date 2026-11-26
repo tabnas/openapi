@@ -13,7 +13,7 @@ import * as U from '../dist/uri'
 import { bundle, bundleAll, parse, ResolveError } from '../dist/openapi'
 
 const ROOT = join(__dirname, '..', '..')
-const { agree } = require(join(ROOT, 'tools', 'corpus', 'bundle-agree.cjs'))
+const { agree, checkWritten } = require(join(ROOT, 'tools', 'corpus', 'bundle-agree.cjs'))
 const { generate } = require(join(ROOT, 'tools', 'apidef-preset', 'generate.cjs'))
 
 const BASE = 'https://example.com/api/'
@@ -395,9 +395,9 @@ describe('bundle, what a review of it found', () => {
     assert.deepEqual(C(got.Same_2000), { title: 'n1999' })
   })
 
-  test('the steps of every round of typing are those of one run', () => {
-    // Schemas that only mapping values name, each naming the next: the
-    // index is told of one more in each round, and built again.
+  test('schemas that only mapping values name are brought in, and their steps are those of one run', () => {
+    // Each names the next, so the index types one more in each of its
+    // rounds, and the bundle is written once.
     const documents: Record<string, unknown> = {}
     const length = 5
     for (let i = 0; i < length; i++) {
@@ -482,6 +482,60 @@ describe('the check of a bundle', () => {
       assert.ok(held.why.some((line: string) => said.test(line)), held.why.join('; '))
     })
   }
+
+  // A document of a later version than the description's, with a field
+  // beside a reference that its own version read and the description's
+  // does not. The bundle says so, and the check allows that field there
+  // and no other difference.
+  const later = () => description({ paths: { '/a': { get: { responses: { 200: { $ref: 'new.json#/components/responses/R' } } } } } }, { openapi: '3.0.3' })
+  const newer = {
+    'new.json': {
+      openapi: '3.1.0',
+      info,
+      paths: {},
+      components: { responses: { R: { $ref: '#/components/responses/S', description: 'mine' }, S: { description: 'theirs' } } },
+    },
+  }
+  const versioned = (change: (b: any) => void) =>
+    agree(
+      {
+        ...O,
+        bundle: (raw: any, options: any) => {
+          const b = bundle(raw, options)
+          change(b)
+          return b
+        },
+      },
+      U,
+      later(),
+      { retrievalUri: HOME, documents: newer },
+    )
+
+  test('allows a field that the bundle says stands unread, and only that', async () => {
+    const held = await versioned(() => undefined)
+    assert.ok(held.ok, held.why.join('; '))
+    assert.deepEqual(held.bundle.left, [{ at: '/components/responses/R/description', ref: 'mine', why: 'version' }])
+    // With nothing said of it, the field is a difference.
+    const silent = await versioned((b) => (b.left.length = 0))
+    assert.equal(silent.ok, false)
+    assert.ok(silent.why.some((line: string) => /description: "mine" \/ "theirs"$/.test(line)), silent.why.join('; '))
+    // And another field of the same response is one still.
+    const other = await versioned((b) => (b.tree.components.responses.S.headers = {}))
+    assert.equal(other.ok, false)
+  })
+
+  test('checks a bundle that was written elsewhere, as it is given', async () => {
+    const set = { entry: C(entry()), documents }
+    const b = bundle(entry(), { retrievalUri: HOME, documents })
+    const written = C({ tree: b.tree, embedded: b.embedded, left: b.left, dialects: b.dialects })
+    const changed = C(written)
+    changed.tree.components.schemas.Has.$ref = '#/components/schemas/Cat'
+    const seen: number[] = []
+    const results = await checkWritten(O, U, { retrievalUri: HOME, sets: [{ ...set, bundle: written }, { ...set, bundle: changed }] }, (n: number) => seen.push(n))
+    assert.deepEqual(results.map((r: any) => r.ok), [true, false])
+    assert.ok(0 < results[1].why.length)
+    assert.deepEqual(seen, [1, 2])
+  })
 })
 
 describe('bundleAll', () => {
@@ -511,6 +565,47 @@ describe('bundleAll', () => {
     assert.equal(JSON.stringify(bundle(entry(), { retrievalUri: HOME, documents })), JSON.stringify(b))
     // And it agrees with what `resolveAll` makes of the same documents.
     const held = await agree(O, U, entry(), { retrievalUri: HOME, load: (uri: string) => files[uri] })
+    assert.ok(held.ok, held.why.join('; '))
+  })
+
+  test('it loads what a schema names that only a mapping value names', async () => {
+    const more: Record<string, unknown> = {
+      [BASE + 'dog.yaml']: 'type: object\nproperties:\n  name: {$ref: "name.yaml"}\ndiscriminator:\n  propertyName: breed\n  mapping:\n    puppy: "sub/puppy.yaml#/Puppy"\n',
+      [BASE + 'sub/puppy.yaml']: { Puppy: { allOf: [{ $ref: '../dog.yaml' }, { $ref: 'toy.yaml' }] }, Unused: { $ref: 'never.yaml' } },
+      [BASE + 'sub/toy.yaml']: { type: 'string' },
+      [BASE + 'name.yaml']: { type: 'string' },
+      [BASE + 'never.yaml']: { never: 'asked for' },
+    }
+    const pets = () =>
+      description({
+        paths: {},
+        components: { schemas: { Pet: { type: 'object', discriminator: { propertyName: 'kind', mapping: { dog: 'dog.yaml', gone: 'gone.yaml' } } } } },
+      })
+    const asked: string[] = []
+    const b = await bundleAll(pets(), { retrievalUri: HOME, load: (uri: string) => (asked.push(uri), more[uri]) })
+    assert.deepEqual(asked, [BASE + 'dog.yaml', BASE + 'gone.yaml', BASE + 'name.yaml', BASE + 'sub/puppy.yaml', BASE + 'sub/toy.yaml'])
+    assert.deepEqual(C(b.tree.components.schemas), {
+      Pet: { type: 'object', discriminator: { propertyName: 'kind', mapping: { dog: '#/components/schemas/dog', gone: 'gone.yaml' } } },
+      dog: {
+        type: 'object',
+        properties: { name: { $ref: '#/components/schemas/name' } },
+        discriminator: { propertyName: 'breed', mapping: { puppy: '#/components/schemas/Puppy' } },
+      },
+      name: { type: 'string' },
+      Puppy: { allOf: [{ $ref: '#/components/schemas/dog' }, { $ref: '#/components/schemas/toy' }] },
+      toy: { type: 'string' },
+    })
+    assert.deepEqual(
+      b.embedded.map((e) => [e.at, e.doc, e.from]),
+      [
+        ['/components/schemas/dog', BASE + 'dog.yaml', ''],
+        ['/components/schemas/name', BASE + 'name.yaml', ''],
+        ['/components/schemas/Puppy', BASE + 'sub/puppy.yaml', '/Puppy'],
+        ['/components/schemas/toy', BASE + 'sub/toy.yaml', ''],
+      ],
+    )
+    assert.deepEqual(b.left, [])
+    const held = await agree(O, U, pets(), { retrievalUri: HOME, load: (uri: string) => more[uri] })
     assert.ok(held.ok, held.why.join('; '))
   })
 

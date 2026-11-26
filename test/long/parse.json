@@ -1,0 +1,226 @@
+{
+  "note": "Texts too long to write out, each built from parts, and what `parse` makes of each. A part of `text` is a string, or a map: `of` written `repeat` times with `join` between, where in `of` `{i}` is the count from 0, `{j}` the count from 1, and `{s}` as many spaces as the count from 0. `bytes` is the size of the text as UTF-8, to check a builder by. A case has the options of `parse`, and either `error`, the code the text is refused with, or `reads`: the path of a list or a map in the tree, and how many items or members it has.",
+  "cases": [
+    {
+      "note": "Anchors nested in flow, each holding every alias: 3,000 anchors around 3,000 aliases. The measure of what the aliases copy counts its own work, and gives up past its bound, so the text is refused for its aliases.",
+      "text": [
+        "base: &z x\nv: ",
+        { "repeat": 3000, "of": "&a{i} [" },
+        { "repeat": 3000, "of": "*z", "join": ", " },
+        { "repeat": 3000, "of": "]" },
+        "\n"
+      ],
+      "error": "openapi_alias_budget",
+      "bytes": 37903
+    },
+    {
+      "note": "Anchors by the thousand on one line, each on the scalar at its end.",
+      "text": ["k: ", { "repeat": 20000, "of": "&a " }, "x\nuse: *a\n"],
+      "error": "openapi_alias_budget",
+      "bytes": 60013
+    },
+    {
+      "note": "Block anchors nested by indentation, 600 deep: each anchor holds the rest of the text.",
+      "text": [
+        { "repeat": 600, "of": "{s}k{i}: &b{i}\n" },
+        { "repeat": 600, "of": " " },
+        "v: 1\nuse: *b0\n"
+      ],
+      "error": "openapi_alias_budget",
+      "bytes": 187294
+    },
+    {
+      "note": "Anchors that each hold an alias to themselves, nested 200 deep.",
+      "text": [{ "repeat": 200, "of": "{s}a{i}: &a{i}\n{s} r{i}: *a{i}\n" }],
+      "error": "openapi_alias_budget",
+      "bytes": 44360
+    },
+    {
+      "note": "Ten references to a list of ten, three levels deep: 44,451 bytes once every alias is copied, which is under the default budget of a megabyte.",
+      "text": [
+        "openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\nl1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\nl2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\nl3: &l3 [*l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2]\n"
+      ],
+      "reads": { "at": ["l3"], "length": 10 },
+      "bytes": 231
+    },
+    {
+      "note": "The same text under a budget of exactly what it comes to.",
+      "text": [
+        "openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\nl1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\nl2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\nl3: &l3 [*l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2]\n"
+      ],
+      "options": { "aliasBudget": 44451 },
+      "reads": { "at": ["l3"], "length": 10 },
+      "bytes": 231
+    },
+    {
+      "note": "And under a budget one byte short of it.",
+      "text": [
+        "openapi: 3.1.0\nl0: &l0 [x, x, x, x, x, x, x, x, x, x]\nl1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\nl2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\nl3: &l3 [*l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2, *l2]\n"
+      ],
+      "options": { "aliasBudget": 44450 },
+      "error": "openapi_alias_budget",
+      "bytes": 231
+    },
+    {
+      "note": "A long list copied eight times is more than a megabyte copied, and under ten times the text: the default budget is the larger of the two, so it is read.",
+      "text": [
+        "openapi: 3.1.0\nbase: &b [",
+        { "repeat": 50000, "of": "x, " },
+        "x]\n",
+        { "repeat": 8, "of": "u{i}: *b\n" }
+      ],
+      "reads": { "at": ["u7"], "length": 50001 },
+      "bytes": 150084
+    },
+    {
+      "note": "Two levels of aliases behind a comment that only the base reading has, under a budget they fit: read, and the last list has its ten.",
+      "text": [
+        "components: /*\n|\n  */\n  l0: &l0 [x, x, x, x, x, x, x, x, x, x]\n  l1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\n  l2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\n"
+      ],
+      "options": { "aliasBudget": 100000 },
+      "reads": { "at": ["components", "l2"], "length": 10 },
+      "bytes": 185
+    },
+    {
+      "note": "Two levels of aliases behind the same comment, a member deeper, under a budget they fit: read, and the last list has its ten.",
+      "text": [
+        "components:\n  a: /*\n|\n  */ 1\n  l0: &l0 [x, x, x, x, x, x, x, x, x, x]\n  l1: &l1 [*l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0, *l0]\n  l2: &l2 [*l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1, *l1]\n"
+      ],
+      "options": { "aliasBudget": 100000 },
+      "reads": { "at": ["components", "l2"], "length": 10 },
+      "bytes": 192
+    },
+    {
+      "note": "A text of very many small values is held to the work it takes: a limit of a megabyte or less gives a text 100,000 rule passes. 20,000 items in a flow list are read.",
+      "text": ["a: [", { "repeat": 20000, "of": "x," }, "x]\n"],
+      "options": { "maxBytes": 1000000 },
+      "reads": { "at": ["a"], "length": 20001 },
+      "bytes": 40007
+    },
+    {
+      "note": "30,000 items in a flow list are stopped.",
+      "text": ["a: [", { "repeat": 30000, "of": "x," }, "x]\n"],
+      "options": { "maxBytes": 1000000 },
+      "error": "openapi_work",
+      "bytes": 60007
+    },
+    {
+      "note": "30,000 items in a flow list are stopped, under the specification's reading too.",
+      "text": ["a: [", { "repeat": 30000, "of": "x," }, "x]\n"],
+      "options": { "maxBytes": 1000000, "reading": "spec" },
+      "error": "openapi_work",
+      "bytes": 60007
+    },
+    {
+      "note": "20,000 empty items of a block list are read.",
+      "text": ["l:\n", { "repeat": 20000, "of": "-\n" }],
+      "options": { "maxBytes": 1000000 },
+      "reads": { "at": ["l"], "length": 20000 },
+      "bytes": 40003
+    },
+    {
+      "note": "30,000 empty items of a block list are stopped.",
+      "text": ["l:\n", { "repeat": 30000, "of": "-\n" }],
+      "options": { "maxBytes": 1000000 },
+      "error": "openapi_work",
+      "bytes": 60003
+    },
+    {
+      "note": "30,000 empty items of a block list are stopped, under the specification's reading too.",
+      "text": ["l:\n", { "repeat": 30000, "of": "-\n" }],
+      "options": { "maxBytes": 1000000, "reading": "spec" },
+      "error": "openapi_work",
+      "bytes": 60003
+    },
+    {
+      "note": "8,000 small maps in a block list are read.",
+      "text": ["base:\n", { "repeat": 8000, "of": "  - {a: x}\n" }],
+      "options": { "maxBytes": 1000000 },
+      "reads": { "at": ["base"], "length": 8000 },
+      "bytes": 88006
+    },
+    {
+      "note": "12,000 small maps in a block list are stopped.",
+      "text": ["base:\n", { "repeat": 12000, "of": "  - {a: x}\n" }],
+      "options": { "maxBytes": 1000000 },
+      "error": "openapi_work",
+      "bytes": 132006
+    },
+    {
+      "note": "12,000 small maps in a block list are stopped, under the specification's reading too.",
+      "text": ["base:\n", { "repeat": 12000, "of": "  - {a: x}\n" }],
+      "options": { "maxBytes": 1000000, "reading": "spec" },
+      "error": "openapi_work",
+      "bytes": 132006
+    },
+    {
+      "note": "20,000 members of a block map are read.",
+      "text": [{ "repeat": 20000, "of": "k{i}: v\n" }],
+      "options": { "maxBytes": 1000000 },
+      "reads": { "at": [], "length": 20000 },
+      "bytes": 188890
+    },
+    {
+      "note": "30,000 members of a block map are stopped.",
+      "text": [{ "repeat": 30000, "of": "k{i}: v\n" }],
+      "options": { "maxBytes": 1000000 },
+      "error": "openapi_work",
+      "bytes": 288890
+    },
+    {
+      "note": "30,000 members of a block map are stopped, under the specification's reading too.",
+      "text": [{ "repeat": 30000, "of": "k{i}: v\n" }],
+      "options": { "maxBytes": 1000000, "reading": "spec" },
+      "error": "openapi_work",
+      "bytes": 288890
+    },
+    {
+      "note": "JSON text that the fast path reads takes none of the grammar's work: 30,000 items are read.",
+      "text": ["{\"openapi\":\"3.1.0\",\"a\":[", { "repeat": 30000, "of": "1," }, "1]}"],
+      "options": { "maxBytes": 1000000 },
+      "reads": { "at": ["a"], "length": 30001 },
+      "bytes": 60027
+    },
+    {
+      "note": "The same text is stopped where the grammar reads it: with the fast path off.",
+      "text": ["{\"openapi\":\"3.1.0\",\"a\":[", { "repeat": 30000, "of": "1," }, "1]}"],
+      "options": { "maxBytes": 1000000, "fast": false },
+      "error": "openapi_work",
+      "bytes": 60027
+    },
+    {
+      "note": "And 20,000 items are read there.",
+      "text": ["{\"openapi\":\"3.1.0\",\"a\":[", { "repeat": 20000, "of": "1," }, "1]}"],
+      "options": { "maxBytes": 1000000, "fast": false },
+      "reads": { "at": ["a"], "length": 20001 },
+      "bytes": 40027
+    },
+    {
+      "note": "A smaller limit gives the same 100,000 passes: 5,000 small maps are read under a limit of 200,000 bytes, and 17,272 are stopped.",
+      "text": ["base:\n", { "repeat": 5000, "of": "  - {a: x}\n" }],
+      "options": { "maxBytes": 200000 },
+      "reads": { "at": ["base"], "length": 5000 },
+      "bytes": 55006
+    },
+    {
+      "note": "17,272 small maps, under a limit of 200,000 bytes.",
+      "text": ["base:\n", { "repeat": 17272, "of": "  - {a: x}\n" }],
+      "options": { "maxBytes": 200000 },
+      "error": "openapi_work",
+      "bytes": 189998
+    },
+    {
+      "note": "A description of 600 kB, most of whose bytes are the words of its descriptions, takes a fraction of those passes, and is read under a limit of a mebibyte.",
+      "text": [
+        "openapi: 3.1.0\npaths:\n",
+        {
+          "repeat": 731,
+          "of": "  /pets/{i}:\n    get:\n      description: Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. \n      responses:\n        '200': {description: Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. Lists the pets of one owner, newest first, a page at a time. }\n"
+        }
+      ],
+      "options": { "maxBytes": 1048576 },
+      "reads": { "at": ["paths"], "length": 731 },
+      "bytes": 600794
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "note": "The rounds of loading are held to a count. Each of four documents names the next, so each takes a round to find, and the fourth is not asked for under a count of three.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "N": { "$ref": "n0.yaml#/N" } } }
+  },
+  "options": { "maxRounds": 3 },
+  "table": {
+    "https://example.com/api/n0.yaml": { "N": { "$ref": "n1.yaml#/N" } },
+    "https://example.com/api/n1.yaml": { "N": { "$ref": "n2.yaml#/N" } },
+    "https://example.com/api/n2.yaml": { "N": { "$ref": "n3.yaml#/N" } },
+    "https://example.com/api/n3.yaml": { "N": { "type": "string" } }
+  },
+  "asked": [
+    "https://example.com/api/n0.yaml",
+    "https://example.com/api/n1.yaml",
+    "https://example.com/api/n2.yaml"
+  ],
+  "error": { "code": "openapi_work", "at": "https://example.com/api/n3.yaml" },
+  "bundle": {
+    "asked": [
+      "https://example.com/api/n0.yaml",
+      "https://example.com/api/n1.yaml",
+      "https://example.com/api/n2.yaml"
+    ],
+    "error": { "code": "openapi_work", "at": "https://example.com/api/n3.yaml" }
+  }
+}

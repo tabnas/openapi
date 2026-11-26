@@ -1,0 +1,16 @@
+openapi: 3.1.0
+info:
+  title: Pets
+  version: "1"
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      discriminator:
+        propertyName: kind
+        mapping:
+          dog: dog.yaml
+          cat: Cat
+    Cat:
+      type: object

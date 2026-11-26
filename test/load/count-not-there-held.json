@@ -1,0 +1,31 @@
+{
+  "note": "And under a count of five the sixth of them is not asked for.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "S0": { "$ref": "gone0.yaml" },
+        "S1": { "$ref": "gone1.yaml" },
+        "S2": { "$ref": "gone2.yaml" },
+        "S3": { "$ref": "gone3.yaml" },
+        "S4": { "$ref": "gone4.yaml" },
+        "S5": { "$ref": "gone5.yaml" },
+        "S6": { "$ref": "gone6.yaml" },
+        "S7": { "$ref": "gone7.yaml" }
+      }
+    }
+  },
+  "options": { "maxDocuments": 5 },
+  "table": {},
+  "asked": [
+    "https://example.com/api/gone0.yaml",
+    "https://example.com/api/gone1.yaml",
+    "https://example.com/api/gone2.yaml",
+    "https://example.com/api/gone3.yaml",
+    "https://example.com/api/gone4.yaml"
+  ],
+  "error": { "code": "openapi_work", "at": "https://example.com/api/gone5.yaml" }
+}

@@ -1,0 +1,61 @@
+{
+  "source": "This repository: a member named with the character U+FFFF",
+  "note": "A member whose name is the one character U+FFFF, in the description and in a document that a mapping value names, is a member like any other.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/dog.yaml": "dog.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml" } }
+        },
+        "Odd": {
+          "￿": true,
+          "properties": {
+            "x": {
+              "type": "object",
+              "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    ["", "/components/schemas/Odd/properties/x", "", "/components/schemas/Pet", "resolved"],
+    [
+      "https://example.com/api/dog.yaml",
+      "/properties/n",
+      "https://example.com/api/openapi.yaml",
+      "/components/schemas/Odd",
+      "resolved"
+    ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "dog": "#/components/schemas/dog" } }
+          },
+          "Odd": { "￿": true, "properties": { "x": { "$ref": "#/components/schemas/Pet" } } },
+          "dog": { "￿": { "$ref": "x" }, "properties": { "n": { "$ref": "#/components/schemas/Odd" } } }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/dog", "https://example.com/api/dog.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

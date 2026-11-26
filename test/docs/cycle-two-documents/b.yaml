@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "b", "version": "1" },
+  "components": {
+    "schemas": {
+      "Node": {
+        "type": "object",
+        "properties": { "back": { "$ref": "openapi.yaml#/components/schemas/Node" } }
+      }
+    }
+  }
+}

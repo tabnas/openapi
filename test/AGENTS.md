@@ -7,7 +7,8 @@ mind.
 
 `resolve/` holds the resolver's fixtures: an input description, the
 resolved tree, the references left as written (`at why`), the cut edges,
-and `resolve` options, or `ERROR:<code>` for an error `resolve` raises.
+and `resolve` options, or `ERROR:<code>` for an error `resolve` raises,
+with the place the error names after the code where a row says it.
 Five columns are optional: `select`, a path whose value in the resolved
 tree is held to `expected` in place of the whole tree; `connections`,
 the connections report as one `kind at -> target` line per row (`!why`
@@ -37,10 +38,28 @@ values. `apidef-extra.tsv` is this repository's own: the shapes where
 apidef's reading of a reference parts from the specification's, each
 expected value being what apidef's own resolver gives. Before adding or
 changing a row of either, run `node tools/apidef-preset.cjs <apidef
-checkout> --ref 3b24341 --sets rows --rows <the file>`, which holds
+checkout> --ref 0f41ce1 --sets rows --rows <the file>`, which holds
 every row to that resolver. Under `cycles: 'keep'`, which the preset
 sets, the report arrays are in document order. They run in
 `ts/test/resolve-spec.test.ts`.
+
+`keep.tsv` holds what `cycles: 'keep'` gives where a row can say it: a
+kept cycle is a graph, which JSON cannot write, so each row there
+selects a part that is none. `pointer.tsv` holds `refs: 'pointer'` as
+an option by itself, each document read both ways. `bounds.tsv` holds
+the bounds on the work of resolving: a count of steps is each
+implementation's own, so a row holds only a bound far below any count,
+or one that no option sets. `documents.tsv` holds a description in
+several documents under the options that a case of `docs/` cannot
+have, the documents being in the `documents` member of `opts`.
+
+Four columns say one thing of the result each, and a file has one only
+if a row of it needs it: `version`, the version the description was
+read by; `dataSlots`, how many `$ref` maps were data; `order`, where
+`yes` holds the members of the expected value to the order the row
+writes them in, which the comparison of a row does not otherwise see;
+and `sites`, one `at kind:type "ref" -> target` line for each
+reference, which is what was made of it before anything was resolved.
 
 Two more columns are optional there: `operations`, one line for each
 operation of the view that the row's options ask for, and `ignored`,
@@ -69,9 +88,15 @@ the TypeScript package's `parse` gives yet: `parse-duplicates.tsv`, the
 `duplicates` option; `parse-reading.tsv`, what `reading: 'spec'` gives
 where it parts from the base reading; `parse-limits.tsv`, the alias
 budget and the size limit; `parse-mark.tsv`, a byte-order mark under
-`strict`; and `parse-probes.tsv`, the probes of the audit that are
-about reading a text, each under a `# Probe n.n.` comment with the
-audit's own input. A row there with no options pins a default that no
+`strict`; `parse-empty.tsv`, a text with no document in it, under
+either reading; `parse-fast.tsv`, JSON text with the fast path on and
+off, for what `spec/raw-fast.tsv` does not hold; and
+`parse-probes.tsv`, the probes of the audit that are about reading a
+text, each under a `# Probe n.n.` comment with the audit's own input.
+`parse-lossy.tsv` has a fourth column, `lossy`: the report of the
+numbers a tree does not hold exactly, one `at row:col text` line for
+each, with `-` for one the tree does not keep. The same runner holds
+the tree, and a second pass in that test file holds the report. A row there with no options pins a default that no
 row of `spec/` pins. They run in `ts/test/pending.test.ts`, under the
 same runner as `spec/`. "Where a new fixture goes", below, says why they
 are not in `spec/`, and when they move there.
@@ -81,6 +106,34 @@ are not in `spec/`, and when they move there.
 [`../docs/design/prototype/e8-spec-probes.result.md`](../docs/design/prototype/e8-spec-probes.result.md):
 every probe there has a row in one of the two files, and neither has a
 row for a probe the audit lacks.
+
+`long/` holds texts too long to write out as a row, each built from
+parts: `parse.json` for what `parse` makes of one, and `resolve.json`
+for what `resolve` makes of the description that `parse` reads from
+one. A case's `text` is a list of parts, a string or a map of `repeat`,
+`of` and an optional `join`: `of` written `repeat` times with `join`
+between, where in `of` `{i}` is the count from 0, `{j}` the count from
+1, and `{s}` as many spaces as the count from 0. `bytes` is the size of
+the built text as UTF-8, which holds a builder to the recipe. A case
+of `resolve.json` may have `documents`, the description's other
+documents by URI, each a text built from parts in the same way. A case
+says `error`, the code the text is refused with, or `reads`, a path
+into the tree and how many items or members are there. These are the
+shapes that `ts/test/hostile.test.ts` holds to a time, which no fixture
+can carry: the alias measure's worst texts, and texts of very many
+small values on each side of the bound on work. Keep a pair of cases
+well apart from a bound, since the count of rule passes that a text
+takes is the grammar's own. They run in `ts/test/long.test.ts`.
+
+`bytes/` holds what `parse` makes of a text given as bytes:
+`parse.tsv`, whose first column is the bytes in `hex`, two digits
+each, with `expected` and `opts` as a row of `spec/` has them. It runs
+in `ts/test/bytes-spec.test.ts`.
+
+`load/` holds descriptions whose documents are found by loading, a
+case a file, and `addresses.tsv`, the table of which addresses the
+HTTP loader takes for public. "Where a new fixture goes", below, has
+the format of a case. They run in `ts/test/load-spec.test.ts`.
 
 `petstore/` holds one OpenAPI 3.1 description twice: `petstore.yaml` as
 written, and `petstore.json`, the same document as JSON. Every runtime's
@@ -119,6 +172,9 @@ section 5 of
 | what `resolve` gives | `resolve/` | `ts/test/resolve-spec.test.ts` |
 | the object model | `model/` | `ts/test/model.test.ts` |
 | a description in several files | `docs/<case>/` | `ts/test/documents-spec.test.ts` |
+| a description whose documents are loaded, by `resolveAll` or `bundleAll` | `load/<case>.json` | `ts/test/load-spec.test.ts` |
+| a text too long to write out, by what `parse` or `resolve` makes of it | `long/parse.json`, `long/resolve.json` | `ts/test/long.test.ts` |
+| a text given as bytes | `bytes/parse.tsv` | `ts/test/bytes-spec.test.ts` |
 | what `readExpression`, `readTemplate` or `evaluateExpression` gives | `expression/` | `ts/test/expression-spec.test.ts` |
 | what `bundle` writes of several documents | `bundle/<case>.json` | `ts/test/bundle-spec.test.ts` |
 | a set of documents that a generator failed `bundle` on | `bundle-held/<what was wrong>.json` | `ts/test/bundle-spec.test.ts` |
@@ -130,9 +186,12 @@ was retrieved from, and says what `resolve` makes of them: the entry's
 resolved `tree`, the `unresolved` and `cuts` rows, and each site in
 `sites` as its document, where it is, its target's document, its
 target and its status, a document being `""` where it is the entry or
-the site's own. `source` says where the case comes from, and `options`,
-when present, is given to `resolve`. Every file of a folder must be one
-the case names. The first five are the examples of OpenAPI 3.2.0's
+the site's own. `source` says where the case comes from. `options`,
+when present, is given to `resolve` and to `bundle`, so it holds only
+what both take; `resolveOptions` is given to `resolve` alone, for the
+options that shape the resolved tree, which `bundle` does not read.
+`connections` and `urls`, when present, are those reports as `resolve`
+gives them. Every file of a folder must be one the case names. The first five are the examples of OpenAPI 3.2.0's
 Appendix F and Appendix G, written as the specification writes them.
 `bundle` is what `bundle` writes of the same documents, in the form
 that a case of `bundle/` has it.
@@ -156,6 +215,22 @@ review found has a case here under a name of its own: `occupied`,
 rest. `ts/test/bundle.test.ts` has what a case cannot carry: the sets
 of documents that three generators write, and the bundles that the
 check has to fail.
+
+A case of `load/` is one JSON file: a `note`, the `entry` document
+and its `retrievalUri`, the `options` of `resolveAll` if any, the
+documents `given` with the description if any, and `table`, which is
+what the loader has, each document by its URI. A string there is a
+document's text, `null` is a loader that answers `null`, and anything
+else is a document's tree; for a URI that is not there the loader
+answers nothing. `asked` is what the loader was asked for, in order,
+which is part of what a case pins: a loader is asked for one document
+at a time, and a text is read before the next is asked for. The case
+then says what `resolveAll` gives, in the members a case of `docs/`
+has, or the `error` it raises: its code, and the `at` and the `file`
+it names where the case has them. `bundle`, when present, is what
+`bundleAll` makes of the same description and loader: what it asked
+for, and an `error` or the bundle as a case of `bundle/` has it, which
+the runner holds to its documents as it holds every bundle.
 
 A file of `bundle-held/` is for one thing that was wrong: a `note`
 that says what, the `retrievalUri` of the entry, and `sets`. Each set

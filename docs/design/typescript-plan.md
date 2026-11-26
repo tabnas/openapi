@@ -832,6 +832,7 @@ Numbered from 16, after the earlier plan's fifteen.
 | 34 | The engine's rule history on this package's parser. Bounded at 3 it reads every YAML document of the corpus that is read at all to the same tree, in under half the memory, under a third for the largest, and three times the time (section 11) | bounded for a text past the present limit of 16 MiB, and the limit raised to what the bound then allows, measured as T2 measured the present one; unbounded below it, where nothing changes. That reads both Microsoft Graph descriptions, the last two the sweep refuses. The other courses are a bound for every text, or none. **Taken, 22 November 2026: bounded past 16 MiB, and the limit raised.** Built with the turn on work as well as on size, and the limit at 128 MiB (section 11) | T2b item 5 |
 | 35 | The rate of the bound on work. The grammar is given a step for each ten bytes of `maxBytes`, set when descriptions were thought to take one for each eight to eleven. Measured, they take one for each seven to nine, so a description meets the bound on its work at seven to nine tenths of the limit on its size (section 11) | ten, as it is: the limit is a guard, and a caller with a denser description raises `maxBytes`. The other course is seven, which makes the size limit the one a description meets, and gives every `maxBytes` a caller sets 43% more steps. **Taken, 24 November 2026: ten, as it is** | T6 |
 | 36 | What a description in several documents may cost with no option given. A description names its documents, so each limit on one text is met once for every document: a floor of 100,000 steps, and of 1,000,000 bytes that aliases copy out. Twenty documents of 50 kB of small values took four seconds to read, and a chain of 800 documents that each name the next took 2.6 seconds to find, the square of its length (section 11) | as built: the texts of a description's other documents are held together to the limits of one text, `parse.maxBytes` in size, its steps in work and one alias budget; `load` is asked for 10,000 documents at most, counting the ones it does not have; and the documents are found in 64 rounds at most, where the corpus's deepest description takes 7. The other courses are the limits of each document alone, which leave a set unbounded, or an index carried from round to round, which would lift the bound on rounds and is the larger work. **Taken, 24 November 2026: as built** | T4 |
+| 37 | What `bundle` does with a document of another version than the description's. The bundle is one document, read by one version, and the two versions read some things differently. The hand-off found it (section 11): on 26 November 2026 a set with such a document failed the check of a bundle wherever a reference had members beside it, or a schema used a member that the other version's object model does not read | as built: the members beside a reference are written to keep their meaning, or are listed in `left`; a place that the two object models read differently is not, and the reference says so. The other courses are to treat such a place as a `type` row treats a part that a reference typed, which is the larger work and is wanted before `bundle` is ported; or to refuse a set with a document of another version unless the caller allows it | porting |
 
 ## 7. Work in other repositories
 
@@ -902,6 +903,125 @@ holds, the ledger says what changed, and its documentation page says
 what the code does.
 
 ## 11. What each revision changed
+
+**Since acceptance**, as T6 was begun:
+
+- **T5 is on `main`, and T6 was begun on the maintainer's word.** T5
+  merged on 26 November 2026, as tabnas/openapi#13, and the maintainer
+  said to start T6 that day. Items 1, 2, 3 and 6 are built here. Items
+  4 and 5 are the release and apidef's merge after it, which wait on
+  admin and the maintainer.
+- **A mapping value types what it names** (item 6). The index reads
+  each value of a discriminator's `mapping`, and its `defaultMapping`
+  in 3.2, where the object model reads one. `locateMapping` is the one
+  reading of such a value: the name of a schema component of the
+  description where it is one, else a URI reference. What it lands on
+  is typed as a schema where nothing typed it, in the rounds that
+  references type in: by round, then by document order, a mapping
+  value after a reference at its own location. So a schema that only a
+  mapping value names is read, and the references in it are sites.
+  `connections` and `bundle` ask the same function, where each had a
+  reading of its own.
+- **What only mapping values name in another document is read after
+  the description.** The first build read such a place from its
+  discriminator, as a reference is read. Under `cycles: 'cut'` that
+  closed a cycle the resolved tree does not have: a child that builds
+  on its parent with `allOf`, as most that a mapping value names do,
+  was reached while the parent was being read. It was reported as a
+  cut, and the child's reference was left as written wherever a
+  reference came to the child afterwards. A mapping value is no
+  reference: what it names is not inside the schema that names it. So
+  where one lands in another document, the fold starts from a document
+  of one map, reads the description as a reference would, and then
+  each such landing. The bounds fall where they fell. The sites of what
+  only mapping values name therefore come last in the reports, under
+  either way with cycles.
+- **`bundle` is one writing on one index.** It had rounds of its own
+  for a schema that only a mapping value names, and they are gone.
+  Three sets of the generators then failed, in a little over 100,000:
+  where the bundle counts what lands on a part, a mapping value has to
+  be counted as giving a schema. The third generator also found a set
+  under `slots: 'all'` that `main` fails too, one in 30,000: an
+  operation of another document written in the place of the reference
+  of a Path Item. Both are repaired, and each set is in
+  `test/bundle-held/`.
+- **What moved in what `resolve` reports.** Both sweeps of the corpus
+  are as they were recorded, under each reading, and so is the run
+  over the descriptions in several documents: no description of the
+  corpus has a schema that only a mapping value names. On generated
+  sets of documents the reports move where one has: sites are found in
+  such a schema, a reference there that was read as data is a
+  schema's, and what follows from either, an identifier that is now
+  read or a place that a mapping value types before a reference does.
+  Under `refs: 'pointer'`, where a mapping value types nothing, no set
+  moves.
+- **The generators, under seeds they had not had.** After the repairs
+  the three are clean at 100,000 sets each way under seeds 7 and 8,
+  and again on the final build under seeds 13 and 14, with the first
+  generator's seeds 1 to 100,000: a million sets, none failing.
+- **The pages** (item 1). The tutorial has three more steps: a
+  description in two files, the two written as one, and what applies
+  to an operation. The reference has what a mapping value types, the
+  function that says which addresses are public, and the reasons of a
+  bundle's `left` rows. It said the size limit was 16 MiB by default,
+  which Decision 34 made the limit for a parser the caller gives: it
+  is 128 MiB. The prose gate is green at 655 alerts, none an error.
+- **The conformance statement** (item 2) is
+  [`docs/conformance.md`](../conformance.md). Its prose says what each
+  measurement is, and its figures are written by
+  `tools/corpus/statement.cjs` from the records the corpus tools keep,
+  so that no figure on the page is typed by hand. A test fails when
+  the page and the records part.
+- **The hand-off** (item 3). Three audits read every test of the
+  package and classed what each asserts: pinned by a fixture already,
+  expressible in a format that exists, expressible in one that does
+  not, or something only code can say. Then:
+  - 132 rows were added to `test/resolve/`, 63 to `test/pending/` and
+    4 to `test/model/`; 28 cases to `test/docs/` and 21 to
+    `test/bundle/`.
+  - Four formats are new, each with a runner: `test/load/`, a
+    description whose documents are found by loading, with what the
+    loader was asked for (23 cases, and a table of 54 addresses);
+    `test/long/`, texts built from a recipe, for the shapes that are
+    too long for a row (35 cases); `test/bytes/`, a text given as
+    bytes (21 rows); and a column of `test/pending/` for the `lossy`
+    report.
+  - The runner of `test/resolve/` reads four more columns, and the
+    place an error names. A case of `test/docs/` may give options to
+    `resolve` alone.
+  - The check of a bundle runs as a command on bundles that another
+    implementation wrote.
+  - [`porting-brief.md`](porting-brief.md) lists what a port is held
+    to, every option with its default now and when porting starts,
+    the figures a port shares, and what no fixture carries, each with
+    the test that pins it here. One default changes, `reading`, and
+    the brief names the eight shared rows and the thirteen rows of
+    `test/pending/` that change with it.
+- **What writing the fixtures found.**
+  - **A bundle of documents of more than one version did not keep its
+    meaning.** The members beside a reference follow the version of
+    the document the reference is in, and a bundle is read by one. The
+    case of `test/docs/` for that rule failed the check of its own
+    bundle. `bundle` now writes such a reference to mean what it
+    meant: a member that only the description's version would read is
+    left out, what is beside a schema's `$ref` is written as the
+    `allOf` its own version read it as, and a field that only its own
+    version reads stands, each said in `left` but the second, which
+    keeps its meaning. `main` fails the same sets.
+  - **The wider gap is open**, and is Decision 37: the two versions'
+    object models read some places differently, a schema's
+    `prefixItems` or `$defs` among them. Nothing in the bundle says
+    so, the check fails such a set, and no generator writes one. The
+    reference says what is not kept.
+  - **The default base shows.** A description that is given no
+    retrieval URI has a fixed `urn:uuid:` for one, and a relative
+    reference resolved against it is in the `uri` of a row. A port
+    shares the constant, and a row of `uris.tsv` holds it.
+  - **The object model reads a place by its member alone.** A list
+    where the model has a map of schemas has its items read as that
+    map's members would be. The dialect rows of `dialects.tsv` hold
+    only the shapes the model's own test speaks of, and leave that
+    one unpinned.
 
 **Since acceptance**, as T5 was begun:
 
