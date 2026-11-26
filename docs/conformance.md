@@ -2,10 +2,12 @@
 
 What `@tabnas/openapi` has been measured against, and what the
 measurements say. It is the TypeScript package that is measured. The
-figures below are written by `node tools/corpus/statement.cjs --write`
-from the records in [`test/corpus/`](../test/corpus/), and
-`ts/test/conformance.test.ts` fails when this page and those records
-part.
+figures under [The figures](#the-figures) are written by
+`node tools/corpus/statement.cjs --write` from the records in
+[`test/corpus/`](../test/corpus/), and `ts/test/conformance.test.ts`
+fails when this page and those records part. Three measurements keep
+no record, and the [last section](#what-is-measured-with-no-record)
+has them, each with its date.
 
 ## What is claimed
 
@@ -31,7 +33,8 @@ part.
    [`test/long/`](../test/long/) and by the bounds that each function
    states, and has no figure here.
 5. **`compat: 'apidef'` gives what the resolver of `@voxgig/apidef`
-   gives**, on every document compared.
+   gives**, on every document compared. That comparison keeps no
+   record here, and is in the last section.
 
 The base reading is not measured against a YAML parser. It reads more
 than YAML on purpose: `yes`, `no`, `on` and `off` as Booleans, `//` and
@@ -237,3 +240,39 @@ the corpus, which is fetched and not committed.
 A figure moves only on purpose. A sweep that finds a difference fails,
 and `--write` accepts a change that was meant, which changes the
 records in a commit that says why.
+
+## What is measured with no record
+
+Three measurements keep no record in this repository. Two need a
+checkout of `@voxgig/apidef`, and the third runs for longer than a
+suite may. Their figures are typed here by hand, from what each run
+printed, and nothing holds them to this page, so each is given with
+its date. All three were last run on 26 November 2026, with the
+packages named above.
+
+- **The preset comparison** is behind claim 5.
+  `node tools/apidef-preset.cjs` runs `resolve` under
+  `compat: 'apidef'` and the resolver inside `@voxgig/apidef`, as
+  apidef built it at its commit `0f41ce1`, on one raw tree for each
+  document. It compares the two results as graphs: the members, their
+  order, the values, and which objects are shared. It compared 15,193
+  documents and found no difference: 167 shapes written by hand, 6,000
+  documents from a seeded generator, 8,973 documents of the corpus,
+  and the 53 rows of the two fixtures that hold apidef's reading of a
+  reference. The 13 documents that the base reading refuses reach
+  neither resolver.
+- **The apidef gate.** `node tools/apidef-gate.cjs` runs apidef's own
+  TypeScript suite on this build, at apidef's commit `3186c51`, where
+  apidef reads a description through this package. Of 2,735 tests,
+  2,734 pass and one is skipped, as it is at `46c33ab`, the commit of
+  apidef's `main` that has its own parsing still. The gate also
+  compares what the two commits make of 120 descriptions, and all 120
+  results are the same, byte for byte.
+- **The generated sets** are behind claim 3, beside the corpus. Three
+  generators write sets of documents in shapes the corpus has few of:
+  a pointer that is read on through a reference, two schemas with one
+  identifier, a reference that lands on plain JSON. Each set is
+  resolved and written as one document, and the bundle is held to
+  resolving to what its documents resolve to. The suite holds 2,300
+  sets on every run. Run for longer, under seeds they had not had, the
+  generators wrote 500,000 sets, and no bundle failed.

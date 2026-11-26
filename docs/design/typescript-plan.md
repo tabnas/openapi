@@ -971,8 +971,11 @@ what the code does.
   moves.
 - **The generators, under seeds they had not had.** After the repairs
   the three are clean at 100,000 sets each way under seeds 7 and 8,
-  and again on the final build under seeds 13 and 14, with the first
-  generator's seeds 1 to 100,000: a million sets, none failing.
+  and again under seeds 13 and 14 once the rule for a document of
+  another version was built, with the first generator's seeds 1 to
+  100,000: a million sets, none failing. After the reviews below, the
+  build that T6 ends on was run under seeds 17 and 18, with the first
+  generator's seeds 150,001 to 200,000: 500,000 more, none failing.
 - **The pages** (item 1). The tutorial has three more steps: a
   description in two files, the two written as one, and what applies
   to an operation. The reference has what a mapping value types, the
@@ -1088,6 +1091,12 @@ what the code does.
   leaves as written. The rule now holds only where the reference
   comes to a map in the end. `version-boolean.json` and
   `version-unresolved.json` of `test/bundle/` hold it.
+- **The corpus has no set of mixed versions.** Measured once for
+  Decision 37, with a script that is not kept: of the 925 descriptions
+  that the documents run resolves from their own files, 589 are in
+  several documents, 5,078 documents in all, and none of those
+  declares another version than its description's. 1,409 declare 2.0
+  under a description of 2.0, and the other 3,669 declare none.
 
 **Since acceptance**, as T5 was begun:
 

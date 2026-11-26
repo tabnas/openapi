@@ -1033,8 +1033,9 @@ operation written in the place of a Path Item's reference
 not been run, and say which. With the repairs, the three are clean at
 100,000 sets each way under those seeds: 500,000 sets. Before a review
 of the change, the build was run again under seeds 13 and 14, with the
-first generator's seeds 50,001 to 100,000: 500,000 more, and none
-failing.
+first generator's seeds 50,001 to 100,000, and after the review's
+repairs under seeds 17 and 18, with seeds 150,001 to 200,000: 500,000
+more each time, and none failing.
 
 A bundle does not keep everything, and
 [the reference](ts/doc/reference.md) lists what it does not: the
