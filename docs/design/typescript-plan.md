@@ -1121,6 +1121,45 @@ what the code does.
   passes there against 259e4c3 with the same figures: 2,734 of 2,735
   tests, one skipped as on apidef's `main`, and 120 of 120 definitions
   byte-identical. apidef's parse stage did not change.
+- **The package was tried as it would be installed**, on 27 November
+  2026, when the maintainer asked whether it was time to publish.
+  `npm pack` on `main` gives 77 files, 297 kB: `dist`, `src`, the
+  licence, the README and the manifest. Installed from that file into
+  an empty project, npm took the five peers from the registry, a check
+  of every entry point passed, and the declarations compiled for a
+  strict TypeScript consumer. Installed into apidef's branch in place
+  of the link, after `npm ci`, npm put `@tabnas/expr` 0.6.4 at the top
+  and left aontu's pinned copies under `aontu`, with no conflict, and
+  apidef's own `npm test` passed. So item 5 does not wait on aontu's
+  pins, as section 4 feared.
+- **apidef's branch names its reading**, from that day: the parse stage
+  passes `reading: 'base'`, so that the change of default that porting
+  brings (Decision 21) cannot move what apidef reads. With
+  `reading: 'spec'` in its place every test of apidef's suite passed,
+  2,854 of them: nothing there told the readings apart. A test now
+  does, on `yes` and `1_000`, which apidef's other implementation reads
+  the same way. apidef's `main` moved four more times that day, to
+  c9ff187, past 8.36.0. Each move was merged, and the gate passes at
+  apidef 61f7cda against c9ff187: 2,854 of 2,855 tests, one skipped as
+  on apidef's `main`, and 122 of 122 definitions byte-identical.
+- **Item 4's restamp is prepared**, on 27 November 2026, as a pull
+  request here and one in admin. The five stamped workflows name the
+  template this repository was made from. Their texts for this
+  repository are admin's templates now, and here they are staged in
+  `ci/workflows/`, with the two workflows of the C library, for a
+  maintainer to promote: the session's token could not write
+  `.github/workflows/`. The C library is stamped again, from a row
+  of admin's table whose construct calls this package's `Parse`: its
+  contract tests pass, admin's probe of the C ABI passes, and it adds
+  no dependency. The descriptor is generated, where it was the
+  template's. Admin's generator reads a package's error codes from the
+  `error` option, so the four shared codes are written out there, in
+  TypeScript and in Go, and the four that are TypeScript's alone are
+  declared apart: an instance holds the same eight messages and hints
+  as before, byte for byte. What is left of item 4 is the
+  maintainer's: promoting the staged workflows, the first publish by
+  hand, the trusted publisher, and the choice of what a dispatch
+  releases, which its `go` input makes.
 
 **Since acceptance**, as T5 was begun:
 

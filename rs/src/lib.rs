@@ -94,7 +94,7 @@ const DUPLICATE_KEY: &str = "openapi_duplicate_key";
 /// The error codes the plugin raises, with their messages. A placeholder
 /// in braces is filled from the error's details. Member names in a
 /// message are document content, so they arrive JSON-quoted and cut short
-/// (see [`quoted`]). The texts are `ERRORS` in `ts/src/openapi.ts`.
+/// (see [`quoted`]). The texts are the `error` option in `ts/src/openapi.ts`.
 const ERRORS: [(&str, &str); 4] = [
     (
         ROOT,
@@ -114,7 +114,7 @@ const ERRORS: [(&str, &str); 4] = [
     ),
 ];
 
-/// The hints for [`ERRORS`], as `HINTS` in `ts/src/openapi.ts`.
+/// The hints for [`ERRORS`], as the `hint` option in `ts/src/openapi.ts`.
 const HINTS: [(&str, &str); 4] = [
     (
         ROOT,
