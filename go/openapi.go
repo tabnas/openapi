@@ -42,30 +42,6 @@ const VERSION = "0.1.0"
 // needs none, and the resolver's options will belong to the resolver.
 var Defaults = map[string]any{}
 
-// errorMessages are the error codes the plugin raises, with their
-// messages, and errorHints their hints. A placeholder in braces is filled
-// from the error's details. Member names in a message are document
-// content, so they arrive JSON-quoted and cut short (see quoted). Mirrors
-// ERRORS and HINTS in ts/src/openapi.ts, text for text.
-var (
-	errorMessages = map[string]string{
-		"openapi_root":          "the document is {kind} at its root, where an OpenAPI description is a map",
-		"openapi_stream":        "the text holds more than one YAML document, where a description is one",
-		"openapi_version":       "the root names no OpenAPI or Swagger version this package reads ({found})",
-		"openapi_duplicate_key": "the member name {key} appears twice in one map",
-	}
-
-	errorHints = map[string]string{
-		"openapi_root": "Put the members of the description, such as openapi, info and paths, " +
-			"at the top level of the document.",
-		"openapi_stream": "Split the stream at each --- line and parse each document on its own.",
-		"openapi_version": "Set openapi to a 3.0, 3.1 or 3.2 version string, such as \"3.1.0\", " +
-			"or swagger to \"2.0\".",
-		"openapi_duplicate_key": "Remove or rename one of the two members. JSON readers disagree on " +
-			"which of them to keep.",
-	}
-)
-
 // installedKey marks an instance the plugin is installed on, so that a
 // second install changes nothing.
 const installedKey = "openapi-installed"
@@ -100,10 +76,30 @@ func OpenApi(j *tabnas.Tabnas, _ map[string]any) error {
 	}
 	j.Decorate(installedKey, true)
 	j.SetOptions(tabnas.Options{
-		// Copies: the engine keeps the maps it is given, and a later
-		// option merge must not reach these tables.
-		Error: copyStrings(errorMessages),
-		Hint:  copyStrings(errorHints),
+		// The error codes the plugin raises, with their messages, and
+		// their hints below. A placeholder in braces is filled from the
+		// error's details. Member names in a message are document content,
+		// so they arrive JSON-quoted and cut short (see quoted). Mirrors
+		// the `error` and `hint` options in ts/src/openapi.ts, text for
+		// text. They are written out here, in the options, where the
+		// generator of the package's descriptor reads them, and each
+		// install makes maps of its own: the engine keeps the maps it is
+		// given, and a later option merge must not reach another instance.
+		Error: map[string]string{
+			"openapi_root":          "the document is {kind} at its root, where an OpenAPI description is a map",
+			"openapi_stream":        "the text holds more than one YAML document, where a description is one",
+			"openapi_version":       "the root names no OpenAPI or Swagger version this package reads ({found})",
+			"openapi_duplicate_key": "the member name {key} appears twice in one map",
+		},
+		Hint: map[string]string{
+			"openapi_root": "Put the members of the description, such as openapi, info and paths, " +
+				"at the top level of the document.",
+			"openapi_stream": "Split the stream at each --- line and parse each document on its own.",
+			"openapi_version": "Set openapi to a 3.0, 3.1 or 3.2 version string, such as \"3.1.0\", " +
+				"or swagger to \"2.0\".",
+			"openapi_duplicate_key": "Remove or rename one of the two members. JSON readers disagree on " +
+				"which of them to keep.",
+		},
 		Map: &tabnas.MapOptions{
 			// The last value of a repeated name wins, whole: the base
 			// grammars would otherwise merge two maps given under one name.
@@ -112,14 +108,6 @@ func OpenApi(j *tabnas.Tabnas, _ map[string]any) error {
 	})
 	j.SubRuleDone(check)
 	return nil
-}
-
-func copyStrings(in map[string]string) map[string]string {
-	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }
 
 // check makes the checks, on each rule pass. They run only in a parse

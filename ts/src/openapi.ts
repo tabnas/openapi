@@ -36,18 +36,12 @@ import { aliasedBytes, aliasedSize, defaultAliasBudget, weigh } from './yaml-ali
 // options belong to `resolve`, since `use()` deep-copies what it is given.
 type OpenApiOptions = Record<string, never>
 
-// The error codes the plugin raises, with their messages and hints. A
-// placeholder in braces is filled from the error's details. Member names
-// in a message are document content, so they arrive JSON-quoted and cut
-// short (see `quoted`).
-const ERRORS: Record<string, string> = {
-  openapi_root:
-    'the document is {kind} at its root, where an OpenAPI description is a map',
-  openapi_stream:
-    'the text holds more than one YAML document, where a description is one',
-  openapi_version:
-    'the root names no OpenAPI or Swagger version this package reads ({found})',
-  openapi_duplicate_key: 'the member name {key} appears twice in one map',
+// The error codes this implementation raises and the package's others do
+// not yet, with their messages and hints: those of `aliasBudget`,
+// `maxBytes` and bytes as input. They are kept apart from the four in the
+// plugin's options below, which every implementation raises. A code moves
+// there once the others raise it.
+const OWN_ERRORS: Record<string, string> = {
   openapi_alias_budget:
     'the YAML aliases of the text would copy it out to about {size} bytes, ' +
     'past the budget of {budget}',
@@ -59,18 +53,7 @@ const ERRORS: Record<string, string> = {
   openapi_encoding: 'the bytes are not well-formed {encoding}',
 }
 
-const HINTS: Record<string, string> = {
-  openapi_root:
-    'Put the members of the description, such as openapi, info and paths, ' +
-    'at the top level of the document.',
-  openapi_stream:
-    'Split the stream at each --- line and parse each document on its own.',
-  openapi_version:
-    'Set openapi to a 3.0, 3.1 or 3.2 version string, such as "3.1.0", ' +
-    'or swagger to "2.0".',
-  openapi_duplicate_key:
-    'Remove or rename one of the two members. JSON readers disagree on ' +
-    'which of them to keep.',
+const OWN_HINTS: Record<string, string> = {
   openapi_alias_budget:
     'An alias is read as a copy of the node its anchor labels, so aliases ' +
     'inside anchored nodes multiply. Write the repeated part out where ' +
@@ -143,8 +126,41 @@ const OpenApi: Plugin = function OpenApi(tn: Tabnas, _options: OpenApiOptions) {
   }
   INSTALLED.add(tn)
   tn.options({
-    error: ERRORS,
-    hint: HINTS,
+    // The error codes the plugin raises, with their messages and hints. A
+    // placeholder in braces is filled from the error's details. Member
+    // names in a message are document content, so they arrive JSON-quoted
+    // and cut short (see `quoted`). The four written out here are the ones
+    // every implementation of this package raises, and the package's
+    // descriptor lists them: its generator reads this table where it
+    // stands, as `error`, in these options.
+    error: {
+      openapi_root:
+        'the document is {kind} at its root, where an OpenAPI description ' +
+        'is a map',
+      openapi_stream:
+        'the text holds more than one YAML document, where a description ' +
+        'is one',
+      openapi_version:
+        'the root names no OpenAPI or Swagger version this package reads ' +
+        '({found})',
+      openapi_duplicate_key: 'the member name {key} appears twice in one map',
+      ...OWN_ERRORS,
+    },
+    hint: {
+      openapi_root:
+        'Put the members of the description, such as openapi, info and ' +
+        'paths, at the top level of the document.',
+      openapi_stream:
+        'Split the stream at each --- line and parse each document on its ' +
+        'own.',
+      openapi_version:
+        'Set openapi to a 3.0, 3.1 or 3.2 version string, such as "3.1.0", ' +
+        'or swagger to "2.0".',
+      openapi_duplicate_key:
+        'Remove or rename one of the two members. JSON readers disagree on ' +
+        'which of them to keep.',
+      ...OWN_HINTS,
+    },
     map: {
       // The last value of a repeated name wins, whole: the base grammars
       // would otherwise merge two maps given under one name. A parse that
