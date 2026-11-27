@@ -1,0 +1,109 @@
+{
+  "source": "This repository: a chain of mapping values through three documents",
+  "note": "Each of three documents is named only by a mapping value of the one before. The last two name each other by reference, which is a cycle, cut once.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": {
+    "https://example.com/api/a.yaml": "a.yaml",
+    "https://example.com/api/b.yaml": "b.yaml",
+    "https://example.com/api/c.yaml": "c.yaml"
+  },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "a": "a.yaml" } }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [
+    {
+      "at": "/properties/b",
+      "ref": "b.yaml",
+      "target": "",
+      "doc": "https://example.com/api/c.yaml",
+      "targetDoc": "https://example.com/api/b.yaml"
+    }
+  ],
+  "sites": [
+    ["https://example.com/api/b.yaml", "/allOf/0", "https://example.com/api/a.yaml", "", "resolved"],
+    [
+      "https://example.com/api/b.yaml",
+      "/properties/c",
+      "https://example.com/api/c.yaml",
+      "",
+      "resolved"
+    ],
+    ["https://example.com/api/c.yaml", "/properties/b", "https://example.com/api/b.yaml", "", "cut"]
+  ],
+  "connections": [
+    {
+      "kind": "mapping",
+      "at": "/components/schemas/Pet/discriminator/mapping/a",
+      "name": "a.yaml",
+      "found": true,
+      "target": "",
+      "targetDoc": "https://example.com/api/a.yaml",
+      "via": "uri"
+    },
+    {
+      "kind": "mapping",
+      "at": "/discriminator/mapping/b",
+      "name": "b.yaml",
+      "found": true,
+      "target": "",
+      "doc": "https://example.com/api/a.yaml",
+      "targetDoc": "https://example.com/api/b.yaml",
+      "via": "uri"
+    },
+    {
+      "kind": "mapping",
+      "at": "/discriminator/mapping/c",
+      "name": "c.yaml",
+      "found": true,
+      "target": "",
+      "doc": "https://example.com/api/b.yaml",
+      "targetDoc": "https://example.com/api/c.yaml",
+      "via": "uri"
+    }
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "a": "#/components/schemas/a" } }
+          },
+          "a": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "b": "#/components/schemas/b" } }
+          },
+          "b": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "c": "#/components/schemas/c" } },
+            "allOf": [{ "$ref": "#/components/schemas/a" }],
+            "properties": { "c": { "$ref": "#/components/schemas/c" } }
+          },
+          "c": { "properties": { "b": { "$ref": "#/components/schemas/b" } } }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/a", "https://example.com/api/a.yaml", "", "component"],
+      ["/components/schemas/b", "https://example.com/api/b.yaml", "", "component"],
+      ["/components/schemas/c", "https://example.com/api/c.yaml", "", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

@@ -109,7 +109,8 @@ So `resolve` takes the other documents as a table, indexes all of them
 with the description, and only then follows references. A document
 that declares a version is a description in its own right, read by
 that version. Any other is read by what refers to it: a file that
-holds one schema is a schema because a schema refers to it.
+holds one schema is a schema because a schema refers to it, or because
+a discriminator's mapping names it.
 
 Reading a document from a disk or a network is a different matter from
 resolving, and a riskier one, since the description says which
@@ -213,6 +214,13 @@ names its tags, and a Discriminator maps payload values to schemas. None
 of these is replaced by what it names: the specification reads each in
 its own way, and a tool that put the target in its place would change
 what the document says.
+
+One of them still says what its target is. A Discriminator's mapping
+names schemas, so a file that only a mapping names is read as a schema,
+and the references in it are followed. Nothing is put where the mapping
+is, which matters for cycles. A child schema usually builds on its
+parent with `allOf` while the parent's mapping names the child, and
+that is no cycle, since the parent does not hold the child.
 
 So `resolve` reports them, in `connections`, and leaves the tree alone.
 Each row says what the name reaches, if anything, which makes the checks

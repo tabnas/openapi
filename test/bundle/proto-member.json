@@ -1,0 +1,27 @@
+{
+  "note": "A member named `__proto__` is a member like any other: a property of that name holds a reference, and the target has one too.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "A": { "properties": { "__proto__": { "$ref": "a.json" } } } } }
+  },
+  "documents": { "a.json": { "properties": { "__proto__": { "type": "string" } } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": { "properties": { "__proto__": { "$ref": "#/components/schemas/a" } } },
+          "a": { "properties": { "__proto__": { "type": "string" } } }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/a", "https://example.com/api/a.json", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

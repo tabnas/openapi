@@ -1,0 +1,114 @@
+{
+  "source": "This repository: the `defaultMapping` of a 3.2 discriminator, and mapping values with nothing to read",
+  "note": "The default of a 3.2 discriminator is a mapping value too, and what it names is read first. A mapping value that names a string, and one that names nothing, have nothing to read.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": {
+    "https://example.com/api/dog.yaml": "dog.yaml",
+    "https://example.com/api/other.yaml": "other.yaml"
+  },
+  "tree": {
+    "openapi": "3.2.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": {
+            "propertyName": "kind",
+            "defaultMapping": "other.yaml",
+            "mapping": { "s": "dog.yaml#/type", "n": "dog.yaml#/none", "d": "dog.yaml" }
+          }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    [
+      "https://example.com/api/other.yaml",
+      "/properties/n",
+      "https://example.com/api/dog.yaml",
+      "",
+      "resolved"
+    ],
+    ["https://example.com/api/dog.yaml", "/properties/n", "", "/properties/m", "resolved"]
+  ],
+  "connections": [
+    {
+      "kind": "defaultMapping",
+      "at": "/components/schemas/Pet/discriminator/defaultMapping",
+      "name": "other.yaml",
+      "found": true,
+      "target": "",
+      "targetDoc": "https://example.com/api/other.yaml",
+      "via": "uri"
+    },
+    {
+      "kind": "mapping",
+      "at": "/components/schemas/Pet/discriminator/mapping/s",
+      "name": "dog.yaml#/type",
+      "found": true,
+      "target": "/type",
+      "targetDoc": "https://example.com/api/dog.yaml",
+      "via": "uri"
+    },
+    {
+      "kind": "mapping",
+      "at": "/components/schemas/Pet/discriminator/mapping/n",
+      "name": "dog.yaml#/none",
+      "found": false,
+      "target": "/none",
+      "targetDoc": "https://example.com/api/dog.yaml",
+      "via": "uri",
+      "why": "not-found"
+    },
+    {
+      "kind": "mapping",
+      "at": "/components/schemas/Pet/discriminator/mapping/d",
+      "name": "dog.yaml",
+      "found": true,
+      "target": "",
+      "targetDoc": "https://example.com/api/dog.yaml",
+      "via": "uri"
+    }
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.2.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": {
+              "propertyName": "kind",
+              "defaultMapping": "#/components/schemas/other",
+              "mapping": {
+                "s": "#/components/schemas/type",
+                "n": "dog.yaml#/none",
+                "d": "#/components/schemas/dog"
+              }
+            }
+          },
+          "other": { "properties": { "n": { "$ref": "#/components/schemas/dog" } } },
+          "type": "object",
+          "dog": {
+            "type": "object",
+            "properties": { "n": { "$ref": "#/components/schemas/dog/properties/m" }, "m": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/other", "https://example.com/api/other.yaml", "", "component"],
+      ["/components/schemas/type", "https://example.com/api/dog.yaml", "/type", "component"],
+      ["/components/schemas/dog", "https://example.com/api/dog.yaml", "", "component"]
+    ],
+    "left": [["/components/schemas/Pet/discriminator/mapping/n", "dog.yaml#/none", "not-found"]],
+    "dialects": []
+  }
+}

@@ -87,3 +87,12 @@ version	path	state
 3.1	/components/schemas/B C	"schema"
 3.2	/components/schemas/B C	"schema"
 2.0	/definitions/B C	"schema"
+#
+# A list is stepped by an index: a whole number with no leading zero, as a
+# number or as its digits. Anything else in a list is data.
+3.1	/paths/~1p/get/parameters/01	"data"
+3.1	/paths/~1p/get/parameters/x	"data"
+# A slot that may hold a reference steps as the object it holds.
+3.1	/paths/~1p/get/responses/200/content	"content"
+# A version this package has no model for is refused.
+4.0	/info	ERROR

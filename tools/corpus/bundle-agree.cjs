@@ -38,6 +38,12 @@
 //     (`outside`), is left in the bundle, and named something.
 //   - A part that a `left` row says may be read as another type than
 //     the documents read it as, or as data (`type`), is not compared.
+//   - A field beside a reference that a `left` row says stands unread
+//     (`version`) is taken out of the documents, where it was written,
+//     and they are resolved again: a document of a later version read
+//     it in the place of its target's own, and the bundle resolves to
+//     the target's own. The trees are then compared with nothing
+//     allowed for it, at the reference or at what it names.
 //
 // Beside the trees:
 //
@@ -51,17 +57,25 @@
 //     says the bundle has no place for what it names. One that was not
 //     found is not found.
 //
-// One thing is read here as the bundle reads it, and not as resolving
-// does. A schema that only a mapping value names is data to the index,
-// which types a place by the references that land on it. A bundle
-// brings such a schema in as a schema, so it tells the index of each,
-// and the documents are resolved here with the same said: with a
-// reference to each among the description's schemas.
-//
 // The suite runs this on every case of test/bundle/ and test/docs/, on
 // every set of test/bundle-held/ and on generated sets of documents,
 // and tools/corpus/documents.cjs on the corpus's descriptions in
 // several documents.
+//
+// Run as a command, it checks bundles that were written elsewhere: by
+// an implementation of this package in another language, which cannot
+// be handed to `agree`.
+//
+//   node tools/corpus/bundle-agree.cjs <file.json>...
+//
+// Each file is JSON in the form of a file of test/bundle-held/: the
+// `retrievalUri` of the entry, and `sets`, each an `entry`, its
+// `documents` and its `options` if any. Each set also has `bundle`,
+// what was written of it: its `tree`, and its `embedded`, `left` and
+// `dialects` rows as `bundle` gives them here. The documents are
+// resolved by this checkout's build, and so is each bundle. It ends
+// with 0 when every bundle agrees with its documents, with 1 when one
+// does not, and with 2 when it could not run.
 
 const isObj = (v) => null != v && 'object' === typeof v
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k)
@@ -108,42 +122,6 @@ const LOCATORS = new Set(['mapping', 'defaultMapping', 'operationRef'])
 // The members whose text a bundle may write again, beside the values of
 // a `mapping` and the members that hold a URL.
 const WRITTEN = new Set(['$ref', '$id', 'id', '$dynamicRef', '$recursiveRef', 'operationRef', 'defaultMapping'])
-
-// Where a bundle says which schemas it told the index of.
-const TOLD = Symbol.for('@tabnas/openapi/bundle/told')
-
-// The members that stand for those schemas among the description's.
-const SAID = '/components/schemas/\u0000'
-
-const plain = (v) => isObj(v) && !Array.isArray(v)
-
-// A description with a reference to each schema a bundle told the index
-// of, as the bundle gave it to the index.
-function withTold(raw, told) {
-  if (0 === told.length || !plain(raw)) return raw
-  const components = plain(raw.components) ? raw.components : {}
-  const schemas = plain(components.schemas) ? components.schemas : {}
-  const extra = {}
-  told.forEach((uri, i) => (extra['\u0000' + i] = { $ref: uri }))
-  return { ...raw, components: { ...components, schemas: { ...schemas, ...extra } } }
-}
-
-// What resolving gave, without what those references added to it.
-function withoutTold(raw, told, result) {
-  if (0 === told.length || !plain(raw)) return result
-  const components = result.tree.components
-  const schemas = components.schemas
-  told.forEach((_, i) => delete schemas['\u0000' + i])
-  if (!plain(raw.components) || !plain(raw.components.schemas)) delete components.schemas
-  if (!plain(raw.components)) delete result.tree.components
-  const mine = (row) => !row.at.startsWith(SAID)
-  return {
-    ...result,
-    unresolved: result.unresolved.filter(mine),
-    provenance: result.provenance.filter(mine),
-    connections: result.connections.filter(mine),
-  }
-}
 
 // A place as one text: its document, and the steps to it.
 const spot = (doc, parts) => (0 === parts.length ? doc : doc + '#' + JSON.stringify(parts))
@@ -322,6 +300,26 @@ function same(a, b, path, allow, seen, why) {
   return true
 }
 
+// A tree with one member less at a place. The maps and lists on the way
+// to it are copied, and nothing else is, so the tree given is not
+// changed. A place that is not there takes nothing out.
+function without(tree, parts, field) {
+  const copied = (node) =>
+    Array.isArray(node) ? node.slice() : Object.defineProperties(Object.create(Object.getPrototypeOf(node)), Object.getOwnPropertyDescriptors(node))
+  if (!isObj(tree)) return tree
+  const root = copied(tree)
+  let node = root
+  for (const seg of parts) {
+    if (!own(node, seg) || !isObj(node[seg])) return tree
+    const next = copied(node[seg])
+    Object.defineProperty(node, seg, { value: next, enumerable: true, writable: true, configurable: true })
+    node = next
+  }
+  if (Array.isArray(node) || !own(node, field)) return tree
+  delete node[field]
+  return root
+}
+
 // Resolve, bundle, resolve the bundle, and compare. `options` are those
 // of `bundle`, or with `load` those of `bundleAll`.
 async function agree(O, U, raw, options) {
@@ -342,13 +340,9 @@ async function agree(O, U, raw, options) {
           maxRounds,
         }
   const bundle = loading ? await O.bundleAll(raw, { ...rest, ...loading }) : O.bundle(raw, rest)
-  const told = bundle[TOLD] ?? []
-  const asked = withTold(raw, told)
-  const before = withoutTold(
-    raw,
-    told,
-    loading ? await O.resolveAll(asked, { ...rest, ...loading, cycles: 'keep' }) : O.resolve(asked, { ...rest, cycles: 'keep' }),
-  )
+  const before = loading
+    ? await O.resolveAll(raw, { ...rest, ...loading, cycles: 'keep' })
+    : O.resolve(raw, { ...rest, cycles: 'keep' })
   const { documents, parse, ...alone } = rest
   const after = O.resolve(bundle.tree, { ...alone, cycles: 'keep' })
 
@@ -455,6 +449,50 @@ async function agree(O, U, raw, options) {
   const allow = allowances(U, bundle, home, objects(loosely), partsOf(unread), urls, vouched, passes, [...declared])
   const why = []
 
+  // A field that the bundle says stands unread beside a reference. The
+  // documents read it, in the place of its target's own, and the bundle
+  // resolves to the target's own. So the bundle is held to what the
+  // documents resolve to without the field: it is taken out where it
+  // was written, in a copy of its document, and the documents are
+  // resolved again. To allow the field where the bundle's tree has the
+  // reference would allow it at the target too, since the tree has the
+  // target's own object in both places.
+  let expected = before
+  const standing = bundle.left.filter((l) => 'version' === l.why)
+  if (0 < standing.length) {
+    const changed = new Map()
+    const treeOf = (uri) => {
+      if (changed.has(uri)) return changed.get(uri)
+      const doc = texts.get(uri)
+      // A document that declares a version is a description, which
+      // `parse` reads as `resolve` read it.
+      return 'string' === typeof doc || doc instanceof Uint8Array ? O.parse(doc, { ...(rest.parse ?? {}) }) : doc
+    }
+    for (const l of standing) {
+      const parts = stepsOf(l.at)
+      const field = parts.pop()
+      // Where the reference was written: in what was brought to the
+      // place nearest above it. A place further up is another target's,
+      // which had a reference where this one was written in.
+      const above = bundle.embedded
+        .map((e) => ({ e, at: stepsOf(e.at) }))
+        .filter(({ at }) => at.length <= parts.length && at.every((seg, i) => seg === parts[i]))
+      const nearest = Math.max(...above.map(({ at }) => at.length))
+      for (const { e, at } of above) {
+        if (at.length !== nearest) continue
+        changed.set(e.doc, without(treeOf(e.doc), [...stepsOf(e.from), ...parts.slice(at.length)], field))
+      }
+    }
+    const again = { ...rest, cycles: 'keep' }
+    if (undefined !== rest.documents) {
+      again.documents = {}
+      for (const [name, doc] of Object.entries(rest.documents)) again.documents[name] = changed.get(absolute(retrieved, name)) ?? doc
+    }
+    expected = loading
+      ? await O.resolveAll(raw, { ...again, load: async (uri) => changed.get(uri) ?? texts.get(uri), maxDocuments, maxRounds })
+      : O.resolve(raw, again)
+  }
+
   // A locator is found where the bundle has it, if it was found, and
   // lands on what it landed on: at its own place in the description,
   // and for one in another document at each place its content was
@@ -517,7 +555,7 @@ async function agree(O, U, raw, options) {
     }
   }
 
-  same(before.tree, after.tree, [], allow, new Map(), why)
+  same(expected.tree, after.tree, [], allow, new Map(), why)
 
   // The description's own places are where they were. What was brought
   // in is under the place an `embedded` row gives.
@@ -540,4 +578,63 @@ async function agree(O, U, raw, options) {
   return { ok: 0 === why.length, why, bundle, before, after, located }
 }
 
-module.exports = { agree, same, loose, allowances }
+// Whether each bundle of a file agrees with its documents: the bundle
+// is the one the file gives, and not one this package writes.
+// `onSet`, when given, is told each set's number as it is done.
+async function checkWritten(O, U, held, onSet) {
+  const results = []
+  for (const [n, set] of held.sets.entries()) {
+    const options = { retrievalUri: held.retrievalUri, documents: set.documents, ...(set.options ?? {}) }
+    // The documents a bundle was made of, where it does not list them:
+    // the ones the set gives, each by its URI in normal form.
+    const documents = Object.keys(set.documents ?? {}).map((uri) => U.withoutFragment(U.normalizeUri(U.resolveUri(held.retrievalUri ?? '', uri))))
+    const written = { documents, embedded: [], left: [], dialects: [], ...set.bundle }
+    let result
+    try {
+      result = await agree({ ...O, bundle: () => written }, U, O.parse(JSON.stringify(set.entry)), options)
+    } catch (e) {
+      result = { ok: false, why: ['the check could not be made: ' + String(e && e.message).split('\n')[0]] }
+    }
+    results.push({ ok: result.ok, why: result.why })
+    if (undefined !== onSet) onSet(n + 1, held.sets.length)
+  }
+  return results
+}
+
+module.exports = { agree, same, loose, allowances, checkWritten }
+
+if (require.main === module) {
+  const Fs = require('node:fs')
+  const Path = require('node:path')
+  const files = process.argv.slice(2)
+  if (0 === files.length || files.some((f) => f.startsWith('-'))) {
+    console.error('usage: node tools/corpus/bundle-agree.cjs <file.json>...')
+    process.exit(2)
+  }
+  const dist = Path.join(__dirname, '..', '..', 'ts', 'dist')
+  ;(async () => {
+    const O = require(Path.join(dist, 'openapi.js'))
+    const U = require(Path.join(dist, 'uri.js'))
+    let failed = 0
+    for (const file of files) {
+      const held = JSON.parse(Fs.readFileSync(file, 'utf8'))
+      // A line at least every ten seconds, with how far through the file it is.
+      let said = Date.now()
+      const results = await checkWritten(O, U, held, (done, of) => {
+        if (Date.now() - said < 10000) return
+        said = Date.now()
+        console.log(`bundle-agree: ${file}: ${done} of ${of} sets (${((100 * done) / of).toFixed(1)}%)`)
+      })
+      for (const [n, r] of results.entries()) {
+        if (r.ok) continue
+        failed++
+        console.log(`bundle-agree: ${file}, set ${n}: ${r.why.join('; ')}`)
+      }
+      console.log(`bundle-agree: ${file}: ${results.filter((r) => r.ok).length} of ${results.length} bundles agree with their documents`)
+    }
+    process.exit(0 === failed ? 0 : 1)
+  })().catch((e) => {
+    console.error('bundle-agree: ' + String(e && e.message))
+    process.exit(2)
+  })
+}

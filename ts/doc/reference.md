@@ -10,6 +10,7 @@ behind them.
 import { parse, resolve, resolveAll, version, make, aliasedSize, wellFormed, OpenApi, ResolveError, VERSION } from '@tabnas/openapi'
 import { bundle, bundleAll } from '@tabnas/openapi'
 import { readExpression, readTemplate, evaluateExpression, ExpressionError } from '@tabnas/openapi'
+import { fileLoader, httpLoader, isPublicAddress } from '@tabnas/openapi/dist/loaders'
 import type { Connection, Lossy, ParseOptions, ParseReport, Reading, ResolveOptions, ResolveResult, VersionInfo } from '@tabnas/openapi'
 import type { BundleOptions, BundleResult, Exchange, Expression, Ignored, OperationView, Template } from '@tabnas/openapi'
 ```
@@ -25,7 +26,7 @@ type ParseOptions = {
   fast?: boolean | 'auto'         // default 'auto'
   duplicates?: 'last' | 'merge'   // default 'last'
   aliasBudget?: number            // bytes; default: the larger of 1,000,000 and ten times the text
-  maxBytes?: number               // bytes; default 16,777,216
+  maxBytes?: number               // bytes; default 134,217,728, and 16,777,216 for a given instance
   report?: ParseReport            // a map the parse fills
   instance?: Tabnas               // default: a shared parser per `strict` and `reading`
 }
@@ -391,6 +392,13 @@ extension, or under a member the version does not have, such as
 sites, and they can type further maps in turn. A reference of kind
 `data` types nothing.
 
+A discriminator's mapping value names a schema, so it types such a map
+as a reference where a schema goes does, in the same order. A schema
+that only a mapping value names is therefore read as a schema, and the
+references in it are sites. The mapping value itself is no site:
+`resolve` puts nothing in its place, and `connections` says what it
+reaches.
+
 A component is what its map of the Components Object holds, whatever
 its name. The specification has a pattern for a component's name,
 `^[a-zA-Z0-9\.\-_]+$`, and a component named otherwise is read as any
@@ -567,7 +575,8 @@ decides which edge of a cycle is cut and which site `inline-once`
 fills. It is also the order of `unresolved`, `cuts` and `provenance`. A
 reference that a pointer only passes is not entered then. Under
 `cycles: 'keep'` no landing is entered early, and those three are in
-document order.
+document order. Under either, what only a mapping value names in
+another document is entered last.
 
 Three options bound the work:
 
@@ -683,6 +692,27 @@ with `$schema` has the dialect of the description's version. A part of
 such a document that no reference lands on is data, and a `$ref` in it
 is no site, unless `slots` is `'all'`.
 
+A mapping value types what it lands on too, so `resolve` reads a schema
+in another document that only a mapping value names. It reads that
+schema once it has read the description, and its sites come last in the
+reports. Being named in a `mapping` puts the schema inside nothing, so
+a child that builds on its parent with `allOf` closes no cycle with the
+parent that names it:
+
+```js
+const { parse, resolve } = require('@tabnas/openapi')
+
+const pets = parse('openapi: 3.1.0\ninfo: {title: t, version: "1"}\npaths: {}\ncomponents:\n  schemas:\n    Pet:\n      type: object\n      discriminator:\n        propertyName: kind\n        mapping: {dog: "Dog.yaml"}\n')
+const p = resolve(pets, {
+  retrievalUri: 'https://example.com/api/openapi.yaml',
+  documents: { 'Dog.yaml': 'allOf:\n  - {$ref: "openapi.yaml#/components/schemas/Pet"}\n  - {type: object}\n' },
+})
+p.provenance.length // => 1
+p.provenance[0].doc // => 'https://example.com/api/Dog.yaml'
+p.provenance[0].status // => 'resolved'
+p.cuts // => []
+```
+
 The members beside a reference follow the rule of the version of the
 document that holds the reference. Sharing, cycles, `maxDepth` and
 `maxSteps` span the documents. Two references to one location hold one
@@ -730,6 +760,32 @@ Under `strict`, `resolve` throws a `ResolveError` instead, coded
 outside its choices throws a `TypeError`, and so does `inline-once` or
 `copy` with `cycles: 'keep'`. Every `at`, `target` and cut path is an
 RFC 6901 pointer.
+
+#### Positions
+
+A row of `provenance` says where in the tree its reference is. It says
+where in the text as well when the parse recorded positions and
+`resolve` is given them: `row` and `col` are then the line and the
+column of the map that holds the reference, each counted from 1.
+`recordPositions` is from `@tabnas/expr`, and takes the parser the
+text is read with.
+
+```js
+const { make, parse, resolve } = require('@tabnas/openapi')
+const { recordPositions } = require('@tabnas/expr')
+
+const reader = make()
+const positions = recordPositions(reader)
+const raw = parse('openapi: 3.1.0\ncomponents:\n  schemas:\n    A: {$ref: "#/components/schemas/B"}\n    B: {type: string}\n', { instance: reader })
+
+const [site] = resolve(raw, { positions }).provenance
+site.at // => '/components/schemas/A'
+site.row // => 4
+site.col // => 8
+```
+
+JSON text that the fast path reads has no positions, since no grammar
+ran. Give `parse` `fast: false` to have them.
 
 #### Connections
 
@@ -1226,6 +1282,37 @@ load('file:///etc/passwd') // => undefined
 // const { tree } = await resolveAll(raw, { retrievalUri: 'https://api.example.com/openapi.yaml', load })
 ```
 
+### `isPublicAddress(address)`
+
+```ts
+import { isPublicAddress } from '@tabnas/openapi/dist/loaders'
+
+function isPublicAddress(address: string): boolean
+```
+
+The test `httpLoader` makes of each address a host has, for a loader of
+your own. It is `true` for an IPv4 or IPv6 address of the public
+internet. It is `false` for the machine's own address, a private or
+link-local one, one that names a group of hosts, the ranges kept for
+documentation and other uses, and any text it cannot read as an
+address. An IPv4 address
+inside an IPv6 one is judged as the IPv4 address: the IPv4-mapped
+form, the NAT64 prefix `64:ff9b::/96`, and 6to4.
+
+```js
+const { isPublicAddress } = require('@tabnas/openapi/dist/loaders')
+
+isPublicAddress('93.184.216.34') // => true
+isPublicAddress('10.0.0.1') // => false
+isPublicAddress('::ffff:127.0.0.1') // => false
+isPublicAddress('not an address') // => false
+```
+
+A name is not an address. Resolve the name first, judge every address
+it has, and send the request to the addresses judged, as `httpLoader`
+does: a name that is resolved again for the request may answer with
+another address.
+
 ### `bundle(raw, options?)`
 
 ```ts
@@ -1437,6 +1524,8 @@ are these:
 | `anchor` | an anchor that was left out, because the place it moved to has one of that name, or has a reference that names one and finds none |
 | `id` | an identifier that was left out. It named the resource it was already in, or another schema has it, or the description's version reads none, or it was not read, and in its place in the bundle it would start a resource |
 | `type` | a part of a target that the documents read as one type, where the bundle may read it as another, or as data |
+| `sibling` | a member beside a reference, in a document of another version than the description's, that was left out |
+| `version` | a field beside a reference, in a document of a later version than the description's, that stands unread |
 
 A `type` row is for a part that has its type from a reference, and not
 from where it is: a schema in a member that its document gives no
@@ -1452,6 +1541,36 @@ An identifier in a part that the documents read as another type than
 a schema is a plain member there. It is left out, and listed as `id`,
 where a reference of the bundle may read the part as a schema: the
 member would then name a resource.
+
+A `sibling` row and a `version` row are for a reference in a document
+of another version than the description's, which has members beside
+it. A version reads some of those and not others: 3.1 applies what is
+beside the `$ref` of a schema, and puts a `description` beside a
+reference to a response in the place of the response's own, where 3.0
+reads neither; 3.2 does the same for the `summary` of a response. The bundle is read by
+the description's version, so it writes such a reference to mean what
+it meant:
+
+- A member that its own version did not read, and the description's
+  would, is left out. It is a `sibling` row, with the member's place
+  and its value.
+- What is beside the `$ref` of a schema, where its own version applied
+  it and the description's does not, is written as that version read it:
+  the reference becomes the first of an `allOf`, ahead of the ones
+  the schema has, and the other members stand. An `allOf` there that
+  is no list is left out, as a `sibling` row: `resolve` reads nothing
+  in one beside a `$ref`.
+- A field that its own version read in the place of its target's own,
+  where the description's has no such rule, cannot be written to mean
+  that. It stands where it is, unread. It is a `version` row, with the
+  field's place and its value, and the bundle resolves to the target's
+  own field there.
+
+None of this is done for a reference that comes to no map in the end:
+one to a schema that is `false`, or one whose chain of references
+names nothing or comes round to itself. No version reads what is
+beside such a reference, so it is written as it was, with what is
+beside it.
 
 A reference that is listed as `outside` is written to name what it
 named. In a schema resource it may have named its target through a
@@ -1488,17 +1607,21 @@ bounds are the bundle's own, with no option given:
 
 - The bundle is one document of one version. A document of another
   version is read in it by the description's version. A schema
-  resource of 3.1 is plain content in a description of 3.0.
+  resource of 3.1 is plain content in a description of 3.0. The
+  members beside a reference are written to keep their meaning, or are
+  listed in `left`. A place that one version's object model reads and
+  the other's does not is not: a schema in `prefixItems` or `$defs`,
+  from a document of 3.1, is data in a description of 3.0, and a
+  reference in it is not followed there; and a `$ref` map in such a
+  member of a 3.0 document, which was data, is a reference in a
+  description of 3.1. Nothing in the bundle says so. Give `bundle`
+  documents of the description's own version where that matters.
 - A schema that is brought in becomes a component with a name. A
   discriminator that lists it then has that name as an implicit
   mapping value, where the schema had no name before.
 - A name that is looked for in every document, an `operationId`, is
   looked for in the bundle alone. An operation that no reference
   brings in is not in it.
-- A schema that only a mapping value names is read as a schema in the
-  bundle, with the references in it. `resolve` reads it as data: it
-  types a place by the references that land on it, and a mapping
-  value is none.
 - Under `slots: 'all'`, content that nothing typed may be written where
   the bundle reads a type. An identifier in it was a plain member, and
   is left out where it would start a schema resource.

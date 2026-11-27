@@ -1,0 +1,6 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "t", "version": "1" },
+  "paths": { "/pets": { "$ref": "pets.yaml" } },
+  "components": { "securitySchemes": { "Key": { "type": "http", "scheme": "basic" } } }
+}

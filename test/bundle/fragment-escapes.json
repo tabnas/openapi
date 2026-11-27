@@ -1,0 +1,40 @@
+{
+  "note": "A pointer is written as a fragment that reads back. A target inside one that is brought is named through it, and each step of the pointer is written as RFC 6901 escapes it, with `%` and `#` percent-encoded.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Outer": { "$ref": "lib.json#/defs/Outer" },
+        "Odd": { "$ref": "lib.json#/defs/Outer/properties/a%25b%23c%20d~1e~0f" }
+      }
+    }
+  },
+  "documents": { "lib.json": { "defs": { "Outer": { "properties": { "a%b#c d/e~f": { "type": "string" } } } } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Outer": { "$ref": "#/components/schemas/Outer_2" },
+          "Odd": { "$ref": "#/components/schemas/Outer_2/properties/a%25b%23c d~1e~0f" },
+          "Outer_2": { "properties": { "a%b#c d/e~f": { "type": "string" } } }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/schemas/Outer_2",
+        "https://example.com/api/lib.json",
+        "/defs/Outer",
+        "component"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

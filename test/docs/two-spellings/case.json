@@ -1,0 +1,74 @@
+{
+  "source": "This repository: one document under two spellings of its name",
+  "note": "Two references name one document, one of them with `./` before its name. They are one document, known by its URI in normal form. A reference inside it that is a fragment alone lands in the document that holds it, and its site follows the first reference to that document.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/shared.yaml": "shared.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": { "type": "object", "properties": { "owner": { "type": "string" } } },
+        "Again": { "type": "object", "properties": { "owner": { "type": "string" } } }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    [
+      "",
+      "/components/schemas/Pet",
+      "https://example.com/api/shared.yaml",
+      "/components/schemas/Pet",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/shared.yaml",
+      "/components/schemas/Pet/properties/owner",
+      "",
+      "/components/schemas/Owner",
+      "resolved"
+    ],
+    [
+      "",
+      "/components/schemas/Again",
+      "https://example.com/api/shared.yaml",
+      "/components/schemas/Pet",
+      "resolved"
+    ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "$ref": "#/components/schemas/Pet_2" },
+          "Again": { "$ref": "#/components/schemas/Pet_2" },
+          "Pet_2": { "type": "object", "properties": { "owner": { "$ref": "#/components/schemas/Owner" } } },
+          "Owner": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/schemas/Pet_2",
+        "https://example.com/api/shared.yaml",
+        "/components/schemas/Pet",
+        "component"
+      ],
+      [
+        "/components/schemas/Owner",
+        "https://example.com/api/shared.yaml",
+        "/components/schemas/Owner",
+        "component"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

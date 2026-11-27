@@ -1,0 +1,7 @@
+{
+  "type": "object",
+  "properties": {
+    "owner": { "$ref": "Owner.yaml" },
+    "tags": { "type": "array", "items": { "$ref": "defs.yaml#/Tag" } }
+  }
+}

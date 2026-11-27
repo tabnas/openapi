@@ -1,0 +1,74 @@
+{
+  "source": "This repository: a cycle through two documents",
+  "note": "A schema of the description names one of another document, which names it back. The cycle is cut once, at the reference whose target was still being read, and that reference is left as written.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/b.yaml": "b.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Node": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "type": "object",
+              "properties": { "back": { "$ref": "openapi.yaml#/components/schemas/Node" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [
+    {
+      "at": "/components/schemas/Node/properties/back",
+      "ref": "openapi.yaml#/components/schemas/Node",
+      "target": "/components/schemas/Node",
+      "doc": "https://example.com/api/b.yaml",
+      "targetDoc": "https://example.com/api/openapi.yaml"
+    }
+  ],
+  "sites": [
+    [
+      "",
+      "/components/schemas/Node/properties/next",
+      "https://example.com/api/b.yaml",
+      "/components/schemas/Node",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/b.yaml",
+      "/components/schemas/Node/properties/back",
+      "https://example.com/api/openapi.yaml",
+      "/components/schemas/Node",
+      "cut"
+    ]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Node": { "type": "object", "properties": { "next": { "$ref": "#/components/schemas/Node_2" } } },
+          "Node_2": { "type": "object", "properties": { "back": { "$ref": "#/components/schemas/Node" } } }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/schemas/Node_2",
+        "https://example.com/api/b.yaml",
+        "/components/schemas/Node",
+        "component"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

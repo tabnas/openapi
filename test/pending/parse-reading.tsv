@@ -64,3 +64,17 @@ a: yes\nb: No\nc: ON\nd: off\n	{"a":"yes","b":"No","c":"ON","d":"off"}	{"reading
 y: y\nn: N\nt: TRUE\nf: false\n	{"y":"y","n":"N","t":true,"f":false}	{"reading":"spec"}
 # The core schema's own words are unchanged.
 a: true\nb: False\nc: NULL\nd: ~\n	{"a":true,"b":false,"c":null,"d":null}	{"reading":"spec"}
+# The base reading, for the texts above: no row of ../spec/ pins a number
+# in base two, or a comment that starts with `//`, under the default.
+a: 0b11\nb: //x\n	{"a":3,"b":null}	
+# And `base` is the default, spelled out.
+a: 0b11\n	{"a":3}	{"reading":"base"}
+# `strict` reads JSON by RFC 8259 under either reading, so a number in
+# base sixteen is no JSON there.
+{"openapi":"3.1.0","a":1e3}	{"openapi":"3.1.0","a":1000}	{"strict":true,"reading":"spec"}
+{"openapi":"3.1.0","a":0x1F}	ERROR:unexpected	{"strict":true,"reading":"spec"}
+# The words and numbers the two readings part on, in one text: the base
+# reading first, with `No`, `ON` and `False` in the capitals that no row of
+# ../spec/ has, then the core schema.
+a: yes\nb: No\nc: ON\nd: off\ne: true\nf: False\ng: ~\nh: 1_000\ni: 0x1F\n	{"a":true,"b":false,"c":true,"d":false,"e":true,"f":false,"g":null,"h":1000,"i":31}	
+a: yes\nb: No\nc: ON\nd: off\ne: true\nf: False\ng: ~\nh: 1_000\ni: 0x1F\n	{"a":"yes","b":"No","c":"ON","d":"off","e":true,"f":false,"g":null,"h":"1_000","i":31}	{"reading":"spec"}

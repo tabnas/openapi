@@ -1,0 +1,109 @@
+{
+  "note": "The same with cycles kept: the same documents are asked for, in the same order, and the same sites are read.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml", "gone": "gone.yaml" } }
+        }
+      }
+    }
+  },
+  "options": { "cycles": "keep" },
+  "table": {
+    "https://example.com/api/dog.yaml": "type: object\nproperties:\n  name: {$ref: \"name.yaml\"}\ndiscriminator:\n  propertyName: breed\n  mapping:\n    puppy: \"sub/puppy.yaml#/Puppy\"\n",
+    "https://example.com/api/sub/puppy.yaml": {
+      "Puppy": { "allOf": [{ "$ref": "../dog.yaml" }, { "$ref": "toy.yaml" }] },
+      "Unused": { "$ref": "never.yaml" }
+    },
+    "https://example.com/api/sub/toy.yaml": { "type": "string" },
+    "https://example.com/api/name.yaml": { "type": "string" },
+    "https://example.com/api/never.yaml": { "never": "asked for" }
+  },
+  "asked": [
+    "https://example.com/api/dog.yaml",
+    "https://example.com/api/gone.yaml",
+    "https://example.com/api/name.yaml",
+    "https://example.com/api/sub/puppy.yaml",
+    "https://example.com/api/sub/toy.yaml"
+  ],
+  "documents": [
+    "https://example.com/api/dog.yaml",
+    "https://example.com/api/name.yaml",
+    "https://example.com/api/sub/puppy.yaml",
+    "https://example.com/api/sub/toy.yaml"
+  ],
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml", "gone": "gone.yaml" } }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    [
+      "https://example.com/api/dog.yaml",
+      "/properties/name",
+      "https://example.com/api/name.yaml",
+      "",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/sub/puppy.yaml",
+      "/Puppy/allOf/0",
+      "https://example.com/api/dog.yaml",
+      "",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/sub/puppy.yaml",
+      "/Puppy/allOf/1",
+      "https://example.com/api/sub/toy.yaml",
+      "",
+      "resolved"
+    ]
+  ],
+  "connections": [
+    {
+      "kind": "mapping",
+      "at": "/components/schemas/Pet/discriminator/mapping/dog",
+      "name": "dog.yaml",
+      "found": true,
+      "target": "",
+      "targetDoc": "https://example.com/api/dog.yaml",
+      "via": "uri"
+    },
+    {
+      "kind": "mapping",
+      "at": "/components/schemas/Pet/discriminator/mapping/gone",
+      "name": "gone.yaml",
+      "found": false,
+      "target": null,
+      "via": "uri",
+      "why": "external"
+    },
+    {
+      "kind": "mapping",
+      "at": "/discriminator/mapping/puppy",
+      "name": "sub/puppy.yaml#/Puppy",
+      "found": true,
+      "target": "/Puppy",
+      "doc": "https://example.com/api/dog.yaml",
+      "targetDoc": "https://example.com/api/sub/puppy.yaml",
+      "via": "uri"
+    }
+  ]
+}

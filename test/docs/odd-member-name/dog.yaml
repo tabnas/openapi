@@ -1,0 +1,1 @@
+{ "￿": { "$ref": "x" }, "properties": { "n": { "$ref": "openapi.yaml#/components/schemas/Odd" } } }

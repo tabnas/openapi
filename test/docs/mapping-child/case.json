@@ -1,0 +1,61 @@
+{
+  "source": "This repository: a child schema that only its parent's mapping names",
+  "note": "The usual shape of a discriminator: the parent names its child by a mapping value, and the child builds on the parent with `allOf`. No reference reaches the child, so the mapping value alone makes its document a schema, and the reference in it is read. Nothing is put in a mapping value's place, so the child is not inside the parent, and no cycle closes.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/dog.yaml": "dog.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml" } }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    [
+      "https://example.com/api/dog.yaml",
+      "/allOf/0",
+      "https://example.com/api/openapi.yaml",
+      "/components/schemas/Pet",
+      "resolved"
+    ]
+  ],
+  "connections": [
+    {
+      "kind": "mapping",
+      "at": "/components/schemas/Pet/discriminator/mapping/dog",
+      "name": "dog.yaml",
+      "found": true,
+      "target": "",
+      "targetDoc": "https://example.com/api/dog.yaml",
+      "via": "uri"
+    }
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "dog": "#/components/schemas/dog" } }
+          },
+          "dog": { "allOf": [{ "$ref": "#/components/schemas/Pet" }, { "type": "object" }] }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/dog", "https://example.com/api/dog.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

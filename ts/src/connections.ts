@@ -33,7 +33,7 @@ import type { TemplatePart } from './expression'
 import { slot, step } from './model'
 import type { ModelVersion } from './model'
 import { EXTRA_FACTOR, hasIds as schemasHaveIds } from './site-index'
-import type { DocFacts, Landing, Loc, SiteIndex } from './site-index'
+import type { DocFacts, Landing, Loc, Located, SiteIndex } from './site-index'
 import { ANCHOR, NOTHING, fragmentOf, hierarchical, isMap, normalizeUri, own, pointer, resolveUri, stepInto } from './uri'
 import type { Path } from './uri'
 
@@ -341,8 +341,8 @@ function connectionsOf(
 
   // A URI reference: located in this document, there as the document is
   // written, and of what type.
-  const byUri = (name: string, base: string) => {
-    const where = index.locate(name, base)
+  const byUri = (name: string, base: string) => byWhere(index.locate(name, base))
+  const byWhere = (where: Located) => {
     if (null == where.target) {
       return {
         found: false,
@@ -550,12 +550,15 @@ function connectionsOf(
         if (cycle) row.cycle = true
       }
     } else if ('mapping' === use.kind || 'defaultMapping' === use.kind) {
-      if (own(schemas, use.name)) {
+      // The index says how a mapping value is read: as the name of one
+      // of the description's schema components, or as a URI reference.
+      const where = index.locateMapping(use.name, use.base)
+      if ('name' === where.via) {
         row.found = true
-        row.target = pointer([...schemasAt, use.name])
+        row.target = pointer(where.target!)
         row.via = 'name'
       } else {
-        const u = byUri(use.name, use.base)
+        const u = byWhere(where)
         row.found = u.found
         row.target = u.target
         if (undefined !== u.doc) row.targetDoc = u.doc

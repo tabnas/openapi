@@ -1,0 +1,52 @@
+{
+  "note": "A place that a reference hopes for is not made. Under `slots: 'all'` a reference in an extension names the map of the schema components, and the description has none: a new one would be what it names. So the target is written in the place of its reference.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "options": { "slots": "all" },
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {
+      "/a": {
+        "get": {
+          "responses": {
+            "200": {
+              "description": "ok",
+              "content": { "application/json": { "schema": { "$ref": "a.json#/Pet" } } }
+            }
+          }
+        }
+      }
+    },
+    "x-hopes": { "$ref": "#/components/schemas" }
+  },
+  "documents": { "a.json": { "Pet": { "type": "string" } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {
+        "/a": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": { "application/json": { "schema": { "type": "string" } } }
+              }
+            }
+          }
+        }
+      },
+      "x-hopes": { "$ref": "#/components/schemas" }
+    },
+    "embedded": [
+      [
+        "/paths/~1a/get/responses/200/content/application~1json/schema",
+        "https://example.com/api/a.json",
+        "/Pet",
+        "inline"
+      ]
+    ],
+    "left": [["/x-hopes", "#/components/schemas", "not-found"]],
+    "dialects": []
+  }
+}

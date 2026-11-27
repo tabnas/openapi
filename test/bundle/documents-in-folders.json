@@ -1,0 +1,38 @@
+{
+  "note": "Documents that name one another, in a folder and out of it, given as a tree and as text. A relative reference is read against the URI of the document it is in. A document that was not given stays another document.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "A": { "$ref": "a.json" }, "Gone": { "$ref": "gone.json" } } }
+  },
+  "documents": {
+    "a.json": { "type": "object", "properties": { "b": { "$ref": "sub/b.yaml" } } },
+    "sub/b.yaml": "type: object\nproperties:\n  c: { $ref: c.json }\n",
+    "sub/c.json": "{\"type\":\"string\"}"
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": { "$ref": "#/components/schemas/a" },
+          "Gone": { "$ref": "gone.json" },
+          "a": { "type": "object", "properties": { "b": { "$ref": "#/components/schemas/b" } } },
+          "b": { "type": "object", "properties": { "c": { "$ref": "#/components/schemas/c" } } },
+          "c": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/a", "https://example.com/api/a.json", "", "component"],
+      ["/components/schemas/b", "https://example.com/api/sub/b.yaml", "", "component"],
+      ["/components/schemas/c", "https://example.com/api/sub/c.json", "", "component"]
+    ],
+    "left": [["/components/schemas/Gone", "gone.json", "external"]],
+    "dialects": []
+  }
+}

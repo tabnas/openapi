@@ -1,0 +1,19 @@
+{
+  "note": "A text that does not parse is refused with the grammar's own code, and the error names the document it is in, as its file.",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": { "S0": { "$ref": "n0.yaml" }, "S1": { "$ref": "n1.yaml" }, "S2": { "$ref": "n2.yaml" } }
+    }
+  },
+  "table": {
+    "https://example.com/api/n0.yaml": "type: string\n",
+    "https://example.com/api/n1.yaml": "a: }\n",
+    "https://example.com/api/n2.yaml": "type: string\n"
+  },
+  "asked": ["https://example.com/api/n0.yaml", "https://example.com/api/n1.yaml"],
+  "error": { "code": "unexpected", "file": "https://example.com/api/n1.yaml" }
+}

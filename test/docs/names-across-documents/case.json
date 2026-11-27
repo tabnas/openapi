@@ -1,0 +1,133 @@
+{
+  "source": "This repository: names used in another document",
+  "note": "A tag and a security scheme are looked for in the description, whichever document uses the name, and an `operationId` among the operations of every document. So the description names an operation that only the other document has, and the other document's tag and security requirement are judged by the description's `tags` and security schemes, not its own.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/other.yaml": "other.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "tags": [{ "name": "pets" }],
+    "paths": {
+      "/near": { "get": { "operationId": "nearOp", "responses": {} } },
+      "/far": {
+        "get": {
+          "operationId": "farOp",
+          "tags": ["pets", "unknown"],
+          "security": [{ "Key": [] }, { "Missing": [] }],
+          "responses": {}
+        }
+      }
+    },
+    "components": {
+      "securitySchemes": { "Key": { "type": "apiKey", "name": "k", "in": "header" } },
+      "links": { "ToFar": { "operationId": "farOp" } }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [["", "/paths/~1far", "https://example.com/api/other.yaml", "/paths/~1far", "resolved"]],
+  "connections": [
+    {
+      "kind": "operationId",
+      "at": "/components/links/ToFar/operationId",
+      "name": "farOp",
+      "found": true,
+      "target": "/paths/~1far/get",
+      "targetDoc": "https://example.com/api/other.yaml"
+    },
+    {
+      "kind": "tag",
+      "at": "/paths/~1far/get/tags/0",
+      "name": "pets",
+      "found": true,
+      "target": "/tags/0",
+      "doc": "https://example.com/api/other.yaml"
+    },
+    {
+      "kind": "tag",
+      "at": "/paths/~1far/get/tags/1",
+      "name": "unknown",
+      "found": false,
+      "target": null,
+      "doc": "https://example.com/api/other.yaml"
+    },
+    {
+      "kind": "securityScheme",
+      "at": "/paths/~1far/get/security/0/Key",
+      "name": "Key",
+      "found": true,
+      "target": "/components/securitySchemes/Key",
+      "doc": "https://example.com/api/other.yaml",
+      "via": "name"
+    },
+    {
+      "kind": "securityScheme",
+      "at": "/paths/~1far/get/security/1/Missing",
+      "name": "Missing",
+      "found": false,
+      "target": null,
+      "doc": "https://example.com/api/other.yaml"
+    },
+    {
+      "kind": "operationId",
+      "at": "/components/links/L/operationId",
+      "name": "nearOp",
+      "found": true,
+      "target": "/paths/~1near/get",
+      "doc": "https://example.com/api/other.yaml"
+    },
+    {
+      "kind": "operationId",
+      "at": "/components/links/M/operationId",
+      "name": "farOp",
+      "found": true,
+      "target": "/paths/~1far/get",
+      "doc": "https://example.com/api/other.yaml",
+      "targetDoc": "https://example.com/api/other.yaml"
+    },
+    {
+      "kind": "operationId",
+      "at": "/components/links/N/operationId",
+      "name": "nowhere",
+      "found": false,
+      "target": null,
+      "doc": "https://example.com/api/other.yaml"
+    }
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "tags": [{ "name": "pets" }],
+      "paths": {
+        "/near": { "get": { "operationId": "nearOp", "responses": {} } },
+        "/far": { "$ref": "#/components/pathItems/_far" }
+      },
+      "components": {
+        "securitySchemes": { "Key": { "type": "apiKey", "name": "k", "in": "header" } },
+        "links": { "ToFar": { "operationId": "farOp" } },
+        "pathItems": {
+          "_far": {
+            "get": {
+              "operationId": "farOp",
+              "tags": ["pets", "unknown"],
+              "security": [{ "Key": [] }, { "Missing": [] }],
+              "responses": {}
+            }
+          }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/pathItems/_far",
+        "https://example.com/api/other.yaml",
+        "/paths/~1far",
+        "component"
+      ]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

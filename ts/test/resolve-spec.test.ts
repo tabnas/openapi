@@ -3,8 +3,9 @@
 // The resolver against test/resolve/*.tsv. Each row parses its input,
 // resolves it with the row's options, and holds the resolved tree, the
 // references left as written (`at why`) and the cut edges to the row; an
-// `ERROR:<code>` row holds the code `resolve` raises. Five columns are
-// optional: `select`, a path into the resolved tree whose value is held
+// `ERROR:<code>` row holds the code `resolve` raises, and the place the
+// error names where the row has one after the code. The other columns
+// are optional: `select`, a path into the resolved tree whose value is held
 // to `expected` in place of the whole tree; `connections`, the
 // connections report, one `kind at -> target` line each (`!why` for a
 // target not found, then any flags, and `landing=` where a pointer is
@@ -25,7 +26,17 @@
 // `ignored`, one `what at name` line for each thing the specification
 // says to ignore, then its kind, `path=`, `method=`, `index=` and
 // `additional` where it has them. Every value the view gives is held to
-// the resolved tree at its place. These fixtures live outside
+// the resolved tree at its place. Four more say one thing of the result
+// each: `version`, the version the description was read by; `dataSlots`,
+// how many `$ref` maps were data; `order`, where `yes` holds the members
+// of the expected value to the order the row writes them in; and
+// `sites`, one `at kind:type "ref" -> target` line for each reference,
+// which is what the index made of it before anything was resolved. The
+// target is `-` where the reference names no place: a `$ref` that is no
+// string, an anchor that nothing declares, or a document that was not
+// given. A site in another document than the description is written
+// with its document, as `uri#pointer`, and so is a target in another
+// document than its site. These fixtures live outside
 // test/spec/ because the parity runners there read a parse, and because
 // the Go and Rust ports do not carry the resolver yet.
 
@@ -68,6 +79,15 @@ function where(p: any): string {
   if (undefined !== p.fragment) out += ' fragment=' + p.fragment
   if (undefined !== p.conflict) out += ' conflict=' + p.conflict
   return out
+}
+
+// One reference as the index read it, as a fixture writes it. A row has
+// a site's document where that is not the description, and a target's
+// where that is not the site's.
+function sited(p: any): string {
+  const placed = (doc: unknown, at: string) => (null == doc ? at : doc + '#' + at)
+  const target = null == p.target ? '-' : placed(p.targetDoc, p.target)
+  return `${placed(p.doc, p.at)} ${p.kind}${null == p.type ? '' : ':' + p.type} ${JSON.stringify(p.ref)} -> ${target}`
 }
 
 // One declared dialect as a fixture writes it.
@@ -157,11 +177,15 @@ for (const file of files) {
         const opts = '' === raw ? {} : JSON.parse(raw)
         const expected = row.named('expected')
         if (expected.startsWith('ERROR:')) {
-          const code = expected.slice('ERROR:'.length)
+          // The code, then the place the error names, where the row says it.
+          const said = expected.slice('ERROR:'.length)
+          const space = said.indexOf(' ')
+          const code = -1 === space ? said : said.slice(0, space)
+          const at = -1 === space ? undefined : said.slice(space + 1)
           assert.throws(
             () => resolve(parse(input), opts),
-            (err: any) => code === err.code,
-            `${file}:${row.line} should raise ${code}`,
+            (err: any) => code === err.code && (undefined === at || at === err.at),
+            `${file}:${row.line} should raise ${said}`,
           )
           return
         }
@@ -170,6 +194,17 @@ for (const file of files) {
         let value = out.tree
         if ('' !== select) for (const seg of JSON.parse(select)) value = value[seg]
         assert.deepStrictEqual(C(value), JSON.parse(expected), `${file}:${row.line} tree`)
+        if ('yes' === row.named('order').trim()) {
+          assert.equal(JSON.stringify(value), expected, `${file}:${row.line} the order of the members`)
+        }
+        const read = row.named('version').trim()
+        if ('' !== read) assert.equal(out.version, read, `${file}:${row.line} version`)
+        const slots = row.named('dataSlots').trim()
+        if ('' !== slots) assert.equal(String(out.dataSlots), slots, `${file}:${row.line} dataSlots`)
+        const sites = row.named('sites').trim()
+        if ('' !== sites) {
+          assert.deepStrictEqual(out.provenance.map(sited), JSON.parse(sites), `${file}:${row.line} sites`)
+        }
         assert.deepStrictEqual(
           out.unresolved.map((u) => u.at + ' ' + u.why),
           JSON.parse(row.named('unresolved') || '[]'),

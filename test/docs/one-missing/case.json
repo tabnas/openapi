@@ -1,0 +1,36 @@
+{
+  "source": "This repository: a document that was not given, beside one that was",
+  "note": "A reference into a document that was not given is left as written, with `external`, while the document that was given resolves.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/shared.yaml": "shared.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Pet": { "$ref": "missing.yaml#/Pet" }, "Here": { "type": "string" } } }
+  },
+  "unresolved": [{ "at": "/components/schemas/Pet", "ref": "missing.yaml#/Pet", "why": "external" }],
+  "cuts": [],
+  "sites": [
+    ["", "/components/schemas/Pet", "", null, "unresolved"],
+    ["", "/components/schemas/Here", "https://example.com/api/shared.yaml", "", "resolved"]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "$ref": "missing.yaml#/Pet" },
+          "Here": { "$ref": "#/components/schemas/shared" },
+          "shared": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/shared", "https://example.com/api/shared.yaml", "", "component"]],
+    "left": [["/components/schemas/Pet", "missing.yaml#/Pet", "external"]],
+    "dialects": []
+  }
+}

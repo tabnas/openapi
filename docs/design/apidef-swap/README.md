@@ -240,6 +240,11 @@ At apidef `3186c51`, which merges apidef 8.34.0 at `46c33ab`, the same
 again: 2,734 of 2,735 tests and all 120 definitions byte-identical.
 That release moved apidef's version and nothing else.
 
+At apidef `9549a6c`, which merges apidef 8.34.1 at `259e4c3`, the same
+once more: 2,734 of 2,735 tests and all 120 definitions byte-identical.
+That release changes how apidef's guide reads a version segment inside
+a path, which is after its parse stage, and the merge had no conflict.
+
 At apidef `3b24341`, where the change was made, the three diffs gave
 the same result on the suite and definitions apidef had then: 2,477 of
 2,478 tests, and 57 definitions. With the first of them alone the suite

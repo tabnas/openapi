@@ -1,0 +1,44 @@
+{
+  "source": "This repository: `parse: { strict: true }` reads each document as JSON, and asks no version of one that is no description",
+  "note": "Under `parse: { strict: true }` a document given as text is read as JSON by RFC 8259. A version is asked of a description alone: a schema document has none, and one that is `false` has no map either.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": {
+    "https://example.com/api/Pet.json": "Pet.json",
+    "https://example.com/api/never.json": "never.json"
+  },
+  "options": { "parse": { "strict": true } },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Pet": { "type": "object" }, "Never": false } }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    ["", "/components/schemas/Pet", "https://example.com/api/Pet.json", "", "resolved"],
+    ["", "/components/schemas/Never", "https://example.com/api/never.json", "", "resolved"]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "$ref": "#/components/schemas/Pet_2" },
+          "Never": { "$ref": "#/components/schemas/never" },
+          "Pet_2": { "type": "object" },
+          "never": false
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Pet_2", "https://example.com/api/Pet.json", "", "component"],
+      ["/components/schemas/never", "https://example.com/api/never.json", "", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

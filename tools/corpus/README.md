@@ -268,8 +268,11 @@ node tools/corpus/sweep.cjs --write
 ```
 
 It rewrites both files from the finished run in `.corpus/run`, without
-sweeping again. Commit them with the change that moved them, and say in
-the commit which rows moved and why. Never edit the ledger by hand: the
+sweeping again. Then run `node tools/corpus/statement.cjs --write`,
+which writes the new figures into
+[`docs/conformance.md`](../../docs/conformance.md): the suite fails
+until that page has them. Commit all of it with the change that moved
+the figures, and say in the commit which rows moved and why. Never edit the ledger by hand: the
 sweep writes it, and a hand edit shows as a changed row on the next run.
 If a repair removes a row that `accepted.tsv` names, delete that entry in
 the same change.
@@ -335,12 +338,10 @@ the same loader, and holds the bundle to its documents with
 resolve to. That module resolves the documents, bundles them, resolves
 the bundle and compares the two trees from the root, allowing only
 what the bundle's own reports account for. Its header lists each
-allowance. It judges a reference and a locator by where they land,
-and it reads the documents as the bundle does in one thing: a schema
-that only a mapping value names is read as a schema. It reads the
-identifiers that the documents declare, each document as it is loaded,
-to know every base that a text may have been written against. A bundle that
-does not agree ends the run with 1, as a
+allowance. It judges a reference and a locator by where they land. It
+reads the identifiers that the documents declare, each document as it
+is loaded, to know every base that a text may have been written
+against. A bundle that does not agree ends the run with 1, as a
 description that throws does. The figures under `bundle` count the
 bundles that agree, the targets by how each was brought in, and what
 was left. The record,
@@ -358,7 +359,8 @@ written by the tool and never by hand.
 | `parse-only.cjs <file>` | the time and peak memory of one document, with the package alone in the process |
 | `target-check.cjs [n] [seed]` | for a sample of described documents, checks that every resolved local pointer lands where it says |
 | `ref-census.cjs` | every `$ref` naming another document, in every document, by form and by what it names |
-| `bundle-agree.cjs` | a module: whether a bundle resolves to what its documents resolve to. `documents.cjs` and the suite's bundle tests call it |
+| `bundle-agree.cjs [<file.json>...]` | a module: whether a bundle resolves to what its documents resolve to. `documents.cjs` and the suite's bundle tests call it. As a command it checks bundles that were written elsewhere, each beside its set of documents in a file of the form `test/bundle-held/` has |
+| `statement.cjs [--write\|--check]` | the figures of [`docs/conformance.md`](../../docs/conformance.md), from the records in `test/corpus/`. It reads no document of the corpus |
 
 Everything in the corpus is data. Nothing in it is run, and no reference
 in it is followed beyond the files already fetched.

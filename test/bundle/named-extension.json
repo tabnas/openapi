@@ -1,0 +1,25 @@
+{
+  "note": "A `$ref` map in an extension that the caller names in `extensions` is a reference. Its target has no type, so it is written in the place of the first reference to it, and the next names that place. One in an extension that is not named is data.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "options": { "extensions": ["x-shared"] },
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "x-shared": { "first": { "$ref": "data.json#/a" }, "second": { "$ref": "data.json#/a" } },
+    "x-other": { "$ref": "data.json#/a" }
+  },
+  "documents": { "data.json": { "a": { "n": 1 } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "x-shared": { "first": { "n": 1 }, "second": { "$ref": "#/x-shared/first" } },
+      "x-other": { "$ref": "data.json#/a" }
+    },
+    "embedded": [["/x-shared/first", "https://example.com/api/data.json", "/a", "inline"]],
+    "left": [],
+    "dialects": []
+  }
+}

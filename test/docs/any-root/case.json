@@ -1,0 +1,57 @@
+{
+  "source": "This repository: a document that is no description may be anything at its root",
+  "note": "A document given as text needs no version and no map at its root: a schema that is `false`, a list that a pointer reads into and that a reference names whole, and a text of a comment alone, which is null.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": {
+    "https://example.com/api/never.json": "never.json",
+    "https://example.com/api/list.yaml": "list.yaml",
+    "https://example.com/api/empty.yaml": "empty.yaml"
+  },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Never": false,
+        "Second": { "type": "number" },
+        "All": [{ "type": "string" }, { "type": "number" }],
+        "None": null
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    ["", "/components/schemas/Never", "https://example.com/api/never.json", "", "resolved"],
+    ["", "/components/schemas/Second", "https://example.com/api/list.yaml", "/1", "resolved"],
+    ["", "/components/schemas/All", "https://example.com/api/list.yaml", "", "resolved"],
+    ["", "/components/schemas/None", "https://example.com/api/empty.yaml", "", "resolved"]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Never": { "$ref": "#/components/schemas/never" },
+          "Second": { "$ref": "#/components/schemas/list/1" },
+          "All": { "$ref": "#/components/schemas/list" },
+          "None": { "$ref": "#/components/schemas/empty" },
+          "never": false,
+          "list": [{ "type": "string" }, { "type": "number" }],
+          "empty": null
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/never", "https://example.com/api/never.json", "", "component"],
+      ["/components/schemas/list", "https://example.com/api/list.yaml", "", "component"],
+      ["/components/schemas/empty", "https://example.com/api/empty.yaml", "", "component"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

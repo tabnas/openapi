@@ -1,0 +1,43 @@
+input	expected	opts
+# A text with no document in it is refused with `openapi_root`, under
+# either reading: white space, comments, a document that is null, and a
+# root that is a list. ../spec/raw-errors.tsv pins the empty text, a
+# comment and `~` under the base reading. Only the TypeScript package has
+# the `reading` option yet, so these rows are here and not in ../spec/
+# (see ../AGENTS.md, "Where a new fixture goes").
+#
+# The message says what the root is, which a row cannot hold: `empty` for
+# white space and comments alone, `null`, and `a list`.
+# White space, comments (the fifth text opens with a byte order mark,
+# U+FEFF, which is invisible), a document that is null, and a list.
+ 	ERROR:openapi_root	
+\n\n	ERROR:openapi_root	
+\t\r\n	ERROR:openapi_root	
+  # c\n# d\n	ERROR:openapi_root	
+﻿# c\n	ERROR:openapi_root	
+---\n	ERROR:openapi_root	
+null	ERROR:openapi_root	
+--- # c\n	ERROR:openapi_root	
+- 1	ERROR:openapi_root	
+# The same under the specification's reading.
+ 	ERROR:openapi_root	{"reading":"spec"}
+\n\n	ERROR:openapi_root	{"reading":"spec"}
+\t\r\n	ERROR:openapi_root	{"reading":"spec"}
+  # c\n# d\n	ERROR:openapi_root	{"reading":"spec"}
+﻿# c\n	ERROR:openapi_root	{"reading":"spec"}
+---\n	ERROR:openapi_root	{"reading":"spec"}
+null	ERROR:openapi_root	{"reading":"spec"}
+--- # c\n	ERROR:openapi_root	{"reading":"spec"}
+- 1	ERROR:openapi_root	{"reading":"spec"}
+# The three texts of ../spec/raw-errors.tsv, under the specification's
+# reading.
+	ERROR:openapi_root	{"reading":"spec"}
+# c	ERROR:openapi_root	{"reading":"spec"}
+~	ERROR:openapi_root	{"reading":"spec"}
+# A `//` comment is one under the base reading, so the text is empty. Under
+# the specification's it is a string, which is no map either.
+// c	ERROR:openapi_root	
+// c	ERROR:openapi_root	{"reading":"spec"}
+# Under `strict` an empty text and a comment are no JSON.
+	ERROR:unexpected	{"strict":true}
+# c	ERROR:unexpected	{"strict":true}

@@ -1,0 +1,64 @@
+{
+  "note": "A document of a later version than the description's, with an `allOf` that is no list beside a schema's `$ref`. Resolving reads nothing in such a member beside a reference, and the list that the reference is written into has no place for it: it is left out, and `left` says so, with its value. The other members stand.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Old": { "$ref": "new.json#/components/schemas/A" } } }
+  },
+  "documents": {
+    "new.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": {
+            "$ref": "#/components/schemas/B",
+            "allOf": { "type": "string" },
+            "description": "applied in 3.1"
+          },
+          "B": { "type": "string" }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Old": { "$ref": "#/components/schemas/A" },
+          "A": {
+            "allOf": [{ "$ref": "#/components/schemas/B" }],
+            "$schema": "https://spec.openapis.org/oas/3.1/dialect/base",
+            "description": "applied in 3.1"
+          },
+          "B": { "$schema": "https://spec.openapis.org/oas/3.1/dialect/base", "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/schemas/A",
+        "https://example.com/api/new.json",
+        "/components/schemas/A",
+        "component"
+      ],
+      [
+        "/components/schemas/B",
+        "https://example.com/api/new.json",
+        "/components/schemas/B",
+        "component"
+      ]
+    ],
+    "left": [["/components/schemas/A/allOf", { "type": "string" }, "sibling"]],
+    "dialects": [
+      ["/components/schemas/A", "https://spec.openapis.org/oas/3.1/dialect/base"],
+      ["/components/schemas/B", "https://spec.openapis.org/oas/3.1/dialect/base"]
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "note": "A reference that names the description by its own URI, in any spelling of it, is written as the fragment alone: `#` for the whole of it. So is one in another document, once what holds it is in the bundle.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "A": { "type": "string" },
+        "Rel": { "$ref": "openapi.json#/components/schemas/A" },
+        "Abs": { "$ref": "https://EXAMPLE.com:443/api/x/../openapi.json#/components/schemas/A" },
+        "Whole": { "$ref": "openapi.json" },
+        "Back": { "$ref": "far.json#/there" }
+      }
+    }
+  },
+  "documents": { "far.json": { "there": { "$ref": "openapi.json#/components/schemas/A" } } },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": { "type": "string" },
+          "Rel": { "$ref": "#/components/schemas/A" },
+          "Abs": { "$ref": "#/components/schemas/A" },
+          "Whole": { "$ref": "#" },
+          "Back": { "$ref": "#/components/schemas/there" },
+          "there": { "$ref": "#/components/schemas/A" }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/there", "https://example.com/api/far.json", "/there", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

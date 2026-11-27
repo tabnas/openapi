@@ -10,9 +10,12 @@
 // `[its document, where, its target's document, its target, its status]`,
 // a document being '' where it is the entry or the site's own. `bundle`
 // is what `bundle` writes of them as one document, in the form a case of
-// test/bundle/ has it. The first cases are the specification's own
-// examples of several documents, as it writes them. See
-// ../../test/AGENTS.md.
+// test/bundle/ has it. A case may give `options`, which `resolve` and
+// `bundle` both take, and `resolveOptions`, which `resolve` alone takes:
+// the shape of the resolved tree is nothing `bundle` reads. It may also
+// say the `connections` and the `urls` of the result, each row as the
+// report has it. The first cases are the specification's own examples
+// of several documents, as it writes them. See ../../test/AGENTS.md.
 
 import { describe, test } from 'node:test'
 import assert from 'node:assert'
@@ -38,11 +41,13 @@ type Case = {
   retrievalUri: string
   documents: Record<string, string>
   options?: Record<string, unknown>
+  resolveOptions?: Record<string, unknown>
   tree: unknown
   unresolved: unknown[]
   cuts: unknown[]
   sites: unknown[]
   connections?: unknown[]
+  urls?: unknown[]
   bundle: { tree: unknown; embedded: string[][]; left: unknown[][]; dialects: string[][] }
 }
 
@@ -64,7 +69,7 @@ describe('several documents, from test/docs', () => {
       const read = (file: string) => readFileSync(join(dir, file), 'utf8')
       const documents: Record<string, string> = {}
       for (const [uri, file] of Object.entries(c.documents)) documents[uri] = read(file)
-      const r = resolve(parse(read(c.entry)), { retrievalUri: c.retrievalUri, documents, ...(c.options ?? {}) })
+      const r = resolve(parse(read(c.entry)), { retrievalUri: c.retrievalUri, documents, ...(c.options ?? {}), ...(c.resolveOptions ?? {}) })
       assert.deepEqual(plain(r.tree), c.tree)
       assert.deepEqual(plain(r.unresolved), c.unresolved)
       assert.deepEqual(plain(r.cuts), c.cuts)
@@ -73,6 +78,7 @@ describe('several documents, from test/docs', () => {
         c.sites,
       )
       if (undefined !== c.connections) assert.deepEqual(plain(r.connections), c.connections)
+      if (undefined !== c.urls) assert.deepEqual(plain(r.urls), c.urls)
 
       // The same documents as one, which resolves to the same.
       const options = { retrievalUri: c.retrievalUri, documents, ...(c.options ?? {}) }

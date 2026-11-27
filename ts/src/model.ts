@@ -194,6 +194,21 @@ function kindFrom(version: ModelVersion, state: string): SlotKind {
   return s.kind
 }
 
+// Whether a member of a position may hold something of this kind: one
+// of its properties, a pattern of names, its catch-all or its items. A
+// refable slot is asked as the object it holds.
+function leadsTo(version: ModelVersion, state: string, kind: SlotKind): boolean {
+  const states = table(version)
+  let s = states[state]
+  if (null != s && 'refable' === s.kind && null != s.target) s = states[s.target]
+  if (null == s) return false
+  const is = (to: string | undefined): boolean => null != to && kind === states[to]?.kind
+  if (is(s.rest) || is(s.items)) return true
+  for (const name of Object.keys(s.props ?? {})) if (is(s.props![name])) return true
+  for (const [, to] of s.patterns ?? []) if (is(to)) return true
+  return false
+}
+
 // The state of a Schema Object, by the name of the dialect it is read
 // by: the version's own, and for 3.1 and 3.2 the dialects a schema may
 // declare (model/applicators.json).
@@ -250,6 +265,6 @@ function walkModel<T>(
   }
 }
 
-export { VERSIONS as MODEL_VERSIONS, classify, kindFrom, rootState, schemaStates, slot, step, stepper, walkModel }
+export { VERSIONS as MODEL_VERSIONS, classify, kindFrom, leadsTo, rootState, schemaStates, slot, step, stepper, walkModel }
 
 export type { How, ModelVersion, Slot, SlotKind }

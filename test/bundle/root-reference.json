@@ -1,0 +1,29 @@
+{
+  "note": "Under `slots: 'all'` a root that is a reference is written as what it names, and what that names in turn is brought into it.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "options": { "slots": "all" },
+  "entry": { "$ref": "root.json", "openapi": "3.1.0", "info": { "title": "t", "version": "1" }, "paths": {} },
+  "documents": {
+    "root.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": { "schemas": { "A": { "$ref": "a.json#/X" } } }
+    },
+    "a.json": { "X": { "type": "string" } }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": { "schemas": { "A": { "type": "string" } } }
+    },
+    "embedded": [
+      ["/components/schemas/A", "https://example.com/api/a.json", "/X", "inline"],
+      ["", "https://example.com/api/root.json", "", "inline"]
+    ],
+    "left": [],
+    "dialects": []
+  }
+}

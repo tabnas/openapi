@@ -1,0 +1,11 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "entry", "version": "1" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "New": { "$ref": "old.yaml#/components/schemas/B", "description": "beside, and applied in 3.1" },
+      "Old": { "$ref": "old.yaml#/components/schemas/A" }
+    }
+  }
+}

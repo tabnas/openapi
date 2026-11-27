@@ -40,7 +40,7 @@
 // that passes through another reference. A reference that names nothing
 // in the set is left to name what it named, and listed.
 
-import { frontOf, gather, quoted, settle } from './resolve'
+import { OVERRIDE, frontOf, gather, quoted, settle } from './resolve'
 import type { Front, Loader, ResolveOptions, ResolveResult } from './resolve'
 import { kindFrom, slot, step, stepper } from './model'
 import type { ModelVersion } from './model'
@@ -53,7 +53,6 @@ import {
   fragmentOf,
   hierarchical,
   isMap,
-  merged,
   normalizeUri,
   own,
   pointer,
@@ -124,9 +123,17 @@ type Embedded = {
 //             reference of that type lands on it, or one of another
 //             type does too, or the place it is in has a type of its
 //             own. What is in it is then not read as it was
+//   sibling   a member beside a reference of a document of an earlier
+//             version than the description's, that was left out: its
+//             own version did not read it, and the description's would
+//   version   a field beside a reference of a document of a later
+//             version than the description's, that stands unread: its
+//             own version read it in the place of the target's, and
+//             the description's has no such rule
 //
-// `ref` is the text as the documents have it, and for `type` the place
-// the part came from, as a URI.
+// `ref` is the text as the documents have it, for `type` the place the
+// part came from, as a URI, and for `sibling` and `version` the
+// member's value.
 type Left = { at: string; ref: unknown; why: string }
 
 // A schema that was given a `$schema`: it moved to a place that is read
@@ -302,67 +309,43 @@ function only(options: Record<string, unknown>, who: string): BundleOptions {
   return out as BundleOptions
 }
 
-// A discriminator's mapping value may be all that names a schema: one
-// in a document with no version, which no `$ref` reaches. The index
-// types such a place by the references that land on it, and a mapping
-// value is none, so the schema is plain data to it, and the references
-// in the schema are unread. The bundle is then written again on an
-// index that is told of each such schema, at most this many times: a
-// schema that is typed so may hold a mapping value of its own.
-const MAPPING_ROUNDS = 8
+// Which of the members beside a reference a version reads: every one
+// beside a schema's from 3.1, unless the schema is of a dialect whose
+// `$ref` stands alone, and beside a Reference Object's the fields that
+// stand in the place of its target's. A Path Item's are read in every
+// version and a reference's in data in none, so neither is asked.
+type Beside = 'all' | string[]
+function readBeside(v: ModelVersion, site: SiteFacts, alone: boolean): Beside {
+  if ('schema' === site.kind) return hasIds(v) && !alone ? 'all' : []
+  return 'reference' === site.kind ? ((OVERRIDE[v] ?? {})[site.type ?? ''] ?? []) : []
+}
+const isRead = (beside: Beside, name: string): boolean => 'all' === beside || beside.includes(name)
 
-// Where a bundle says which schemas it told the index of, for the check
-// of a bundle (tools/corpus/bundle-agree.cjs): resolving the documents
-// reads such a schema as data, and the check has to read it as the
-// bundle does. It is no part of the result: the index will type what a
-// mapping value names itself (the plan's T6), and this goes then.
-const TOLD = Symbol.for('@tabnas/openapi/bundle/told')
-
-// The description as the index is given it, where mapping values name
-// schemas that nothing types: with a reference to each among its schema
-// components, which the bundle does not have.
-function withTypers(raw: any, typers: string[]): any {
-  if (0 === typers.length || !isMap(raw)) return raw
-  const components = isMap(raw.components) ? raw.components : Object.create(null)
-  const extra = Object.create(null)
-  typers.forEach((uri, i) => define(extra, '\u0000' + i, { $ref: uri }))
-  const schemas = merged(isMap(components.schemas) ? components.schemas : Object.create(null), extra)
-  return merged(raw, { components: merged(components, { schemas }) })
+// What a reference comes to in the end, as the documents have it: where
+// it lands, and from a reference there on to where that one lands. None
+// where the chain names nothing, or comes round to itself: such a
+// reference is left as it is written, by every version.
+function endOf(land: Landing): unknown {
+  const met = new Set<Loc>()
+  let cur: Landing | undefined = land
+  while (undefined !== cur && cur.found && undefined !== cur.loc?.site) {
+    if (met.has(cur.loc)) return undefined
+    met.add(cur.loc)
+    cur = cur.loc.site.landing
+  }
+  return undefined === cur || !cur.found ? undefined : cur.node
 }
 
 // Write a description and the documents given with it as one document.
 // Neither the raw tree nor any document is changed.
 function bundle(raw: any, options: BundleOptions = {}): BundleResult {
-  let o = settle(only(options as Record<string, unknown>, 'bundle'), 'bundle')
-  const typers: string[] = []
-  // The steps of every round are those of one run, for `maxSteps` and
-  // `onCheck`.
-  const count = { steps: 0 }
-  for (let round = 0; ; round++) {
-    const front = frontOf(withTypers(raw, typers), o, 'bundle', count)
-    const { result, untyped } = bundleOn(raw, front, 'all' === o.slots)
-    // What was told of and is still not typed cannot be.
-    const fresh = [...untyped].filter((uri) => !typers.includes(uri))
-    if (0 === fresh.length || MAPPING_ROUNDS === round) {
-      Object.defineProperty(result, TOLD, { value: typers.slice() })
-      return result
-    }
-    typers.push(...fresh)
-    // The documents are read once: what was given as text is given
-    // again as it was read.
-    if (0 === round && 0 < front.others.length) {
-      const documents = Object.create(null)
-      for (const doc of front.others) define(documents, doc.key, doc.raw)
-      o = { ...o, documents }
-    }
-  }
+  const o = settle(only(options as Record<string, unknown>, 'bundle'), 'bundle')
+  return bundleOn(raw, frontOf(raw, o, 'bundle'), 'all' === o.slots)
 }
 
-// One bundle, on one index of the documents. `untyped` is what mapping
-// values name that the index gives no type.
-function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult; untyped: Set<string> } {
+// One bundle, on the index of the documents.
+function bundleOn(raw: any, front: Front, all: boolean): BundleResult {
   const { detected, mv, others, limit, counting, tick, refuse, index } = front
-  const untyped = new Set<string>()
   const home = index.docs[0]
   const rootIsMap = isMap(raw)
 
@@ -628,10 +611,9 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     return node
   }
 
-  // The description's schema components, as written: a mapping value
-  // that is one of their names is a name.
+  // Where the description's schema components are: a mapping value that
+  // reads as a name hopes for one of that name there.
   const schemasAt = sectionOf('schema')
-  const named = null === schemasAt ? undefined : entryAt(schemasAt)
 
   // One writing of the bundle. `tops` is given for a second one: the
   // targets that were found to hold other targets, each with the type
@@ -795,8 +777,10 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     // has a target at.
     const seats = new Map<Loc, Dest>()
     // The references with a type that were written to land on a place of
-    // the bundle, each with where it is written.
+    // the bundle, each with where it is written. A mapping value is one,
+    // of a schema: it types what it names, as a reference does.
     const landings: { at: At; to: string; gives: string | null; loc: Loc }[] = []
+    const givenBy = (from: From, ds: Dest): string | null => (from.mapping ? 'schema' : expectAt(ds))
     // The parts of targets that a reference gave a type, each where it
     // was written in a place the bundle reads as data, or as another
     // type: `never` says that the place has a type of its own, or is one
@@ -945,16 +929,15 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     }
 
     // Whether what a mapping value names can be brought in as a schema.
-    // A map that the index gives no type would be read as a schema where
-    // it is brought to, with references in it that nothing has read. It
-    // is asked to be typed, and this writing leaves it.
+    // The index types a map that the model gives no state as one, where
+    // a mapping value is the first to land on it. So a map that is no
+    // schema here is of another type, or of another version's model, and
+    // read as a schema where it is brought to it would hold references
+    // that nothing has read.
     const schemaAt = (land: Landing): boolean => {
       const loc = land.loc
       if (undefined === loc || !isMap(loc.raw)) return true
-      if ('unknown' !== loc.known) return 'schema' === slot(loc.doc.mv, loc.state).kind
-      const path = land.path!
-      untyped.add(land.doc!.key + (0 === path.length ? '' : '#' + fragment(path)))
-      return false
+      return 'unknown' !== loc.known && 'schema' === slot(loc.doc.mv, loc.state).kind
     }
 
     // The new text of what names a target, or the value to write in its
@@ -1045,7 +1028,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
           // From the description's own space a pointer reaches it, and
           // from another resource its identifier does.
           const there = lres.doc === home ? pathOf(lres) : seated(lres)
-          if (undefined !== there && !from.mapping) landings.push({ at, to: pointer([...there, ...inner]), gives: expectAt(ds), loc: hl })
+          if (undefined !== there) landings.push({ at, to: pointer([...there, ...inner]), gives: givenBy(from, ds), loc: hl })
           if (null === space.res && undefined !== there) return { ref: '#' + fragment([...there, ...rel]) }
           const uri = lres.base + (0 === rel.length ? '' : '#' + fragment(rel))
           return { ref: ABSOLUTE.test(text) ? uri : relativeTo(space.base, uri) }
@@ -1094,7 +1077,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
               undefined === seated(lloc) &&
               ((from.placed && 'unknown' === lloc.known) || isPlainPart(lloc))
             if (!again) {
-              if (!from.mapping) landings.push({ at, to: pointer(got), gives: expectAt(ds), loc: hl })
+              landings.push({ at, to: pointer(got), gives: givenBy(from, ds), loc: hl })
               return { ref: '#' + fragment([...got, ...rest]) }
             }
           }
@@ -1109,8 +1092,19 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
           // or where data is. In a place that reads another type it would
           // be read as that one, and what is in it with it: a reference
           // in it that the documents do not read would be read.
+          //
+          // Under `slots: 'all'` a part that a reference gave a type may
+          // stay in a place that reads data, and is read as what it was
+          // where a reference lands on it again. So a place in such a
+          // part reads what the documents read there, though the model
+          // reads data: an operation written in the place of a Path Item
+          // reference there would be read as a Path Item.
           const reads = holds(ds)
-          if (null !== expect && 'data' !== reads && reads !== expect) return { left: 'outside' }
+          const was =
+            'data' === reads && true !== ds.plain && 'typed' === from.loc.known
+              ? holds({ state: from.loc.state, v: from.loc.doc.mv })
+              : reads
+          if (null !== expect && 'data' !== was && was !== expect) return { left: 'outside' }
           return inline(land, rootSpace, at, dd, ds, from.lays, expect)
         }
         if (from.mapping && !schemaAt(land)) return { left: 'outside' }
@@ -1140,7 +1134,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
       // has inside something else: it is put again, by itself.
       const again = undefined !== lloc && isPlainPart(lloc) && !space.defs.has(lloc)
       if (undefined !== got && undefined !== hl && !again) {
-        if (!from.mapping) landings.push({ at, to: pointer([...space.at, ...got]), gives: expectAt(ds), loc: hl })
+        landings.push({ at, to: pointer([...space.at, ...got]), gives: givenBy(from, ds), loc: hl })
         return { ref: '#' + fragment([...got, ...rest]) }
       }
       if (from.mapping && !schemaAt(land)) return { left: 'outside' }
@@ -1168,8 +1162,9 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     // A discriminator's mapping value: the name of one of the
     // description's schemas, or a URI reference to a schema.
     const mapped = (v: string, holder: Loc, space: Space, at: At): string => {
-      if (isMap(named) && own(named, v)) return v
-      const where = index.locate(v, holder.base)
+      // The index says how one is read. A name stays a name.
+      const where = index.locateMapping(v, holder.base)
+      if ('name' === where.via) return v
       const land = undefined === where.target ? undefined : index.landingAt(where.target, where.doc)
       if (undefined === land || !land.found) {
         // What reads as a name is one, wherever it is: it hopes for a
@@ -1552,6 +1547,51 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
         // it is written in a place that has a type, what is beside it
         // would be: it is written alone.
         if ('data' === site.kind && null !== expectAt(ds)) for (const k of beside) delete out[k]
+        // And a reference of a document of another version than the
+        // description's is read in the bundle by the description's rule
+        // for what is beside it. Where it comes to no map in the end, a
+        // schema that is `false` say, or to nothing, no version reads
+        // what is beside it, and it stands as it was written.
+        else if (written !== mv && 0 < beside.length && ('data' !== ds.state || true === ds.edge) && isMap(endOf(land))) {
+          const then = readBeside(written, site, site.alone)
+          const now = readBeside(mv, site, hasIds(mv) ? dialectOf(inside).dialect.refAlone : true)
+          // What that rule reads, and the document's own did not, is
+          // left out, and said: a member beside a schema's `$ref` in
+          // 3.0, which 3.1 would apply, and a `summary` beside a
+          // response's reference in 3.1, which 3.2 would put in the
+          // place of the response's own.
+          for (const k of beside) {
+            if (!own(out, k) || !isRead(now, k) || isRead(then, k)) continue
+            left.push({ at: pointerAt(down(at, k)), ref: out[k], why: 'sibling' })
+            delete out[k]
+          }
+          // What the document's rule read, and the description's does
+          // not. Beside a schema's `$ref` it is what applies with the
+          // reference, which every version can say: the reference is
+          // written as the first of an `allOf`, as resolving reads it.
+          // Beside any other reference it is a field that stands in the
+          // place of the target's own. No older version has a way to
+          // say that, so the field stands where it is, unread, and is
+          // said.
+          const lost = beside.filter((k) => own(out, k) && isRead(then, k) && !isRead(now, k))
+          if (0 < lost.length && 'schema' === site.kind) {
+            const rest: [string, any][] = Object.keys(out).filter((k) => '$ref' !== k && 'allOf' !== k).map((k) => [k, out[k]])
+            const first = Object.create(null)
+            define(first, '$ref', out.$ref)
+            // An `allOf` there that is no list is nothing that resolving
+            // reads beside a `$ref`, and the list has no place for it:
+            // it is left out, and said.
+            if (own(out, 'allOf') && !Array.isArray(out.allOf)) {
+              left.push({ at: pointerAt(down(at, 'allOf')), ref: out.allOf, why: 'sibling' })
+            }
+            const all = [first, ...(Array.isArray(out.allOf) ? out.allOf : [])]
+            for (const k of Object.keys(out)) delete out[k]
+            define(out, 'allOf', all)
+            for (const [k, v] of rest) define(out, k, v)
+          } else {
+            for (const k of lost) left.push({ at: pointerAt(down(at, k)), ref: out[k], why: 'version' })
+          }
+        }
       } else if ('left' in to) {
         stands(to.left, land)
         if (('cycle' === to.left || 'outside' === to.left) && null === space.res && undefined !== land.loc) {
@@ -1780,7 +1820,7 @@ function bundleOn(raw: any, front: Front, all: boolean): { result: BundleResult;
     left: done.left,
     dialects: done.dialects,
   }
-  return { result, untyped }
+  return result
 }
 
 // Find and load the documents a description names, as `resolveAll`

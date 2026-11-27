@@ -1,0 +1,64 @@
+{
+  "source": "This repository: a cycle of references inside what only a mapping value names",
+  "note": "A schema that only a mapping value names holds two references to itself, one by its document and one by the fragment alone. Each closes a cycle, and each is cut, as anywhere.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/dog.yaml": "dog.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "dog": "dog.yaml" } }
+        }
+      }
+    }
+  },
+  "unresolved": [],
+  "cuts": [
+    {
+      "at": "/properties/self",
+      "ref": "dog.yaml",
+      "target": "",
+      "doc": "https://example.com/api/dog.yaml"
+    },
+    {
+      "at": "/properties/mate",
+      "ref": "#",
+      "target": "",
+      "doc": "https://example.com/api/dog.yaml"
+    }
+  ],
+  "sites": [
+    ["https://example.com/api/dog.yaml", "/properties/self", "", "", "cut"],
+    ["https://example.com/api/dog.yaml", "/properties/mate", "", "", "cut"]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "dog": "#/components/schemas/dog" } }
+          },
+          "dog": {
+            "type": "object",
+            "properties": {
+              "self": { "$ref": "#/components/schemas/dog" },
+              "mate": { "$ref": "#/components/schemas/dog" }
+            }
+          }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/dog", "https://example.com/api/dog.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

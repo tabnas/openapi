@@ -1,0 +1,72 @@
+address	public
+# Which addresses the HTTP loader takes for public: one it may ask a
+# document of with no leave given. An address that is not public is one
+# of a private, a loopback, a link-local or a reserved range, in IPv4 or
+# in IPv6, or an IPv4 address of such a range written inside an IPv6
+# one. A text that is no address is not public.
+#
+# Public addresses, the last two of them IPv4 addresses inside IPv6
+# ones.
+8.8.8.8	yes
+1.1.1.1	yes
+172.32.0.1	yes
+100.128.0.1	yes
+192.0.1.1	yes
+2606:4700:4700::1111	yes
+2001:4860:4860::8888	yes
+::ffff:8.8.8.8	yes
+64:ff9b::808:808	yes
+# Addresses of IPv4 that are not public: this network, private use,
+# shared address space, loopback, link-local, the protocol assignments,
+# the documentation ranges, the 6to4 relay, benchmarking, multicast,
+# reserved, and broadcast.
+0.0.0.0	no
+10.1.2.3	no
+100.64.0.1	no
+100.127.255.255	no
+127.0.0.1	no
+169.254.169.254	no
+172.16.0.1	no
+172.31.255.255	no
+192.0.0.1	no
+192.0.2.1	no
+192.88.99.1	no
+192.168.1.1	no
+198.18.0.1	no
+198.19.255.255	no
+198.51.100.7	no
+203.0.113.9	no
+224.0.0.1	no
+239.255.255.255	no
+240.0.0.1	no
+255.255.255.255	no
+# Addresses of IPv6 that are not public: unspecified, loopback, an IPv4
+# address of a closed range inside one, unique local, link-local,
+# multicast, documentation, and 6to4 around a closed IPv4 address.
+::	no
+::1	no
+::127.0.0.1	no
+::ffff:127.0.0.1	no
+::ffff:10.0.0.1	no
+::ffff:7f00:1	no
+64:ff9b::7f00:1	no
+64:ff9b::10.0.0.1	no
+fc00::1	no
+fd12:3456:789a::1	no
+fe80::1	no
+febf::1	no
+ff02::1	no
+2001:db8::1	no
+2002:7f00:1::	no
+2002:a00:1::1	no
+# What is no address: one with a zone, a text, the empty text, too few
+# parts and too many, a part out of range, and malformed IPv6.
+fe80::1%eth0	no
+not an address	no
+	no
+1.2.3	no
+1.2.3.4.5	no
+256.1.1.1	no
+::g	no
+1::2::3	no
+1:2:3:4:5:6:7:8:9	no

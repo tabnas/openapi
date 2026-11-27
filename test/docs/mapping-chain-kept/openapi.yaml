@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "entry", "version": "1" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Pet": {
+        "type": "object",
+        "discriminator": { "propertyName": "kind", "mapping": { "a": "a.yaml" } }
+      }
+    }
+  }
+}

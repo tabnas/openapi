@@ -1,0 +1,1 @@
+{ "Tag": { "type": "string" }, "Unused": { "$ref": "nothing.yaml" } }

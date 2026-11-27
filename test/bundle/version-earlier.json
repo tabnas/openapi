@@ -1,0 +1,73 @@
+{
+  "note": "A document of an earlier version than the description's. A member beside a reference there was not read by its own version, and the description's would read it: beside a schema's `$ref`, which 3.1 applies, and beside a response's reference, whose `description` 3.1 puts in the place of the response's own. Each is left out, and `left` says so, with its value.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/a": { "get": { "responses": { "200": { "$ref": "old.json#/components/responses/R" } } } } },
+    "components": { "schemas": { "Old": { "$ref": "old.json#/components/schemas/A" } } }
+  },
+  "documents": {
+    "old.json": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": { "$ref": "#/components/schemas/B", "description": "beside, and not read in 3.0" },
+          "B": { "type": "string" }
+        },
+        "responses": {
+          "R": { "$ref": "#/components/responses/S", "description": "not read" },
+          "S": { "description": "theirs" }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/a": { "get": { "responses": { "200": { "$ref": "#/components/responses/R" } } } } },
+      "components": {
+        "schemas": {
+          "Old": { "$ref": "#/components/schemas/A" },
+          "A": { "$ref": "#/components/schemas/B" },
+          "B": { "type": "string" }
+        },
+        "responses": { "R": { "$ref": "#/components/responses/S" }, "S": { "description": "theirs" } }
+      }
+    },
+    "embedded": [
+      [
+        "/components/responses/R",
+        "https://example.com/api/old.json",
+        "/components/responses/R",
+        "component"
+      ],
+      [
+        "/components/schemas/A",
+        "https://example.com/api/old.json",
+        "/components/schemas/A",
+        "component"
+      ],
+      [
+        "/components/responses/S",
+        "https://example.com/api/old.json",
+        "/components/responses/S",
+        "component"
+      ],
+      [
+        "/components/schemas/B",
+        "https://example.com/api/old.json",
+        "/components/schemas/B",
+        "component"
+      ]
+    ],
+    "left": [
+      ["/components/responses/R/description", "not read", "sibling"],
+      ["/components/schemas/A/description", "beside, and not read in 3.0", "sibling"]
+    ],
+    "dialects": []
+  }
+}

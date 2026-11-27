@@ -1,0 +1,74 @@
+{
+  "source": "This repository: the same under `cycles: 'keep'`",
+  "note": "The documents of `mapping-own-document`, resolved under `cycles: 'keep'`: the same sites, in the same order.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": {
+    "https://example.com/api/dog.yaml": "dog.yaml",
+    "https://example.com/api/name.yaml": "name.yaml"
+  },
+  "resolveOptions": { "cycles": "keep" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "entry", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": { "propertyName": "kind", "mapping": { "p": "#/Puppy" } }
+        }
+      }
+    }
+  },
+  "unresolved": [
+    {
+      "at": "/Puppy/properties/lost",
+      "ref": "#/Nothing",
+      "why": "not-found",
+      "doc": "https://example.com/api/dog.yaml"
+    }
+  ],
+  "cuts": [],
+  "sites": [
+    ["", "/components/schemas/Pet", "https://example.com/api/dog.yaml", "/Dog", "resolved"],
+    [
+      "https://example.com/api/dog.yaml",
+      "/Puppy/properties/n",
+      "https://example.com/api/name.yaml",
+      "",
+      "resolved"
+    ],
+    ["https://example.com/api/dog.yaml", "/Puppy/properties/lost", "", "/Nothing", "unresolved"]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "entry", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": { "$ref": "#/components/schemas/Dog" },
+          "Dog": {
+            "type": "object",
+            "discriminator": { "propertyName": "kind", "mapping": { "p": "#/components/schemas/Puppy" } }
+          },
+          "Puppy": {
+            "properties": {
+              "n": { "$ref": "#/components/schemas/name" },
+              "lost": { "$ref": "dog.yaml#/Nothing" }
+            }
+          },
+          "name": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/Dog", "https://example.com/api/dog.yaml", "/Dog", "component"],
+      ["/components/schemas/Puppy", "https://example.com/api/dog.yaml", "/Puppy", "component"],
+      ["/components/schemas/name", "https://example.com/api/name.yaml", "", "component"]
+    ],
+    "left": [["/components/schemas/Puppy/properties/lost", "#/Nothing", "not-found"]],
+    "dialects": []
+  }
+}

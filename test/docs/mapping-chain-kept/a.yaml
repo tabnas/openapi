@@ -1,0 +1,1 @@
+{ "type": "object", "discriminator": { "propertyName": "kind", "mapping": { "b": "b.yaml" } } }

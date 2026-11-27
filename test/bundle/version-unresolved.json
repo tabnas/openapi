@@ -1,0 +1,53 @@
+{
+  "note": "A reference of a document of an earlier version, with a member beside it, that names a reference which names nothing. Each is left as it is written when the documents are resolved, with what is beside it, and so it is in the bundle: the member stands, where it would be left out beside a reference that comes to a schema.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "New": { "$ref": "old.json#/components/schemas/A" } } }
+  },
+  "documents": {
+    "old.json": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": { "$ref": "#/components/schemas/B", "description": "beside" },
+          "B": { "$ref": "#/components/schemas/Gone" }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "New": { "$ref": "#/components/schemas/A" },
+          "A": { "$ref": "#/components/schemas/B", "description": "beside" },
+          "B": { "$ref": "old.json#/components/schemas/Gone" }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/schemas/A",
+        "https://example.com/api/old.json",
+        "/components/schemas/A",
+        "component"
+      ],
+      [
+        "/components/schemas/B",
+        "https://example.com/api/old.json",
+        "/components/schemas/B",
+        "component"
+      ]
+    ],
+    "left": [["/components/schemas/B", "#/components/schemas/Gone", "not-found"]],
+    "dialects": []
+  }
+}

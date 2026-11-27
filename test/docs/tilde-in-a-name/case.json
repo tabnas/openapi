@@ -1,0 +1,36 @@
+{
+  "source": "This repository: a document is known by its URI in normal form",
+  "note": "One document named two ways, with `~` and with `%7E`. The normal form of a URI writes `~`, so both references name the document that was given under that form.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://example.com/api/openapi.yaml",
+  "documents": { "https://example.com/api/a~b/Tag.yaml": "a~b-Tag.yaml" },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "Tag": { "type": "string" }, "Same": { "type": "string" } } }
+  },
+  "unresolved": [],
+  "cuts": [],
+  "sites": [
+    ["", "/components/schemas/Tag", "https://example.com/api/a~b/Tag.yaml", "", "resolved"],
+    ["", "/components/schemas/Same", "https://example.com/api/a~b/Tag.yaml", "", "resolved"]
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Tag": { "$ref": "#/components/schemas/Tag_2" },
+          "Same": { "$ref": "#/components/schemas/Tag_2" },
+          "Tag_2": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [["/components/schemas/Tag_2", "https://example.com/api/a~b/Tag.yaml", "", "component"]],
+    "left": [],
+    "dialects": []
+  }
+}

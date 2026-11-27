@@ -8,3 +8,9 @@ input	expected	unresolved	cuts	opts
 {"openapi":"3.0.3","components":{"schemas":{"S":{"$ref":"#name"}}}}	ERROR:openapi_pointer			{"strict":true}
 {"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":42}}}}	ERROR:openapi_ref_type			{"strict":true}
 {"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"$ref":"#/components/schemas/T"}}}}	{"openapi":"3.1.0","components":{"schemas":{"T":{"type":"string"},"S":{"type":"string"}}}}	[]	[]	{"strict":true}
+# An error names the reference it is for, where the row has a place after
+# the code.
+{"openapi":"3.1.0","components":{"schemas":{"S":{"$ref":"#/nope"}}}}	ERROR:openapi_unresolved /components/schemas/S			{"strict":true}
+# And a pointer that would be read on through a reference is refused at its
+# own reference, not at the one it passes.
+{"openapi":"3.0.3","components":{"schemas":{"T":{"properties":{"x":{}}},"A":{"$ref":"#/components/schemas/T"},"P":{"$ref":"#/components/schemas/A/properties/x"}}}}	ERROR:openapi_unresolved /components/schemas/P			{"strict":true}

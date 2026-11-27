@@ -1,0 +1,1 @@
+{ "type": "object", "properties": { "n": { "$ref": "#/properties/m" }, "m": { "type": "string" } } }

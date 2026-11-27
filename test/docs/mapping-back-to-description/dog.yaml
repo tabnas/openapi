@@ -1,0 +1,3 @@
+{
+  "properties": { "all": { "$ref": "openapi.yaml" }, "pet": { "$ref": "openapi.yaml#/components/schemas/Pet" } }
+}

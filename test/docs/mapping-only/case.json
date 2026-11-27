@@ -1,0 +1,180 @@
+{
+  "source": "This repository: a schema that only a mapping value names",
+  "note": "The entry document's Pet names a schema document by a mapping value, and a schema component by its name. No reference reaches the schema document, which declares no version: the mapping value alone makes it a schema, so the references in it are read, one of which names nothing. Its own mapping value names a third document the same way.",
+  "entry": "openapi.yaml",
+  "retrievalUri": "https://www.example.com/api/description/openapi.yaml",
+  "documents": {
+    "https://www.example.com/api/description/dog.yaml": "dog.yaml",
+    "https://www.example.com/api/description/name.yaml": "name.yaml",
+    "https://www.example.com/api/description/puppy.yaml": "puppy.yaml"
+  },
+  "tree": {
+    "openapi": "3.1.0",
+    "info": {
+      "title": "Pets",
+      "version": "1"
+    },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "Pet": {
+          "type": "object",
+          "discriminator": {
+            "propertyName": "kind",
+            "mapping": {
+              "dog": "dog.yaml",
+              "cat": "Cat"
+            }
+          }
+        },
+        "Cat": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "unresolved": [
+    {
+      "at": "/properties/owner",
+      "ref": "#/nowhere",
+      "why": "not-found",
+      "doc": "https://www.example.com/api/description/dog.yaml"
+    }
+  ],
+  "cuts": [],
+  "sites": [
+    [
+      "https://www.example.com/api/description/dog.yaml",
+      "/properties/name",
+      "https://www.example.com/api/description/name.yaml",
+      "",
+      "resolved"
+    ],
+    [
+      "https://www.example.com/api/description/dog.yaml",
+      "/properties/owner",
+      "",
+      "/nowhere",
+      "unresolved"
+    ],
+    [
+      "https://www.example.com/api/description/puppy.yaml",
+      "/properties/name",
+      "https://www.example.com/api/description/name.yaml",
+      "",
+      "resolved"
+    ]
+  ],
+  "connections": [
+    {
+      "kind": "mapping",
+      "at": "/components/schemas/Pet/discriminator/mapping/dog",
+      "name": "dog.yaml",
+      "found": true,
+      "target": "",
+      "targetDoc": "https://www.example.com/api/description/dog.yaml",
+      "via": "uri"
+    },
+    {
+      "kind": "mapping",
+      "at": "/components/schemas/Pet/discriminator/mapping/cat",
+      "name": "Cat",
+      "found": true,
+      "target": "/components/schemas/Cat",
+      "via": "name"
+    },
+    {
+      "kind": "mapping",
+      "at": "/discriminator/mapping/puppy",
+      "name": "puppy.yaml",
+      "found": true,
+      "target": "",
+      "doc": "https://www.example.com/api/description/dog.yaml",
+      "targetDoc": "https://www.example.com/api/description/puppy.yaml",
+      "via": "uri"
+    }
+  ],
+  "bundle": {
+    "tree": {
+      "openapi": "3.1.0",
+      "info": {
+        "title": "Pets",
+        "version": "1"
+      },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "dog": "#/components/schemas/dog",
+                "cat": "Cat"
+              }
+            }
+          },
+          "Cat": {
+            "type": "object"
+          },
+          "dog": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/name"
+              },
+              "owner": {
+                "$ref": "dog.yaml#/nowhere"
+              }
+            },
+            "discriminator": {
+              "propertyName": "breed",
+              "mapping": {
+                "puppy": "#/components/schemas/puppy"
+              }
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "puppy": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "#/components/schemas/name"
+              }
+            }
+          }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/schemas/dog",
+        "https://www.example.com/api/description/dog.yaml",
+        "",
+        "component"
+      ],
+      [
+        "/components/schemas/name",
+        "https://www.example.com/api/description/name.yaml",
+        "",
+        "component"
+      ],
+      [
+        "/components/schemas/puppy",
+        "https://www.example.com/api/description/puppy.yaml",
+        "",
+        "component"
+      ]
+    ],
+    "left": [
+      [
+        "/components/schemas/dog/properties/owner",
+        "#/nowhere",
+        "not-found"
+      ]
+    ],
+    "dialects": []
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "note": "Under `slots: 'all'` a part that a reference typed as a Path Item stays in a place that reads data, and holds a reference to an operation of another document. An operation has no component to go to, so it was written in the place of that reference. A Path Item reference lands on the part in the bundle, and the operation, which is itself a `$ref` where an operation goes, was read there as the reference of a Path Item: it gave what it names a type, and the members beside a reference in that were read. The operation is left outside.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "sets": [
+    {
+      "entry": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "t",
+          "version": "1"
+        },
+        "paths": {
+          "/q": {
+            "$ref": "a.json#/Y"
+          }
+        },
+        "x-d": {
+          "$ref": "c.json"
+        }
+      },
+      "documents": {
+        "a.json": {
+          "Y": {
+            "post": {
+              "callbacks": {
+                "cb": {
+                  "{$url}": {
+                    "$ref": "c.json#/A"
+                  }
+                }
+              }
+            }
+          },
+          "pet": {}
+        },
+        "sub/b.json": {
+          "X": {
+            "$ref": "../a.json"
+          }
+        },
+        "c.json": {
+          "Y": {
+            "post": {
+              "callbacks": {
+                "cb": {
+                  "{$url}": {
+                    "$ref": "a.json#/pet",
+                    "summary": "s"
+                  }
+                }
+              }
+            }
+          },
+          "pet": {
+            "$ref": "sub/b.json"
+          },
+          "A": {
+            "$ref": "d.json#/paths/~1p/get"
+          }
+        },
+        "d.json": {
+          "openapi": "3.1.0",
+          "paths": {
+            "/p": {
+              "get": {
+                "$ref": "c.json#/Y"
+              }
+            }
+          },
+          "components": {
+            "schemas": {
+              "Z": {
+                "$ref": "a.json"
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "slots": "all"
+      }
+    }
+  ]
+}

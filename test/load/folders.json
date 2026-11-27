@@ -1,0 +1,94 @@
+{
+  "note": "Documents in a folder and out of it, as `bundleAll` loads them: what the description names, then what that names, each asked for by its URI.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": { "schemas": { "A": { "$ref": "a.json" }, "Gone": { "$ref": "gone.json" } } }
+  },
+  "table": {
+    "https://example.com/api/a.json": { "type": "object", "properties": { "b": { "$ref": "sub/b.yaml" } } },
+    "https://example.com/api/sub/b.yaml": "type: object\nproperties:\n  c: { $ref: c.json }\n",
+    "https://example.com/api/sub/c.json": "{\"type\":\"string\"}"
+  },
+  "asked": [
+    "https://example.com/api/a.json",
+    "https://example.com/api/gone.json",
+    "https://example.com/api/sub/b.yaml",
+    "https://example.com/api/sub/c.json"
+  ],
+  "documents": [
+    "https://example.com/api/a.json",
+    "https://example.com/api/sub/b.yaml",
+    "https://example.com/api/sub/c.json"
+  ],
+  "tree": {
+    "openapi": "3.1.0",
+    "info": { "title": "t", "version": "1" },
+    "paths": {},
+    "components": {
+      "schemas": {
+        "A": {
+          "type": "object",
+          "properties": { "b": { "type": "object", "properties": { "c": { "type": "string" } } } }
+        },
+        "Gone": { "$ref": "gone.json" }
+      }
+    }
+  },
+  "unresolved": [{ "at": "/components/schemas/Gone", "ref": "gone.json", "why": "external" }],
+  "cuts": [],
+  "sites": [
+    ["", "/components/schemas/A", "https://example.com/api/a.json", "", "resolved"],
+    [
+      "https://example.com/api/a.json",
+      "/properties/b",
+      "https://example.com/api/sub/b.yaml",
+      "",
+      "resolved"
+    ],
+    [
+      "https://example.com/api/sub/b.yaml",
+      "/properties/c",
+      "https://example.com/api/sub/c.json",
+      "",
+      "resolved"
+    ],
+    ["", "/components/schemas/Gone", "", null, "unresolved"]
+  ],
+  "bundle": {
+    "asked": [
+      "https://example.com/api/a.json",
+      "https://example.com/api/gone.json",
+      "https://example.com/api/sub/b.yaml",
+      "https://example.com/api/sub/c.json"
+    ],
+    "documents": [
+      "https://example.com/api/a.json",
+      "https://example.com/api/sub/b.yaml",
+      "https://example.com/api/sub/c.json"
+    ],
+    "tree": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": { "$ref": "#/components/schemas/a" },
+          "Gone": { "$ref": "gone.json" },
+          "a": { "type": "object", "properties": { "b": { "$ref": "#/components/schemas/b" } } },
+          "b": { "type": "object", "properties": { "c": { "$ref": "#/components/schemas/c" } } },
+          "c": { "type": "string" }
+        }
+      }
+    },
+    "embedded": [
+      ["/components/schemas/a", "https://example.com/api/a.json", "", "component"],
+      ["/components/schemas/b", "https://example.com/api/sub/b.yaml", "", "component"],
+      ["/components/schemas/c", "https://example.com/api/sub/c.json", "", "component"]
+    ],
+    "left": [["/components/schemas/Gone", "gone.json", "external"]],
+    "dialects": []
+  }
+}

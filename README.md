@@ -73,6 +73,11 @@ parse('{"openapi":"3.1.0","paths":{}}') // => { openapi: '3.1.0', paths: {} }
 TypeScript is canonical. The shared fixtures in [`test/spec/`](test/spec/)
 run in all three runtimes and are the parity contract between them.
 
+[`docs/conformance.md`](docs/conformance.md) says what the TypeScript
+package has been measured against: a pinned corpus of real documents,
+how many of them it reads to the tree a reference parser gives, and
+what becomes of every reference in them.
+
 ## Contributing
 
 Read [AGENTS.md](AGENTS.md) first. It has the layout, the commands

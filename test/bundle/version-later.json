@@ -1,0 +1,95 @@
+{
+  "note": "A document of a later version than the description's. What is beside a schema's `$ref` there applies with the reference, which 3.0 can say too: the reference is written as the first of an `allOf`, before the ones the schema has. A `description` beside a response's reference stands in the place of the response's own in 3.1, and 3.0 has no such rule: it stands where it is, unread, and `left` says so.",
+  "retrievalUri": "https://example.com/api/openapi.json",
+  "entry": {
+    "openapi": "3.0.3",
+    "info": { "title": "t", "version": "1" },
+    "paths": { "/a": { "get": { "responses": { "200": { "$ref": "new.json#/components/responses/R" } } } } },
+    "components": { "schemas": { "Old": { "$ref": "new.json#/components/schemas/A" } } }
+  },
+  "documents": {
+    "new.json": {
+      "openapi": "3.1.0",
+      "info": { "title": "t", "version": "1" },
+      "paths": {},
+      "components": {
+        "schemas": {
+          "A": {
+            "title": "first",
+            "$ref": "#/components/schemas/B",
+            "description": "applied in 3.1",
+            "allOf": [{ "$ref": "#/components/schemas/C" }]
+          },
+          "B": { "type": "string" },
+          "C": { "minLength": 1 }
+        },
+        "responses": {
+          "R": { "$ref": "#/components/responses/S", "description": "mine" },
+          "S": { "description": "theirs" }
+        }
+      }
+    }
+  },
+  "bundle": {
+    "tree": {
+      "openapi": "3.0.3",
+      "info": { "title": "t", "version": "1" },
+      "paths": { "/a": { "get": { "responses": { "200": { "$ref": "#/components/responses/R" } } } } },
+      "components": {
+        "schemas": {
+          "Old": { "$ref": "#/components/schemas/A" },
+          "A": {
+            "allOf": [{ "$ref": "#/components/schemas/B" }, { "$ref": "#/components/schemas/C" }],
+            "$schema": "https://spec.openapis.org/oas/3.1/dialect/base",
+            "title": "first",
+            "description": "applied in 3.1"
+          },
+          "C": { "$schema": "https://spec.openapis.org/oas/3.1/dialect/base", "minLength": 1 },
+          "B": { "$schema": "https://spec.openapis.org/oas/3.1/dialect/base", "type": "string" }
+        },
+        "responses": {
+          "R": { "$ref": "#/components/responses/S", "description": "mine" },
+          "S": { "description": "theirs" }
+        }
+      }
+    },
+    "embedded": [
+      [
+        "/components/responses/R",
+        "https://example.com/api/new.json",
+        "/components/responses/R",
+        "component"
+      ],
+      [
+        "/components/schemas/A",
+        "https://example.com/api/new.json",
+        "/components/schemas/A",
+        "component"
+      ],
+      [
+        "/components/responses/S",
+        "https://example.com/api/new.json",
+        "/components/responses/S",
+        "component"
+      ],
+      [
+        "/components/schemas/C",
+        "https://example.com/api/new.json",
+        "/components/schemas/C",
+        "component"
+      ],
+      [
+        "/components/schemas/B",
+        "https://example.com/api/new.json",
+        "/components/schemas/B",
+        "component"
+      ]
+    ],
+    "left": [["/components/responses/R/description", "mine", "version"]],
+    "dialects": [
+      ["/components/schemas/A", "https://spec.openapis.org/oas/3.1/dialect/base"],
+      ["/components/schemas/C", "https://spec.openapis.org/oas/3.1/dialect/base"],
+      ["/components/schemas/B", "https://spec.openapis.org/oas/3.1/dialect/base"]
+    ]
+  }
+}
